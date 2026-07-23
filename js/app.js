@@ -125,7 +125,7 @@ function paintAudio() {
   $('btnMute').classList.toggle('off', m.muted);
 
   const note = m.missing ? t('audio.missing', { src: decodeURI(window.MUSIC_SRC) })
-             : (m.blocked && !m.muted) ? t('audio.blocked')
+             : (m.pending && !m.muted) ? t('audio.blocked')
              : '';
   $('audioNote').textContent = note;
   $('audioNote').hidden = !note;

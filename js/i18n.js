@@ -66,7 +66,7 @@ const DICT = {
     'audio.label': 'ระดับเสียงเพลง',
     'audio.mute': 'ปิดเสียง',
     'audio.unmute': 'เปิดเสียง',
-    'audio.blocked': 'แตะที่ไหนก็ได้สักครั้ง เพลงถึงจะเริ่ม — เบราว์เซอร์ไม่ยอมให้เล่นเสียงเอง',
+    'audio.blocked': 'เพลงเริ่มเล่นแล้วแต่ยังปิดเสียงอยู่ — แตะที่ไหนก็ได้สักครั้งเพื่อเปิดเสียง',
     'audio.missing': 'ไม่พบไฟล์เพลงที่ {src}',
 
     'boot.connecting': 'กำลังเชื่อมต่อ…',
@@ -130,7 +130,7 @@ const DICT = {
     'audio.label': 'Music volume',
     'audio.mute': 'Mute',
     'audio.unmute': 'Unmute',
-    'audio.blocked': 'Tap anywhere once to start the music — browsers block audio until you do',
+    'audio.blocked': 'The music is already running but still silent — tap anywhere once to turn the sound on',
     'audio.missing': 'Music file not found at {src}',
 
     'boot.connecting': 'Connecting…',
