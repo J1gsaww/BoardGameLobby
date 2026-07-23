@@ -7,9 +7,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@600&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/app.css?v=2026-07-23.16">
+<link rel="stylesheet" href="css/app.css?v=2026-07-23.17">
 </head>
-<body data-build="2026-07-23.16">
+<body data-build="2026-07-23.17">
 
 <!-- home -->
 <section id="view-home" class="view" hidden>
@@ -32,6 +32,7 @@
            autocapitalize="characters" spellcheck="false" data-i18n-placeholder="home.codePlaceholder">
     <button class="btn btn-block" id="btnJoin" data-i18n="home.join"></button>
   </div>
+  <div class="segmented join-as" id="joinAs"></div>
 
   <button class="btn btn-block btn-muted" id="btnSetting" data-i18n="home.setting"></button>
 
@@ -69,6 +70,7 @@
   <div class="row-top">
     <button class="link" id="btnLeave" data-i18n="lobby.leave"></button>
     <button class="btn btn-slim" id="btnRules" data-i18n="rules.title"></button>
+    <button class="btn btn-slim" id="btnInvite" data-i18n="lobby.invite"></button>
     <button class="code-chip" id="codeChip" data-i18n-title="lobby.copy">
       <span class="code-chip-label" data-i18n="lobby.codeLabel"></span>
       <span class="code-chip-value" id="outCode">--</span>
@@ -109,9 +111,25 @@
   <div id="gameStage"></div>
 </section>
 
+<!-- chat dock -->
+<div id="chatDock" class="chat-dock" hidden>
+  <button class="chat-head" id="chatToggle">
+    <span data-i18n="chat.title"></span>
+    <span class="chat-unread" id="chatUnread" hidden></span>
+  </button>
+  <div class="chat-body" id="chatBody" hidden>
+    <ul class="chat-list" id="chatList"></ul>
+    <div class="chat-input">
+      <input id="chatText" maxlength="300" data-i18n-placeholder="chat.placeholder">
+      <button class="btn btn-slim" id="chatSend" data-i18n="chat.send"></button>
+    </div>
+    <p class="chat-note" id="chatNote" hidden></p>
+  </div>
+</div>
+
 <div id="boot" class="boot"><p id="bootText"></p></div>
 
-<script src="js/env.js?v=2026-07-23.16"></script>
-<script type="module" src="js/app.js?v=2026-07-23.16"></script>
+<script src="js/env.js?v=2026-07-23.17"></script>
+<script type="module" src="js/app.js?v=2026-07-23.17"></script>
 </body>
 </html>

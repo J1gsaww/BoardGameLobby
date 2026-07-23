@@ -17,6 +17,8 @@ register({
   cover: 'assets/game/tycoon/cover.png',
   table: 'assets/game/tycoon/table.png',
   music: 'assets/music/slave.mp3',
+  spectators: true,          // รับคนดูได้
+  allowSpectatorChat: true,  // เกมนี้ไม่มีข้อมูลลับจากคนดู พิมพ์ได้ตามปกติ
   guide: withExtra(TYCOON_EXTRA),
   minPlayers: TYCOON.minPlayers,
   maxPlayers: TYCOON.maxPlayers,

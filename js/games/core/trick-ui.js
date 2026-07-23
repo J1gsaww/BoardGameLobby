@@ -13,6 +13,7 @@ import { resolve } from './trick-game.js';
 export function makeUI(baseRules, effects) {
 const Sound = makeSound(effects);
 
+let clockTimer = null;
 let picked = [];          // ไพ่ที่เลือกอยู่ ต้องอยู่นอกฟังก์ชันวาด ไม่งั้นหายทุกครั้งที่รีเฟรช
 let pickedFor = '';       // ปุ่มสถานะที่ picked ผูกอยู่ ใช้ล้างเมื่อเปลี่ยนตา
 let showBoard = false;
@@ -35,7 +36,7 @@ const myHand = (ctx) => sortForHand((ctx.secret && ctx.secret.hand) || [], !!ctx
 
 function render(el, ctx) {
   const st = ctx.state;
-  if (!st || !st.phase) { el.innerHTML = ''; Sound.reset(); return; }
+  if (!st || !st.phase) { el.innerHTML = ''; clearInterval(clockTimer); Sound.reset(); return; }
   Sound.react(st);
 
   const key = `${st.phase}:${st.roundNo}:${st.turn}:${st.seq || ''}`;
@@ -49,6 +50,7 @@ function render(el, ctx) {
     ${showBoard ? board(st) : ''}
   `;
   bind(el, ctx);
+  runClock(el, st);
 }
 
 /* ── หัวโต๊ะ ───────────────────────────────────────────────── */
@@ -81,6 +83,7 @@ function table(st, ctx) {
   const me = ctx.me.uid;
   const mine = myHand(ctx);
   const myTurn = st.turn === me;
+  const watching = !(st.seats || []).includes(me);          // คนดู ไม่ได้อยู่ในวง
   const out = (st.finished || []).includes(me) || st.toppled === me;
 
   const rev = !!st.revolution;
@@ -97,10 +100,12 @@ function table(st, ctx) {
         ? cardRow(st.pile.cards, 58) + `<p class="slave-by">${esc(t('trick.playedBy', { name: nameOf(st, st.pile.by) }))}</p>`
         : `<p class="slave-empty">${esc(t('trick.emptyPile'))}</p>`}
       <p class="slave-status">${esc(statusLine(st, ctx))}</p>
+      ${st.deadline ? '<p class="trick-clock" id="trickClock"></p>' : ''}
       ${st.notice ? `<p class="slave-notice">${esc(noticeLine(st))}</p>` : ''}
     </div>
 
-    ${out ? `<p class="slave-done">${esc(t('trick.youAreOut'))}</p>` : `
+    ${watching ? `<p class="slave-done">${esc(t('trick.watching'))}</p>`
+      : out ? `<p class="slave-done">${esc(t('trick.youAreOut'))}</p>` : `
       <div class="slave-hand" id="slaveHand" style="${handStyle(mine.length)}">
         ${mine.map(c => `<button class="hand-card${picked.includes(c) ? ' on' : ''}" data-card="${c}">${cardFace(c, CARD_W)}</button>`).join('')}
       </div>
@@ -133,6 +138,23 @@ function seatStrip(st, ctx) {
       ${tags.length ? `<span class="seat-chip-tag">${esc(tags.join(' · '))}</span>` : ''}
     </div>`;
   }).join('')}</div>`;
+}
+
+/* นาฬิกานับถอยหลัง — เดินเองในเครื่องทุกวินาที ไม่ต้องรอสถานะใหม่จากเซิร์ฟเวอร์
+   ถ้าไม่มีตัวเลขให้เห็น คนเล่นจะโดนระบบลงไพ่ให้โดยไม่รู้ตัวว่าใกล้หมดเวลา */
+function runClock(el, st) {
+  clearInterval(clockTimer);
+  const slot = el.querySelector('#trickClock');
+  if (!slot || !st.deadline) return;
+
+  const paint = () => {
+    const left = Math.max(0, Math.ceil((st.deadline - Date.now()) / 1000));
+    slot.textContent = t('trick.timeLeft', { n: left });
+    slot.classList.toggle('urgent', left <= 3);
+    if (left <= 0) clearInterval(clockTimer);
+  };
+  paint();
+  clockTimer = setInterval(paint, 250);
 }
 
 function statusLine(st, ctx) {

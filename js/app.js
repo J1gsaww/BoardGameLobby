@@ -45,22 +45,44 @@ function boot(msg, bad) {
 }
 
 /* ── รายชื่อผู้เล่น ────────────────────────────────── */
-function listInto(ul, members, hostUid) {
+function listInto(ul, members, hostUid, opts = {}) {
   ul.innerHTML = '';
   members.forEach(m => {
     const li = document.createElement('li');
-    if (!m.online) li.className = 'offline';
+    if (!m.online || m.left) li.className = 'offline';
 
     const badges = [];
     if (m.uid === hostUid) badges.push(`<span class="badge host">${t('badge.host')}</span>`);
-    if (m.role === 'spectator') badges.push(`<span class="badge">${t('badge.spectator')}</span>`);
+    if (m.left) badges.push(`<span class="badge">${t('badge.left')}</span>`);
+    else if (m.role === 'spectator') badges.push(`<span class="badge">${t('badge.spectator')}</span>`);
     else if (m.ready) badges.push(`<span class="badge ready">${t('badge.ready')}</span>`);
-    if (!m.online) badges.push(`<span class="badge">${t('badge.offline')}</span>`);
+    if (!m.online && !m.left) badges.push(`<span class="badge">${t('badge.offline')}</span>`);
 
     li.innerHTML =
       `<span class="pName">${esc(m.name || '')}</span>` +
       (m.uid === me.uid ? `<span class="pMe">${t('badge.you')}</span>` : '') +
       (badges.length ? badges.join('') : '<span class="badge"></span>');
+
+    // เมนูจัดการ ขึ้นเฉพาะตอนเราเป็นเจ้าของห้องและยังไม่เริ่มเกม
+    if (opts.manage && m.uid !== me.uid) {
+      const tools = document.createElement('span');
+      tools.className = 'row-tools';
+      const btn = (act, label, arg) => {
+        const b = document.createElement('button');
+        b.className = 'tool';
+        b.title = t(label);
+        b.textContent = { up: '\u2191', down: '\u2193', seat: '\u21C4', kick: '\u2715' }[act];
+        b.onclick = () => opts.manage(act, m, arg);
+        return b;
+      };
+      if (m.role === 'player' && !m.left) {
+        tools.append(btn('up', 'lobby.up'), btn('down', 'lobby.down'), btn('seat', 'lobby.toWatch'));
+      } else if (!m.left) {
+        tools.append(btn('seat', 'lobby.toPlay'));
+      }
+      tools.append(btn('kick', 'lobby.kick'));
+      li.appendChild(tools);
+    }
     ul.appendChild(li);
   });
 }
@@ -170,7 +192,13 @@ function paintRoom() {
 
   Music.setTrack(Music.defaultTrack());
   show('view-lobby');
-  listInto($('players'), room.members, room.doc.hostUid);
+  listInto($('players'), room.members, room.doc.hostUid, {
+    manage: room.isHost ? (act, m) => {
+      if (act === 'kick') Room.kick(m.uid);
+      else if (act === 'seat') Room.setRole(m.uid, m.role === 'player' ? 'spectator' : 'player');
+      else Room.moveSeat(m.uid, act === 'up' ? -1 : 1);
+    } : null
+  });
   $('outCount').textContent = `${room.members.length}/${window.MAX_IN_ROOM}`;
   paintGames(room);
 
@@ -185,7 +213,7 @@ function paintRoom() {
   $('btnStart').disabled = !Room.canStart();
 
   const game = Room.currentGame();
-  const players = room.members.filter(m => m.role === 'player');
+  const players = room.members.filter(m => m.role === 'player' && !m.left);
   let note = '';
   if (!room.isHost) note = t(game ? 'lobby.waitHost' : 'lobby.hostPicks');
   else if (!game) note = t('lobby.noGame');
@@ -199,14 +227,17 @@ function paintRoom() {
 }
 
 Room.watch((room) => {
-  if (room.closed) {
-    room.closed = false;
+  if (room.closed || room.kicked) {
+    const why = room.kicked ? 'err.kicked' : 'err.roomClosed';
+    room.closed = false; room.kicked = false;
     lastRoom = null;
+    paintChat(null);
     show('view-home');
-    err('err.roomClosed');
+    err(why);
     return;
   }
   lastRoom = room;
+  paintChat(room);
   paintRoom();
 });
 
@@ -258,6 +289,62 @@ function paintAudio() {
 }
 
 Music.onChange(paintAudio);
+
+/* ── เข้าห้องแบบลงเล่นหรือนั่งดู ───────────────────── */
+let watchOnly = false;
+function paintJoinAs() {
+  const host = $('joinAs');
+  host.innerHTML = '';
+  [['player', false], ['watch', true]].forEach(([key, val]) => {
+    const b = document.createElement('button');
+    b.className = 'seg' + (watchOnly === val ? ' on' : '');
+    b.textContent = t('home.joinAs.' + key);
+    b.onclick = () => { watchOnly = val; paintJoinAs(); };
+    host.appendChild(b);
+  });
+}
+
+/* ── แชท ──────────────────────────────────────────
+   แผงลอย ใช้ได้ทั้งตอนอยู่ในห้องและตอนเล่นเกม โดยไม่ต้องแตะผังของทั้งสองหน้า */
+let chatOpen = false;
+let chatSeen = 0;
+
+function paintChat(room) {
+  const dock = $('chatDock');
+  const inRoom = !!(room && room.code && room.doc);
+  dock.hidden = !inRoom;
+  if (!inRoom) return;
+
+  $('chatBody').hidden = !chatOpen;
+  const msgs = room.chat || [];
+
+  const unread = Math.max(0, msgs.length - chatSeen);
+  $('chatUnread').hidden = chatOpen || unread === 0;
+  $('chatUnread').textContent = unread > 9 ? '9+' : String(unread);
+  if (chatOpen) chatSeen = msgs.length;
+
+  const list = $('chatList');
+  list.innerHTML = msgs.length
+    ? msgs.map(m => `<li${m.uid === me.uid ? ' class="mine"' : ''}>` +
+        `<span class="chat-who">${esc(m.name || '')}</span>` +
+        `<span class="chat-text">${esc(m.text || '')}</span></li>`).join('')
+    : `<li class="chat-none">${esc(t('chat.empty'))}</li>`;
+  list.scrollTop = list.scrollHeight;
+
+  const allowed = Room.canChat();
+  $('chatText').disabled = !allowed;
+  $('chatSend').disabled = !allowed;
+  $('chatNote').hidden = allowed;
+  $('chatNote').textContent = allowed ? '' : t('chat.muted');
+}
+
+function submitChat() {
+  const box = $('chatText');
+  const text = box.value.trim();
+  if (!text) return;
+  box.value = '';
+  Room.sendChat(text).catch(e => console.error('ส่งแชทไม่สำเร็จ', e));
+}
 
 /* ── หน้ากติกาเกม ─────────────────────────────────
    สองชั้น — รายชื่อเกม แล้วกดเข้าไปอ่านของเกมนั้น
@@ -332,6 +419,8 @@ function paintLangPick() {
 /* ภาษาเปลี่ยน = ทาข้อความคงที่ใหม่ แล้ววาดส่วนที่สร้างจาก JS ซ้ำ */
 onLangChange(() => {
   paintLangPick();
+  paintJoinAs();
+  paintChat(lastRoom);
   if (current === 'view-rules') paintRules();
   paintError();
   paintAudio();
@@ -364,7 +453,7 @@ $('btnHost').onclick = async () => {
 $('btnJoin').onclick = async () => {
   err(null); if (!needName()) return;
   $('btnJoin').disabled = true;
-  try { await Room.joinRoom($('inCode').value, name); $('inCode').value = ''; }
+  try { await Room.joinRoom($('inCode').value, name, watchOnly); $('inCode').value = ''; }
   catch (e) { errFrom(e); }
   finally { $('btnJoin').disabled = false; }
 };
@@ -390,6 +479,19 @@ $('btnLeave').onclick = async () => {
   Music.setTrack(Music.defaultTrack());
   show('view-home');
   err(null);
+};
+
+$('chatToggle').onclick = () => { chatOpen = !chatOpen; paintChat(lastRoom); };
+$('chatSend').onclick = submitChat;
+$('chatText').addEventListener('keydown', e => { if (e.key === 'Enter') submitChat(); });
+
+$('btnInvite').onclick = async () => {
+  try {
+    await navigator.clipboard.writeText(Room.inviteLink());
+    const b = $('btnInvite'), old = t('lobby.invite');
+    b.textContent = t('lobby.invited');
+    setTimeout(() => { b.textContent = old; }, 1200);
+  } catch { /* บางเบราว์เซอร์ไม่อนุญาต */ }
 };
 
 $('codeChip').onclick = async () => {
@@ -423,12 +525,22 @@ function checkBuild() {
   $('bootText').textContent = t('boot.connecting');
   $('inName').value = name;
   paintLangPick();
+  paintJoinAs();
   Music.init();
   paintAudio();
+
+  // ลิงก์เชิญ — ใส่รหัสให้เลย ถ้ามีชื่ออยู่แล้วก็เข้าห้องให้เลย
+  const invited = (new URLSearchParams(location.search).get('room') || '').toUpperCase();
+
   try {
     await connect();
     $('boot').hidden = true;
     show('view-home');
+    if (invited.length === 4) {
+      $('inCode').value = invited;
+      if (name) { try { await Room.joinRoom(invited, name, watchOnly); } catch (e) { errFrom(e); } }
+      else $('inName').focus();
+    }
     checkBuild();
     console.info('[env]', window.__envInfo(), 'uid', me.uid);
   } catch (e) {

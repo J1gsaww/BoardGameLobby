@@ -43,13 +43,25 @@ service cloud.firestore {
       // state ของเกมเขียนได้เฉพาะเจ้าของห้อง — หัวใจของ Host Authority
       allow update: if (signedIn() && resource.data.hostUid == request.auth.uid)
                     || takingOver();
-      allow delete: if signedIn() && resource.data.hostUid == request.auth.uid;
+      // เจ้าของห้องลบห้องตัวเองได้ · ห้องที่ไม่มีใครแตะเกิน 12 ชั่วโมงใครก็เก็บกวาดได้
+      function staleDoc(d) {
+        return d.touchedAt == null
+            || request.time.toMillis() - d.touchedAt.toMillis() > 43200000;
+      }
+      function roomStale() {
+        return signedIn()
+            && exists(/databases/$(database)/documents/rooms/$(room))
+            && staleDoc(get(/databases/$(database)/documents/rooms/$(room)).data);
+      }
+      allow delete: if signedIn()
+                    && (resource.data.hostUid == request.auth.uid || staleDoc(resource.data));
 
       match /members/{uid} {
         allow read: if signedIn();
         // เขียนเอกสารของตัวเองได้ · เจ้าของห้องเขียนของทุกคนได้
         // (ต้องได้ เพราะเจ้าของห้องแจกเลขที่นั่งและล้างสถานะ Ready)
         allow write: if signedIn() && (request.auth.uid == uid || isHost());
+        allow delete: if signedIn() && (request.auth.uid == uid || isHost() || roomStale());
       }
 
       // คำขอ: ยื่นได้ในนามตัวเองเท่านั้น อ่านและลบได้เฉพาะเจ้าของห้อง
@@ -58,7 +70,7 @@ service cloud.firestore {
         allow read:   if isHost();
         allow create: if inRoom() && request.resource.data.uid == request.auth.uid;
         allow update: if false;
-        allow delete: if isHost();
+        allow delete: if isHost() || roomStale();
       }
 
       // ไพ่ในมือและสำรับ: เจ้าตัวอ่านได้คนเดียว เจ้าของห้องอ่านได้เพราะต้องตัดสิน
@@ -66,6 +78,20 @@ service cloud.firestore {
       match /secrets/{uid} {
         allow read:  if signedIn() && (request.auth.uid == uid || isHost());
         allow write: if isHost();
+        allow delete: if isHost() || roomStale();
+      }
+
+      // แชท: ทุกคนในห้องอ่านได้ · เขียนได้ในนามตัวเองเท่านั้น แก้ย้อนหลังไม่ได้
+      // เจ้าของห้องลบข้อความเก่าทิ้งได้เพื่อไม่ให้ห้องบวม
+      match /chat/{id} {
+        allow read:   if signedIn();
+        allow create: if inRoom()
+                      && request.resource.data.uid == request.auth.uid
+                      && request.resource.data.text is string
+                      && request.resource.data.text.size() > 0
+                      && request.resource.data.text.size() <= 300;
+        allow update: if false;
+        allow delete: if isHost() || roomStale();
       }
     }
 

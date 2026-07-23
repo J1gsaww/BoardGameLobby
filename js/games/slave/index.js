@@ -16,6 +16,8 @@ register({
   cover: 'assets/game/slave/cover.png',
   table: 'assets/game/slave/table.png',
   music: 'assets/music/slave.mp3',
+  spectators: true,          // รับคนดูได้
+  allowSpectatorChat: true,  // เกมนี้ไม่มีข้อมูลลับจากคนดู พิมพ์ได้ตามปกติ
   guide: TRICK_GUIDE,
   minPlayers: SLAVE.minPlayers,
   maxPlayers: SLAVE.maxPlayers,

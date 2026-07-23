@@ -6,6 +6,8 @@ import { extend } from '../../i18n.js';
 extend({
   th: {
     'trick.round': 'รอบ {n}',
+    'trick.watching': 'คุณกำลังนั่งดูอยู่',
+    'trick.timeLeft': 'เหลือ {n} วิ',
     'trick.showBoard': 'ตารางคะแนน',
     'trick.hideBoard': 'ปิดตาราง',
     'trick.scoreboard': 'ตารางคะแนน',
@@ -46,6 +48,8 @@ extend({
   },
   en: {
     'trick.round': 'Round {n}',
+    'trick.watching': 'You are watching',
+    'trick.timeLeft': '{n}s left',
     'trick.showBoard': 'Scores',
     'trick.hideBoard': 'Hide scores',
     'trick.scoreboard': 'Scoreboard',

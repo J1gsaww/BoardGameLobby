@@ -403,3 +403,62 @@ button{ cursor:pointer; border:0; background:none; }
 .rule-sec ul{ margin:0; padding-left:20px; }
 .rule-sec li{ font-size:14px; line-height:1.7; margin-bottom:4px; }
 .rule-sec li:last-child{ margin-bottom:0; }
+
+/* ── เลือกลงเล่นหรือนั่งดูตอนเข้าห้อง ────────────── */
+.join-as{ margin-bottom:12px; }
+.join-as .seg{ padding:8px 10px; font-size:14px; }
+
+/* ── เมนูจัดการผู้เล่นของเจ้าของห้อง ─────────────── */
+.row-tools{ display:flex; gap:4px; margin-left:8px; }
+.tool{
+  width:26px; height:26px; border-radius:8px; line-height:1; font-size:13px;
+  background:var(--sunk); border:1px solid var(--line); color:var(--muted);
+}
+.tool:hover{ color:var(--ink); border-color:var(--lamp); }
+.players li:has(.row-tools){ padding-right:10px; }
+
+/* ── นาฬิกานับถอยหลังในเกม ───────────────────────── */
+.trick-clock{
+  margin:8px 0 0; font-family:var(--mono); font-size:13px; color:var(--muted);
+}
+.trick-clock.urgent{ color:var(--rose); font-weight:600; }
+
+/* ── แผงแชทลอย ───────────────────────────────────── */
+.chat-dock{
+  position:fixed; right:18px; bottom:18px; z-index:45;
+  width:min(320px, calc(100vw - 36px));
+  display:flex; flex-direction:column;
+  border:1px solid var(--line); border-radius:16px;
+  background:var(--bg-sunk, var(--sunk)); overflow:hidden;
+}
+.chat-head{
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  width:100%; padding:11px 15px;
+  font-family:var(--display); font-weight:600; font-size:14px;
+  background:var(--raised);
+}
+.chat-head:hover{ color:var(--lamp); }
+.chat-unread{
+  font-family:var(--mono); font-size:11px; background:var(--lamp); color:#241704;
+  border-radius:999px; padding:1px 7px;
+}
+.chat-body{ display:flex; flex-direction:column; }
+.chat-list{
+  list-style:none; margin:0; padding:12px 14px;
+  max-height:min(46vh, 300px); overflow-y:auto;
+  scrollbar-width:thin; scrollbar-color:var(--line) transparent;
+  display:grid; gap:7px;
+}
+.chat-list li{ font-size:13px; line-height:1.5; }
+.chat-who{ color:var(--lamp); font-size:11.5px; margin-right:7px; font-family:var(--mono); }
+.chat-list li.mine .chat-who{ color:var(--mint); }
+.chat-none{ color:var(--muted); text-align:center; }
+.chat-input{ display:flex; gap:7px; padding:10px 12px; border-top:1px solid var(--line); }
+.chat-input input{
+  flex:1; min-width:0; background:var(--sunk); border:1px solid var(--line);
+  border-radius:10px; padding:9px 11px; font-size:13.5px;
+}
+.chat-input input:disabled{ opacity:.5; }
+.chat-note{ margin:0; padding:0 14px 11px; font-size:12px; color:var(--muted); }
+
+@media (max-width:640px){ .chat-dock{ right:10px; bottom:10px; } }
