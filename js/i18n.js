@@ -43,6 +43,11 @@ const DICT = {
     'lobby.copy': 'แตะเพื่อคัดลอก',
     'lobby.copied': 'คัดลอกแล้ว',
     'lobby.title': 'ผู้เล่นในห้อง',
+    'lobby.pickGame': 'เลือกเกม',
+    'lobby.noGame': 'ยังไม่ได้เลือกเกม',
+    'lobby.hostPicks': 'เจ้าของห้องเป็นคนเลือกเกม',
+    'lobby.wrongCount': 'เกมนี้เล่น {min}–{max} คน ตอนนี้มี {n}',
+    'lobby.players': '{min}–{max} คน',
     'lobby.ready': 'พร้อม',
     'lobby.unready': 'ยังไม่พร้อม',
     'lobby.start': 'เริ่มเกม',
@@ -60,6 +65,7 @@ const DICT = {
     'play.title': 'เริ่มเกมแล้ว',
     'play.hint': 'ตรงนี้คือที่ที่เกมจะมาเสียบในสไลซ์ถัดไป ตอนนี้มีไว้พิสูจน์ว่าสถานะห้องเปลี่ยนถึงทุกเครื่องจริง',
     'play.back': 'กลับไปที่ห้อง',
+    'play.leaveGame': 'จบเกม กลับไปที่ห้อง',
     'play.hostNote': 'คุณเป็นเจ้าของห้อง — กดกลับไปที่ห้องได้',
     'play.guestNote': 'รอเจ้าของห้องพากลับไปที่ห้อง',
 
@@ -107,6 +113,11 @@ const DICT = {
     'lobby.copy': 'Tap to copy',
     'lobby.copied': 'Copied',
     'lobby.title': 'Players',
+    'lobby.pickGame': 'Pick a game',
+    'lobby.noGame': 'No game chosen yet',
+    'lobby.hostPicks': 'The host picks the game',
+    'lobby.wrongCount': 'This game needs {min}–{max} players — there are {n}',
+    'lobby.players': '{min}–{max} players',
     'lobby.ready': 'Ready',
     'lobby.unready': 'Unready',
     'lobby.start': 'Start',
@@ -124,6 +135,7 @@ const DICT = {
     'play.title': 'Game started',
     'play.hint': 'This is where the game will slot in next. For now it proves the room status reaches every screen.',
     'play.back': 'Back to room',
+    'play.leaveGame': 'End game, back to room',
     'play.hostNote': 'You are the host — you can go back to the room',
     'play.guestNote': 'Waiting for the host to go back to the room',
 
@@ -182,6 +194,14 @@ export class AppError extends Error {
 }
 export const messageOf = (e) =>
   (e && e.key) ? t(e.key, e.params) : (e && e.message) || String(e);
+
+/* เกมเติมคำแปลของตัวเองเข้ามาได้ ไม่ต้องมาแก้ไฟล์นี้ */
+export function extend(tables) {
+  for (const [l, table] of Object.entries(tables || {})) {
+    if (!DICT[l]) DICT[l] = {};
+    Object.assign(DICT[l], table);
+  }
+}
 
 /* ── ทาลง DOM ──────────────────────────────────────── */
 

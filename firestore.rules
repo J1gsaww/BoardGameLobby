@@ -11,6 +11,10 @@ service cloud.firestore {
         return get(/databases/$(database)/documents/rooms/$(room)).data.hostUid;
       }
       function isHost() { return signedIn() && hostUid() == request.auth.uid; }
+      function inRoom() {
+        return signedIn()
+            && exists(/databases/$(database)/documents/rooms/$(room)/members/$(request.auth.uid));
+      }
 
       // เจ้าของห้องเงียบไปนานแค่ไหนแล้ว — อ่านจากเอกสารของเขาเอง
       // ปลอมไม่ได้ เพราะแต่ละคนเขียน lastSeen ได้แค่ของตัวเอง
@@ -21,14 +25,14 @@ service cloud.firestore {
             || request.time.toMillis() - get(p).data.lastSeen.toMillis() > 25000;
       }
 
-      // การยึดตำแหน่ง: เปลี่ยนได้แค่ hostUid กับ touchedAt
-      // ตั้งเป็นตัวเองเท่านั้น และต้องนั่งอยู่ในห้องนี้จริง
+      // การยึดตำแหน่ง: เปลี่ยนได้แค่ hostUid กับ touchedAt ตั้งเป็นตัวเองเท่านั้น
+      // และต้องนั่งอยู่ในห้องนี้จริง
       function takingOver() {
         return signedIn()
             && request.resource.data.diff(resource.data).affectedKeys()
                  .hasOnly(['hostUid', 'touchedAt'])
             && request.resource.data.hostUid == request.auth.uid
-            && exists(/databases/$(database)/documents/rooms/$(room)/members/$(request.auth.uid))
+            && inRoom()
             && hostSilent();
       }
 
@@ -36,6 +40,7 @@ service cloud.firestore {
       allow create: if signedIn()
                     && request.resource.data.hostUid == request.auth.uid
                     && room.size() == 4;
+      // state ของเกมเขียนได้เฉพาะเจ้าของห้อง — หัวใจของ Host Authority
       allow update: if (signedIn() && resource.data.hostUid == request.auth.uid)
                     || takingOver();
       allow delete: if signedIn() && resource.data.hostUid == request.auth.uid;
@@ -43,8 +48,24 @@ service cloud.firestore {
       match /members/{uid} {
         allow read: if signedIn();
         // เขียนเอกสารของตัวเองได้ · เจ้าของห้องเขียนของทุกคนได้
-        // (ต้องได้ เพราะเจ้าของห้องเป็นคนแจกเลขที่นั่งและล้างสถานะ Ready)
+        // (ต้องได้ เพราะเจ้าของห้องแจกเลขที่นั่งและล้างสถานะ Ready)
         allow write: if signedIn() && (request.auth.uid == uid || isHost());
+      }
+
+      // คำขอ: ยื่นได้ในนามตัวเองเท่านั้น อ่านและลบได้เฉพาะเจ้าของห้อง
+      // ผู้เล่นจึงเปลี่ยนสถานะเกมเองไม่ได้ ทำได้แค่ขอให้เจ้าของห้องตัดสิน
+      match /actions/{id} {
+        allow read:   if isHost();
+        allow create: if inRoom() && request.resource.data.uid == request.auth.uid;
+        allow update: if false;
+        allow delete: if isHost();
+      }
+
+      // ไพ่ในมือและสำรับ: เจ้าตัวอ่านได้คนเดียว เจ้าของห้องอ่านได้เพราะต้องตัดสิน
+      // ต้องเป็น subcollection — Security Rules คุมได้แค่ระดับเอกสาร ไม่ใช่ระดับฟิลด์
+      match /secrets/{uid} {
+        allow read:  if signedIn() && (request.auth.uid == uid || isHost());
+        allow write: if isHost();
       }
     }
 

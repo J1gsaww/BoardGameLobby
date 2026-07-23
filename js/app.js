@@ -3,6 +3,8 @@
 
 import { connect, me } from './net.js';
 import * as Room from './room.js';
+import * as Games from './games.js';
+import './games/index.js';      // ต้องมาหลัง games.js เสมอ
 import { t, apply, setLang, onLangChange, lang, LANGS, messageOf } from './i18n.js';
 import * as Music from './music.js';
 
@@ -63,6 +65,85 @@ function listInto(ul, members, hostUid) {
   });
 }
 
+/* ── หน้าเลือกเกม ─────────────────────────────────── */
+/* วาดจากสิ่งที่เกมประกาศไว้ล้วน ๆ ไม่รู้จักเกมไหนเป็นการเฉพาะ
+   เพิ่มเกมที่สองแล้วหน้านี้ขึ้นให้เองโดยไม่ต้องแก้อะไรตรงนี้ */
+let lastChosenGame;
+function paintGames(room) {
+  const host = $('games');
+  const chosen = room.doc.gameId;
+  const count = room.members.filter(m => m.role === 'player').length;
+
+  host.innerHTML = '';
+  Games.all().forEach(g => {
+    const card = document.createElement('button');
+    card.className = 'game-card' + (g.id === chosen ? ' on' : '');
+    card.disabled = !room.isHost;
+
+    const art = document.createElement('div');
+    art.className = 'game-art';
+    if (g.cover) {
+      const img = document.createElement('img');
+      img.src = g.cover;
+      img.alt = '';
+      img.loading = 'lazy';
+      img.onerror = () => { art.classList.add('noimg'); img.remove(); };
+      art.appendChild(img);
+    } else {
+      art.classList.add('noimg');
+    }
+
+    const meta = document.createElement('div');
+    meta.className = 'game-meta';
+    meta.innerHTML =
+      `<span class="game-name">${esc(t(g.nameKey))}</span>` +
+      `<span class="game-seats">${esc(t('lobby.players', { min: g.minPlayers, max: g.maxPlayers }))}</span>` +
+      `<span class="game-desc">${esc(t(g.descKey))}</span>`;
+
+    card.append(art, meta);
+    card.onclick = () => Room.pickGame(g.id);
+    host.appendChild(card);
+  });
+
+  // เลื่อนเข้าจอเฉพาะตอนเกมเปลี่ยนจริง ไม่ใช่ทุกครั้งที่ห้องอัปเดต
+  // ไม่งั้นจะกระตุกใส่คนที่กำลังเลื่อนดูเกมอื่นอยู่
+  if (chosen && chosen !== lastChosenGame) {
+    host.querySelector('.game-card.on')?.scrollIntoView({ block: 'nearest' });
+  }
+  lastChosenGame = chosen;
+
+  paintGameSettings(room, Games.get(chosen), count);
+}
+
+/* ตัวเลือกของเกมที่เลือกไว้ — เกมประกาศมาเป็นข้อมูล หน้านี้แค่วาดตาม */
+function paintGameSettings(room, game, count) {
+  const host = $('gameSettings');
+  host.innerHTML = '';
+  if (!game || !game.settings.length) return;
+
+  game.settings.forEach(setting => {
+    const current = room.doc.gameSettings?.[setting.key] ?? setting.default;
+
+    const row = document.createElement('div');
+    row.className = 'field';
+    row.innerHTML = `<span class="field-label">${esc(t(Games.settingKey(game.id, setting.key)))}</span>`;
+
+    const seg = document.createElement('div');
+    seg.className = 'segmented';
+    setting.options.forEach(value => {
+      const b = document.createElement('button');
+      b.className = 'seg' + (value === current ? ' on' : '');
+      b.textContent = t(Games.optionKey(game.id, setting.key, value));
+      b.disabled = !room.isHost;
+      b.onclick = () => Room.setGameSetting(setting.key, value);
+      seg.appendChild(b);
+    });
+
+    row.appendChild(seg);
+    host.appendChild(row);
+  });
+}
+
 /* ── วาดหน้าห้อง ──────────────────────────────────── */
 function paintRoom() {
   const room = lastRoom;
@@ -72,15 +153,24 @@ function paintRoom() {
 
   if (room.doc.status === 'playing') {
     show('view-play');
-    listInto($('playersPlay'), room.members, room.doc.hostUid);
+    const game = Room.currentGame();
+    $('view-play').style.backgroundImage = game?.table ? `url("${game.table}")` : '';
+    $('playCode').textContent = room.code;
     $('btnBack').hidden = !room.isHost;
-    $('playNote').textContent = t(room.isHost ? 'play.hostNote' : 'play.guestNote');
+    $('btnBack').textContent = t('play.leaveGame');
+
+    // เกมวาดหน้าจอตัวเอง แพลตฟอร์มไม่รู้ว่าข้างในเป็นอะไร
+    if (game && typeof game.render === 'function') {
+      try { game.render($('gameStage'), Room.context()); }
+      catch (e) { console.error('เกมวาดหน้าจอไม่สำเร็จ', e); }
+    }
     return;
   }
 
   show('view-lobby');
   listInto($('players'), room.members, room.doc.hostUid);
   $('outCount').textContent = `${room.members.length}/${window.MAX_IN_ROOM}`;
+  paintGames(room);
 
   const mine = room.mine;
   const spectator = mine?.role === 'spectator';
@@ -92,14 +182,17 @@ function paintRoom() {
   $('btnStart').textContent = t('lobby.start');
   $('btnStart').disabled = !Room.canStart();
 
+  const game = Room.currentGame();
   const players = room.members.filter(m => m.role === 'player');
   let note = '';
-  if (!room.isHost) note = t('lobby.waitHost');
-  else if (players.length < 2) note = t('lobby.needTwo');
+  if (!room.isHost) note = t(game ? 'lobby.waitHost' : 'lobby.hostPicks');
+  else if (!game) note = t('lobby.noGame');
+  else if (!Games.fits(game, players.length))
+    note = t('lobby.wrongCount', { min: game.minPlayers, max: game.maxPlayers, n: players.length });
   else if (!players.every(m => m.online)) note = t('lobby.someoneOffline');
-  else if (!players.every(m => m.ready)) {
+  else if (!players.every(m => m.ready))
     note = t('lobby.waitReady', { n: players.filter(m => !m.ready).length });
-  }
+
   $('lobbyNote').textContent = note;
 }
 
@@ -231,6 +324,22 @@ $('codeChip').onclick = async () => {
   } catch { /* บางเบราว์เซอร์ไม่อนุญาต */ }
 };
 
+/* index.html กับ js/env.js ต้องเป็นรุ่นเดียวกัน ถ้าไม่ตรงแปลว่ามีไฟล์ค้างแคช
+   เป็นอาการที่เสียเวลาหาสาเหตุนานมากถ้าไม่มีอะไรบอก */
+function checkBuild() {
+  const html = document.body.dataset.build || '(ไม่มี)';
+  const js = window.BUILD || '(ไม่มี)';
+  if (html === js) { console.info('[build]', js); return; }
+  console.warn(
+    `[build] ไฟล์ไม่ตรงรุ่นกัน — index.html = ${html} · js = ${js}\n` +
+    'แปลว่ามีไฟล์ค้างแคชอยู่ กด Ctrl+Shift+R หรือรอ GitHub Pages อัปเดตสัก 10 นาที'
+  );
+  const bar = document.createElement('div');
+  bar.className = 'build-warn';
+  bar.textContent = `ไฟล์ไม่ตรงรุ่น · html ${html} · js ${js} — กด Ctrl+Shift+R`;
+  document.body.appendChild(bar);
+}
+
 /* ── บูต ──────────────────────────────────────────── */
 (async () => {
   apply();
@@ -243,6 +352,7 @@ $('codeChip').onclick = async () => {
     await connect();
     $('boot').hidden = true;
     show('view-home');
+    checkBuild();
     console.info('[env]', window.__envInfo(), 'uid', me.uid);
   } catch (e) {
     boot(messageOf(e), true);

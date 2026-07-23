@@ -6,9 +6,14 @@
    ได้ทันทีโดยไม่ต้องรู้อะไรเพิ่ม
 
    rooms/{code}
-     hostUid · status ('lobby' | 'playing') · seq · createdAt · touchedAt
+     hostUid · status ('lobby' | 'playing') · gameId · gameSettings
+     seq · createdAt · touchedAt
    rooms/{code}/members/{uid}
      name · role ('player' | 'spectator') · seat · ready · lastSeen · joinedAt
+   rooms/{code}/actions/{id}
+     uid · type · payload · at        ผู้เล่นยื่นคำขอ เจ้าของห้องอ่านแล้วลบ
+   rooms/{code}/secrets/{uid}
+     ข้อมูลลับรายคน                    เจ้าของห้องเขียน เจ้าตัวกับเจ้าของห้องอ่าน
 
    หน้าที่ที่เป็นของเจ้าของห้องอย่างเดียว: แจกเลขที่นั่ง, เปลี่ยน status,
    ล้างสถานะพร้อมตอนกลับเข้าห้อง  — คนอื่นเขียนได้แค่เอกสารของตัวเอง
@@ -16,6 +21,7 @@
 
 import { db, fb, me } from './net.js';
 import { AppError } from './i18n.js';
+import * as Games from './games.js';
 
 const ALPHA = 'ACDEFGHJKLMNPQRTUVWXY34679';   // ตัดตัวที่อ่านสับสนออก
 const HEARTBEAT = 5000;
@@ -27,6 +33,8 @@ export const room = {
   doc: null,
   members: [],
   closed: false,
+  secret: null,      // ข้อมูลลับของเราคนเดียว
+  secrets: {},       // ของทุกคน — มีครบเฉพาะตอนเราเป็นเจ้าของห้อง
   get isHost() { return !!room.doc && room.doc.hostUid === me.uid; },
   get mine()   { return room.members.find(m => m.uid === me.uid) || null; }
 };
@@ -44,6 +52,9 @@ export const watch = (fn) => watchers.push(fn);
 const emit = () => watchers.forEach(f => { try { f(room); } catch (e) { console.error(e); } });
 
 const roomRef   = (code = room.code) => fb.doc(db, 'rooms', code);
+const secretRef = (uid, code = room.code) => fb.doc(db, 'rooms', code, 'secrets', uid);
+const secretsOf = (code = room.code) => fb.collection(db, 'rooms', code, 'secrets');
+const actionsOf = (code = room.code) => fb.collection(db, 'rooms', code, 'actions');
 const memberRef = (uid, code = room.code) => fb.doc(db, 'rooms', code, 'members', uid);
 const membersOf = (code = room.code) => fb.collection(db, 'rooms', code, 'members');
 
@@ -63,6 +74,8 @@ export async function createRoom(name) {
     await fb.setDoc(roomRef(code), {
       hostUid: me.uid,
       status: 'lobby',
+      gameId: null,
+      gameSettings: {},
       seq: 0,
       createdAt: fb.serverTimestamp(),
       touchedAt: fb.serverTimestamp()
@@ -116,6 +129,7 @@ function attach(code) {
       return;
     }
     room.doc = { ...s.data() };
+    syncHostDuties();
     emit();
   }, err => console.error('[room]', err)));
 
@@ -145,6 +159,11 @@ function attach(code) {
     emit();
   }, err => console.error('[members]', err)));
 
+  unsubs.push(fb.onSnapshot(secretRef(me.uid, code), snap => {
+    room.secret = snap.exists() ? snap.data() : null;
+    emit();
+  }, err => console.error('[secret]', err)));
+
   lastBeatAt = Date.now();
   beat = setInterval(() => {
     lastBeatAt = Date.now();
@@ -158,7 +177,9 @@ function detach() {
   window.removeEventListener('beforeunload', bail);
   clearInterval(beat); beat = null;
   unsubs.forEach(u => u()); unsubs = [];
+  stopHostDuties();
   room.code = null; room.doc = null; room.members = [];
+  room.secret = null; room.secrets = {};
 }
 
 function bail() {
@@ -185,34 +206,192 @@ export const setReady = (on) =>
 
 /* ── สิ่งที่เฉพาะเจ้าของห้องทำได้ ─────────────────── */
 
+export async function pickGame(gameId) {
+  if (!room.isHost) return;
+  const game = Games.get(gameId);
+  await fb.updateDoc(roomRef(), {
+    gameId,
+    gameSettings: game ? Games.defaultSettings(game) : {},
+    touchedAt: fb.serverTimestamp()
+  });
+}
+
+export async function setGameSetting(key, value) {
+  if (!room.isHost) return;
+  await fb.updateDoc(roomRef(), {
+    [`gameSettings.${key}`]: value,
+    touchedAt: fb.serverTimestamp()
+  });
+}
+
+
 export async function start() {
   if (!room.isHost || !canStart()) return;
-  await fb.updateDoc(roomRef(), {
+  const game = currentGame();
+  const out = (await game.init(context())) || {};
+
+  const batch = fb.writeBatch(db);
+  batch.update(roomRef(), {
     status: 'playing',
+    state: out.state || {},
     seq: (room.doc.seq || 0) + 1,
     touchedAt: fb.serverTimestamp()
   });
+  for (const [uid, val] of Object.entries(out.secrets || {})) batch.set(secretRef(uid), val);
+  await batch.commit();
 }
 
 export async function backToLobby() {
   if (!room.isHost) return;
+  const secrets = await fb.getDocs(secretsOf());
+  const actions = await fb.getDocs(actionsOf());
+
   const batch = fb.writeBatch(db);
   batch.update(roomRef(), {
     status: 'lobby',
+    state: {},
     seq: (room.doc.seq || 0) + 1,
     touchedAt: fb.serverTimestamp()
   });
-  room.members.forEach(m => {
-    batch.update(memberRef(m.uid), { ready: false, role: 'player', seat: m.role === 'player' ? m.seat : null });
-  });
+  secrets.docs.forEach(d => batch.delete(d.ref));
+  actions.docs.forEach(d => batch.delete(d.ref));
+  room.members.forEach(m => batch.update(memberRef(m.uid), { ready: false, role: 'player' }));
   await batch.commit();
 }
 
+/* ── คำขอจากผู้เล่น ────────────────────────────────
+   ผู้เล่นแก้ state เองไม่ได้ (Security Rules ปิดไว้) จึงยื่นคำขอมาให้
+   เจ้าของห้องตัดสินแทน นี่คือหัวใจของ Host Authority */
+export const send = (type, payload = {}) =>
+  fb.addDoc(actionsOf(), { uid: me.uid, type, payload, at: Date.now() });
+
 export function canStart() {
+  if (room.doc?.status !== 'lobby') return false;
+  const game = Games.get(room.doc?.gameId);
+  if (!game) return false;
   const players = room.members.filter(m => m.role === 'player');
-  return players.length >= 2 &&
-         players.every(m => m.ready && m.online) &&
-         room.doc?.status === 'lobby';
+  return Games.fits(game, players.length) &&
+         players.every(m => m.ready && m.online);
+}
+
+/* เกมที่ห้องนี้เลือกไว้ · null ถ้ายังไม่ได้เลือก */
+export const currentGame = () => Games.get(room.doc?.gameId);
+
+/* ── หน้าที่ที่มีเฉพาะตอนเป็นเจ้าของห้อง ───────────
+   เปิดปิดตามสถานะจริง ไม่ใช่ตอนเข้าห้องครั้งเดียว
+   เพราะตำแหน่งโอนกลางเกมได้ คนที่รับช่วงต้องเริ่มทำหน้าที่เองทันที */
+let hostUnsubs = [];
+let queue = [];
+let busy = false;
+let clock = null;
+
+function syncHostDuties() {
+  if (room.isHost && !hostUnsubs.length) startHostDuties();
+  if (!room.isHost && hostUnsubs.length) stopHostDuties();
+  if (room.isHost) armClock();
+}
+
+function startHostDuties() {
+  console.info('[room] เริ่มทำหน้าที่เจ้าของห้อง');
+
+  hostUnsubs.push(fb.onSnapshot(secretsOf(), s => {
+    room.secrets = Object.fromEntries(s.docs.map(d => [d.id, d.data()]));
+    emit();
+  }, err => console.error('[secrets]', err)));
+
+  hostUnsubs.push(fb.onSnapshot(fb.query(actionsOf(), fb.orderBy('at')), s => {
+    s.docChanges().forEach(c => { if (c.type === 'added') queue.push(c.doc); });
+    drain();
+  }, err => console.error('[actions]', err)));
+}
+
+function stopHostDuties() {
+  hostUnsubs.forEach(u => u());
+  hostUnsubs = [];
+  queue = [];
+  busy = false;
+  clearTimeout(clock);
+  clock = null;
+}
+
+/* ประมวลผลคำขอทีละใบตามลำดับเวลา
+   เขียนสถานะใหม่กับลบคำขอใน batch เดียวกัน — ถ้าเจ้าของห้องดับกลางคัน
+   คำขอนั้นจะไม่ถูกทำซ้ำโดยคนที่รับช่วงต่อ */
+async function drain() {
+  if (busy) return;
+  busy = true;
+  try {
+    while (queue.length) {
+      const snap = queue.shift();
+      const d = snap.data();
+      try {
+        const game = currentGame();
+        const out = game ? await game.onAction(context(), { uid: d.uid, type: d.type, payload: d.payload }) : null;
+        await commit(out, snap.ref);
+      } catch (e) {
+        console.error('ประมวลผลคำขอล้มเหลว', d, e);
+        await fb.deleteDoc(snap.ref).catch(() => {});
+      }
+    }
+  } finally { busy = false; }
+}
+
+/* เขียนผลลัพธ์ลง Firestore แล้วลบคำขอทิ้งในชุดคำสั่งเดียว */
+async function commit(out, actionRef) {
+  const batch = fb.writeBatch(db);
+  let touched = false;
+
+  if (out && out.state) {
+    batch.update(roomRef(), {
+      state: out.state,
+      seq: (room.doc.seq || 0) + 1,
+      touchedAt: fb.serverTimestamp()
+    });
+    room.doc = { ...room.doc, state: out.state, seq: (room.doc.seq || 0) + 1 };
+    touched = true;
+  }
+  for (const [uid, val] of Object.entries((out && out.secrets) || {})) {
+    batch.set(secretRef(uid), val);
+    room.secrets = { ...room.secrets, [uid]: val };
+    touched = true;
+  }
+  if (actionRef) { batch.delete(actionRef); touched = true; }
+  if (touched) await batch.commit();
+  if (out && out.state) armClock();
+}
+
+/* นาฬิกาจับเวลาต่อตา — เจ้าของห้องเป็นคนถือคนเดียว
+   เก็บเวลาหมดไว้ในสถานะสาธารณะ คนที่รับช่วงต่อจึงตั้งนาฬิกาเองได้ */
+function armClock() {
+  clearTimeout(clock);
+  const at = room.doc?.state?.deadline;
+  if (!at || room.doc.status !== 'playing') return;
+  clock = setTimeout(runTick, Math.max(0, at - Date.now()) + 60);
+}
+
+async function runTick() {
+  if (!room.isHost) return;
+  const game = currentGame();
+  if (!game || typeof game.tick !== 'function') return;
+  try {
+    await commit(await game.tick(context()), null);
+  } catch (e) { console.error('นาฬิกาทำงานผิดพลาด', e); }
+}
+
+/* ── ข้อมูลที่ส่งให้เกม ───────────────────────────── */
+export function context() {
+  return {
+    me: { uid: me.uid, ...(room.mine || {}) },
+    members: room.members,
+    isHost: room.isHost,
+    hostUid: room.doc?.hostUid || null,
+    state: room.doc?.state || {},
+    settings: room.doc?.gameSettings || {},
+    secret: room.secret,          // ของเราคนเดียว
+    secrets: room.secrets,        // ครบทุกคน เฉพาะเจ้าของห้อง
+    send,
+    leave: backToLobby
+  };
 }
 
 /* ── งานบ้านของเจ้าของห้อง ───────────────────────── */

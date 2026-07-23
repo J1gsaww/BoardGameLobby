@@ -7,9 +7,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@600&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/app.css?v=2026-07-23.7">
 </head>
-<body>
+<body data-build="2026-07-23.7">
 
 <!-- home -->
 <section id="view-home" class="view" hidden>
@@ -65,8 +65,20 @@
     </button>
   </div>
 
-  <h2 class="view-title"><span data-i18n="lobby.title"></span> <span class="count" id="outCount"></span></h2>
-  <ul class="players" id="players"></ul>
+  <div class="lobby-grid">
+    <div class="pane pane-left">
+      <h2 class="view-title"><span data-i18n="lobby.title"></span> <span class="count" id="outCount"></span></h2>
+      <ul class="players" id="players"></ul>
+    </div>
+
+    <div class="pane pane-right">
+      <h2 class="view-title" data-i18n="lobby.pickGame"></h2>
+      <div class="games-scroll">
+        <div class="games" id="games"></div>
+      </div>
+      <div class="game-settings" id="gameSettings"></div>
+    </div>
+  </div>
 
   <div class="actions">
     <button class="btn btn-ready" id="btnReady"></button>
@@ -77,20 +89,18 @@
   <div id="audioLobby"></div>
 </section>
 
-<!-- game slot for the next slice -->
+<!-- game stage -->
 <section id="view-play" class="view" hidden>
-  <h2 class="view-title" data-i18n="play.title"></h2>
-  <p class="hint" data-i18n="play.hint"></p>
-  <ul class="players" id="playersPlay"></ul>
-  <div class="actions">
-    <button class="btn" id="btnBack" hidden data-i18n="play.back"></button>
+  <div class="row-top">
+    <button class="link" id="btnBack" hidden data-i18n="play.back"></button>
+    <span class="play-code" id="playCode"></span>
   </div>
-  <p class="note" id="playNote"></p>
+  <div id="gameStage"></div>
 </section>
 
 <div id="boot" class="boot"><p id="bootText"></p></div>
 
-<script src="js/env.js"></script>
-<script type="module" src="js/app.js"></script>
+<script src="js/env.js?v=2026-07-23.7"></script>
+<script type="module" src="js/app.js?v=2026-07-23.7"></script>
 </body>
 </html>

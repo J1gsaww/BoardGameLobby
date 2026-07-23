@@ -1,0 +1,74 @@
+/* score.js — ระบบคะแนนของโหมดไม่รู้จบ
+   ─────────────────────────────────────────────────────────────
+   ฟังก์ชันบริสุทธิ์ทั้งไฟล์ ทดสอบได้โดยไม่ต้องมีเกม
+
+   คะแนนมาจากสามทาง
+     1. อันดับตอนจบรอบ
+     2. การลงไพ่ระหว่างเล่น (สะสมทันทีที่ลง ไม่ต้องรอจบรอบ)
+     3. โบนัสล้มคิง คิดจากอันดับเดิมของคนล้ม
+   ───────────────────────────────────────────────────────────── */
+
+export const RANK_POINTS = { king: 500, queen: 300, viceSlave: 50, slave: 0 };
+export const PEOPLE_TOP = 150;      // ประชาชนคนแรกได้เท่านี้
+export const PEOPLE_STEP = 20;      // แล้วลดลงคนละเท่านี้
+export const PEOPLE_FLOOR = 80;     // แต่ไม่ต่ำกว่านี้
+export const TOPPLED_KING = -200;   // คิงที่โดนล้มติดลบเท่านี้
+
+export const TOPPLE_BONUS = { queen: 50, people: 100, viceSlave: 150, slave: 250 };
+
+/* คะแนนตามอันดับ
+   titled = ผลจาก engine.titles() เรียงจากคิงลงมาถึงสลาฟ
+   toppled = uid ของคิงที่โดนล้ม (ถ้ามี) */
+export function rankPoints(titled, toppled = null) {
+  const out = {};
+  let peopleSeen = 0;
+
+  for (const { uid, title } of titled) {
+    if (title === 'people') {
+      out[uid] = Math.max(PEOPLE_FLOOR, PEOPLE_TOP - PEOPLE_STEP * peopleSeen);
+      peopleSeen++;
+    } else {
+      out[uid] = RANK_POINTS[title];
+    }
+  }
+  if (toppled && out[toppled] !== undefined) out[toppled] += TOPPLED_KING;
+  return out;
+}
+
+/* คะแนนของการลงไพ่หนึ่งครั้ง
+   size  = จำนวนใบที่ลง
+   chain = ครั้งที่เท่าไรของตอง/โฟร์ในกองนี้ (นับ 1 เป็นครั้งแรก) */
+export function playPoints(size, chain = 1) {
+  if (size === 1) return 5;
+  if (size === 2) return 10;
+  if (size === 3) return chainValue(50, 200, chain);
+  if (size === 4) return chainValue(150, 300, chain);
+  return 0;
+}
+
+/* ครั้งแรกได้ base · ครั้งถัดไปคิดจาก "คะแนนที่ครั้งก่อนได้จริง" บวก 50
+   ครั้งที่ 4, 6, 8 บวกโบนัสเพิ่ม และโบนัสนั้นถูกนับรวมเป็นฐานของครั้งถัดไปด้วย */
+function chainValue(base, bonus, n) {
+  let value = base;
+  for (let i = 2; i <= n; i++) {
+    value += 50;
+    if (i >= 4 && i % 2 === 0) value += bonus;
+  }
+  return value;
+}
+
+/* โบนัสของคนที่ล้มคิง คิดจากตำแหน่งของเขาในรอบก่อน */
+export const toppleBonus = (prevTitle) => TOPPLE_BONUS[prevTitle] || 0;
+
+/* รวมคะแนนเข้ากระเป๋าเดิม */
+export function addScores(scores, delta) {
+  const out = { ...scores };
+  for (const [uid, n] of Object.entries(delta)) out[uid] = (out[uid] || 0) + n;
+  return out;
+}
+
+/* เรียงตารางคะแนนจากมากไปน้อย */
+export const leaderboard = (scores) =>
+  Object.entries(scores)
+    .map(([uid, points]) => ({ uid, points }))
+    .sort((a, b) => b.points - a.points);

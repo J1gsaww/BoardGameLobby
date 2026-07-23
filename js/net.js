@@ -26,6 +26,15 @@ export async function connect() {
   const auth = a.getAuth(app);
   db = f.getFirestore(app);
 
+  // โหมดเทสหลายคนในเบราว์เซอร์เดียว — เติม ?dev=multi ท้าย URL
+  // เก็บ session ไว้ในหน่วยความจำของแท็บนั้น แต่ละแท็บจึงได้ uid ของตัวเอง
+  // ห้ามใช้ตอนเทสเรื่องรีเฟรชแล้วกลับเข้าที่นั่งเดิม เพราะรีเฟรช = กลายเป็นคนใหม่
+  const multi = new URLSearchParams(location.search).get('dev') === 'multi';
+  if (multi) {
+    await a.setPersistence(auth, a.inMemoryPersistence);
+    console.warn('[dev] โหมดหลายแท็บ — แท็บนี้เป็นผู้เล่นแยกอีกคน รีเฟรชแล้วจะกลายเป็นคนใหม่');
+  }
+
   fb = {
     doc: f.doc, collection: f.collection,
     getDoc: f.getDoc, getDocs: f.getDocs,
