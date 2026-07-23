@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ห้องเกม</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@600&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<!-- ── หน้าแรก ──────────────────────────────────────── -->
+<section id="view-home" class="view" hidden>
+  <div class="lamp" aria-hidden="true"></div>
+
+  <header class="brand">
+    <p class="eyebrow">board game lobby</p>
+    <h1>ห้องเกม</h1>
+  </header>
+
+  <label class="field">
+    <span class="field-label">ชื่อของคุณ</span>
+    <input id="inName" maxlength="16" autocomplete="off" placeholder="ตั้งชื่อที่เพื่อนจะเห็น">
+  </label>
+
+  <button class="btn btn-primary btn-block" id="btnHost">Host Game</button>
+
+  <div class="join-row">
+    <input id="inCode" class="code-input" maxlength="4" autocomplete="off"
+           autocapitalize="characters" spellcheck="false" placeholder="รหัส">
+    <button class="btn btn-block" id="btnJoin">Join Game</button>
+  </div>
+
+  <button class="btn btn-block btn-muted" id="btnSetting" disabled>Setting</button>
+  <p class="hint">ปุ่ม Setting ยังไม่เปิดใช้ในรอบนี้</p>
+
+  <p class="err" id="homeErr" hidden></p>
+</section>
+
+<!-- ── ห้อง ─────────────────────────────────────────── -->
+<section id="view-lobby" class="view" hidden>
+  <div class="row-top">
+    <button class="link" id="btnLeave">ออกจากห้อง</button>
+    <button class="code-chip" id="codeChip" title="แตะเพื่อคัดลอก">
+      <span class="code-chip-label">รหัสห้อง</span>
+      <span class="code-chip-value" id="outCode">––––</span>
+    </button>
+  </div>
+
+  <h2 class="view-title">ผู้เล่นในห้อง <span class="count" id="outCount"></span></h2>
+  <ul class="players" id="players"></ul>
+
+  <div class="actions">
+    <button class="btn btn-ready" id="btnReady">Ready</button>
+    <button class="btn btn-primary" id="btnStart" hidden>Start</button>
+  </div>
+  <p class="note" id="lobbyNote"></p>
+</section>
+
+<!-- ── ที่ว่างของเกม (สไลซ์ถัดไป) ───────────────────── -->
+<section id="view-play" class="view" hidden>
+  <h2 class="view-title">เริ่มเกมแล้ว</h2>
+  <p class="hint">ตรงนี้คือที่ที่เกมจะมาเสียบในสไลซ์ถัดไป ตอนนี้มีไว้พิสูจน์ว่าสถานะห้องเปลี่ยนถึงทุกเครื่องจริง</p>
+  <ul class="players" id="playersPlay"></ul>
+  <div class="actions">
+    <button class="btn" id="btnBack" hidden>กลับไปที่ห้อง</button>
+  </div>
+  <p class="note" id="playNote"></p>
+</section>
+
+<div id="boot" class="boot"><p id="bootText">กำลังเชื่อมต่อ…</p></div>
+
+<script src="js/env.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+
+    match /rooms/{room} {
+
+      function hostUid() {
+        return get(/databases/$(database)/documents/rooms/$(room)).data.hostUid;
+      }
+      function isHost() { return signedIn() && hostUid() == request.auth.uid; }
+
+      // เจ้าของห้องเงียบไปนานแค่ไหนแล้ว — อ่านจากเอกสารของเขาเอง
+      // ปลอมไม่ได้ เพราะแต่ละคนเขียน lastSeen ได้แค่ของตัวเอง
+      // และ lastSeen เป็นเวลาจากเซิร์ฟเวอร์ ไม่ใช่นาฬิกาเครื่องผู้เล่น
+      function hostSilent() {
+        let p = /databases/$(database)/documents/rooms/$(room)/members/$(resource.data.hostUid);
+        return !exists(p)
+            || request.time.toMillis() - get(p).data.lastSeen.toMillis() > 25000;
+      }
+
+      // การยึดตำแหน่ง: เปลี่ยนได้แค่ hostUid กับ touchedAt
+      // ตั้งเป็นตัวเองเท่านั้น และต้องนั่งอยู่ในห้องนี้จริง
+      function takingOver() {
+        return signedIn()
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['hostUid', 'touchedAt'])
+            && request.resource.data.hostUid == request.auth.uid
+            && exists(/databases/$(database)/documents/rooms/$(room)/members/$(request.auth.uid))
+            && hostSilent();
+      }
+
+      allow read:   if signedIn();
+      allow create: if signedIn()
+                    && request.resource.data.hostUid == request.auth.uid
+                    && room.size() == 4;
+      allow update: if (signedIn() && resource.data.hostUid == request.auth.uid)
+                    || takingOver();
+      allow delete: if signedIn() && resource.data.hostUid == request.auth.uid;
+
+      match /members/{uid} {
+        allow read: if signedIn();
+        // เขียนเอกสารของตัวเองได้ · เจ้าของห้องเขียนของทุกคนได้
+        // (ต้องได้ เพราะเจ้าของห้องเป็นคนแจกเลขที่นั่งและล้างสถานะ Ready)
+        allow write: if signedIn() && (request.auth.uid == uid || isHost());
+      }
+    }
+
+    match /{document=**} { allow read, write: if false; }
+  }
+}
