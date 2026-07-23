@@ -6,6 +6,8 @@ import '../core/trick-i18n.js';
 import { makeGame } from '../core/trick-game.js';
 import { makeUI } from '../core/trick-ui.js';
 import { TYCOON } from './rules.js';
+import { withExtra } from '../core/trick-guide.js';
+import { TYCOON_EXTRA } from './guide.js';
 
 const game = makeGame(TYCOON);
 const ui = makeUI(TYCOON);
@@ -15,6 +17,7 @@ register({
   cover: 'assets/game/tycoon/cover.png',
   table: 'assets/game/tycoon/table.png',
   music: 'assets/music/slave.mp3',
+  guide: withExtra(TYCOON_EXTRA),
   minPlayers: TYCOON.minPlayers,
   maxPlayers: TYCOON.maxPlayers,
 

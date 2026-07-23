@@ -7,9 +7,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@600&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/app.css?v=2026-07-23.15">
+<link rel="stylesheet" href="css/app.css?v=2026-07-23.16">
 </head>
-<body data-build="2026-07-23.15">
+<body data-build="2026-07-23.16">
 
 <!-- home -->
 <section id="view-home" class="view" hidden>
@@ -57,10 +57,18 @@
   </div>
 </section>
 
+<!-- game rules -->
+<section id="view-rules" class="view" hidden>
+  <button class="link" id="btnRulesBack"></button>
+  <h2 class="view-title" id="rulesTitle"></h2>
+  <div id="rulesBody"></div>
+</section>
+
 <!-- lobby -->
 <section id="view-lobby" class="view" hidden>
   <div class="row-top">
     <button class="link" id="btnLeave" data-i18n="lobby.leave"></button>
+    <button class="btn btn-slim" id="btnRules" data-i18n="rules.title"></button>
     <button class="code-chip" id="codeChip" data-i18n-title="lobby.copy">
       <span class="code-chip-label" data-i18n="lobby.codeLabel"></span>
       <span class="code-chip-value" id="outCode">--</span>
@@ -95,6 +103,7 @@
 <section id="view-play" class="view" hidden>
   <div class="row-top">
     <button class="link" id="btnBack" hidden data-i18n="play.back"></button>
+    <button class="btn btn-slim" id="btnRulesPlay" data-i18n="rules.title"></button>
     <span class="play-code" id="playCode"></span>
   </div>
   <div id="gameStage"></div>
@@ -102,7 +111,7 @@
 
 <div id="boot" class="boot"><p id="bootText"></p></div>
 
-<script src="js/env.js?v=2026-07-23.15"></script>
-<script type="module" src="js/app.js?v=2026-07-23.15"></script>
+<script src="js/env.js?v=2026-07-23.16"></script>
+<script type="module" src="js/app.js?v=2026-07-23.16"></script>
 </body>
 </html>

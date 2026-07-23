@@ -6,6 +6,7 @@ import '../core/trick-i18n.js';
 import { makeGame } from '../core/trick-game.js';
 import { makeUI } from '../core/trick-ui.js';
 import { SLAVE } from './rules.js';
+import { TRICK_GUIDE } from '../core/trick-guide.js';
 
 const game = makeGame(SLAVE);
 const ui = makeUI(SLAVE);
@@ -15,6 +16,7 @@ register({
   cover: 'assets/game/slave/cover.png',
   table: 'assets/game/slave/table.png',
   music: 'assets/music/slave.mp3',
+  guide: TRICK_GUIDE,
   minPlayers: SLAVE.minPlayers,
   maxPlayers: SLAVE.maxPlayers,
 

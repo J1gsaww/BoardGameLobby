@@ -9,7 +9,7 @@ import { t, apply, setLang, onLangChange, lang, LANGS, messageOf } from './i18n.
 import * as Music from './music.js';
 
 const $ = (id) => document.getElementById(id);
-const VIEWS = ['view-home', 'view-setting', 'view-lobby', 'view-play'];
+const VIEWS = ['view-home', 'view-setting', 'view-rules', 'view-lobby', 'view-play'];
 
 let current = 'view-home';
 let lastRoom = null;
@@ -259,6 +259,63 @@ function paintAudio() {
 
 Music.onChange(paintAudio);
 
+/* ── หน้ากติกาเกม ─────────────────────────────────
+   สองชั้น — รายชื่อเกม แล้วกดเข้าไปอ่านของเกมนั้น
+   เนื้อหามาจากเกมเอง (ช่อง guide ในทะเบียน) หน้านี้แค่จัดรูปแบบให้
+   เพิ่มเกมใหม่แล้วขึ้นเองโดยไม่ต้องแก้อะไรตรงนี้ */
+let rulesGame = null;
+
+function paintRules() {
+  const body = $('rulesBody');
+  body.innerHTML = '';
+
+  if (!rulesGame) {
+    $('rulesTitle').textContent = t('rules.title');
+    $('btnRulesBack').textContent = t('rules.back');
+
+    const note = document.createElement('p');
+    note.className = 'hint';
+    note.textContent = t('rules.pick');
+    body.appendChild(note);
+
+    const list = document.createElement('div');
+    list.className = 'rule-list';
+    Games.all().forEach(g => {
+      const b = document.createElement('button');
+      b.className = 'rule-pick';
+      b.innerHTML =
+        (g.cover ? `<img src="${g.cover}" alt="" loading="lazy" onerror="this.remove()">` : '') +
+        `<span><span class="rule-pick-name">${esc(t(g.nameKey))}</span>` +
+        `<span class="rule-pick-desc">${esc(t(g.descKey))}</span></span>`;
+      b.onclick = () => { rulesGame = g.id; paintRules(); };
+      list.appendChild(b);
+    });
+    body.appendChild(list);
+    return;
+  }
+
+  const game = Games.get(rulesGame);
+  $('rulesTitle').textContent = game ? t(game.nameKey) : t('rules.title');
+  $('btnRulesBack').textContent = t('rules.back');
+
+  const sections = game?.guide?.[lang] || game?.guide?.th || [];
+  if (!sections.length) {
+    const p = document.createElement('p');
+    p.className = 'hint';
+    p.textContent = t('rules.none');
+    body.appendChild(p);
+    return;
+  }
+
+  sections.forEach(sec => {
+    const box = document.createElement('section');
+    box.className = 'rule-sec';
+    box.innerHTML = `<h3>${esc(sec.h)}</h3><ul>` +
+      sec.p.map(line => `<li>${esc(line)}</li>`).join('') + '</ul>';
+    body.appendChild(box);
+  });
+}
+
 /* ── หน้าตั้งค่า ──────────────────────────────────── */
 function paintLangPick() {
   const host = $('langPick');
@@ -275,6 +332,7 @@ function paintLangPick() {
 /* ภาษาเปลี่ยน = ทาข้อความคงที่ใหม่ แล้ววาดส่วนที่สร้างจาก JS ซ้ำ */
 onLangChange(() => {
   paintLangPick();
+  if (current === 'view-rules') paintRules();
   paintError();
   paintAudio();
   if (current === 'view-lobby' || current === 'view-play') paintRoom();
@@ -312,6 +370,15 @@ $('btnJoin').onclick = async () => {
 };
 
 $('btnSetting').onclick = () => { cameFrom = current; paintLangPick(); paintAudio(); show('view-setting'); };
+
+const openRules = () => { cameFrom = current; rulesGame = null; paintRules(); show('view-rules'); };
+$('btnRules').onclick = openRules;
+$('btnRulesPlay').onclick = openRules;
+$('btnRulesBack').onclick = () => {
+  if (rulesGame) { rulesGame = null; paintRules(); return; }   // ชั้นในกลับไปชั้นรายชื่อก่อน
+  show(cameFrom === 'view-rules' ? 'view-home' : cameFrom);
+  if (lastRoom) paintRoom();
+};
 $('btnSettingBack').onclick = () => { show(cameFrom === 'view-setting' ? 'view-home' : cameFrom); if (lastRoom) paintRoom(); };
 
 $('btnReady').onclick = () => Room.setReady(!Room.room.mine?.ready);
