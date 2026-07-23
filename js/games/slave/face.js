@@ -50,10 +50,25 @@ export function cardBack(w = 42) {
   </svg>`;
 }
 
-/* กองไพ่ซ้อนกันแบบพัดสั้น ๆ ใช้แสดงชุดที่อยู่บนกอง */
+/* กองไพ่ที่ถูกลง — เอียงคนละนิดเหมือนโยนลงโต๊ะจริง
+   มุมเอียงคิดจากรหัสไพ่ ไม่ใช่สุ่มสด ๆ เพราะหน้าจอวาดใหม่ทุกครั้งที่ห้องอัปเดต
+   ถ้าสุ่มทุกครั้ง ไพ่จะกระตุกเปลี่ยนมุมไปมาเอง */
+
+const hash = (s) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7);
+const wobble = (card, span) => (Math.abs(hash(card)) % (span * 2 + 1)) - span;
+
 export function cardRow(cards, w = 62) {
-  const overlap = cards.length > 3 ? 0.62 : 0.78;
-  return `<div class="card-row" style="--ov:${overlap}">` +
-    cards.map(c => `<span class="card-slot">${cardFace(c, w)}</span>`).join('') +
-    '</div>';
+  const n = cards.length;
+  const spread = n > 1 ? Math.min(7, 16 / n) : 0;     // ยิ่งไพ่เยอะยิ่งกางแคบลง
+  const overlap = Math.round(w * 0.52);
+
+  const slots = cards.map((card, i) => {
+    const fan = spread * (i - (n - 1) / 2);           // กางออกจากกลาง
+    const rot = (fan + wobble(card, 3)).toFixed(1);   // บวกความเอียงประจำใบ
+    const lift = Math.abs(i - (n - 1) / 2) * 2;       // ปลายพัดวางต่ำลงนิดหน่อย
+    return `<span class="fan-slot" style="--rot:${rot}deg; --lift:${lift.toFixed(0)}px">` +
+           cardFace(card, w) + '</span>';
+  }).join('');
+
+  return `<div class="card-fan" style="--overlap:${overlap}px">${slots}</div>`;
 }

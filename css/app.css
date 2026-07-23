@@ -304,8 +304,18 @@ button{ cursor:pointer; border:0; background:none; }
 .slave-notice{ color:var(--lamp); font-size:13px; margin:8px 0 0; }
 .slave-done{ text-align:center; color:var(--muted); padding:18px 0; }
 
-.card-row{ display:flex; justify-content:center; }
-.card-row .card-slot + .card-slot{ margin-left:calc(-1 * (1 - var(--ov, .78)) * 100px); }
+/* กองไพ่บนโต๊ะ — เอียงคนละนิด มีเงาใต้ใบให้ดูเหมือนวางซ้อนกันจริง */
+.card-fan{
+  display:flex; justify-content:center; align-items:flex-start;
+  padding:8px 0 14px;
+}
+.fan-slot{
+  display:block;
+  transform:rotate(var(--rot, 0deg)) translateY(var(--lift, 0));
+  transform-origin:50% 88%;
+  filter:drop-shadow(0 4px 7px rgba(0,0,0,.5));
+}
+.fan-slot + .fan-slot{ margin-left:calc(-1 * var(--overlap, 32px)); }
 .cardface{ display:block; }
 
 /* ไพ่ในมือ — แถวเดียว ซ้อนกันแบบไพ่จริง ไม่ตกบรรทัด
