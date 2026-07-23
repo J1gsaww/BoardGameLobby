@@ -5,3 +5,4 @@
 
 import './slave/index.js';
 import './tycoon/index.js';
+import './curtain_rivalry/index.js';

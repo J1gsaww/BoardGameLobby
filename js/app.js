@@ -15,9 +15,16 @@ let current = 'view-home';
 let lastRoom = null;
 let cameFrom = 'view-home';
 
+/* หน้าที่เปิดคร่อมอยู่ชั่วคราว — ห้องอัปเดตแล้วต้องไม่ลากผู้ใช้ออกจากหน้านี้
+   ไม่งั้นทุกครั้งที่มีสัญญาณชีพเข้ามา (ทุก 5 วินาที) จะโดนเด้งกลับกลางคัน */
+const OVERLAYS = ['view-rules', 'view-setting'];
+const onOverlay = () => OVERLAYS.includes(current);
+
 function show(id) {
+  if (current === id) return;
   current = id;
   VIEWS.forEach(v => { $(v).hidden = v !== id; });
+  window.scrollTo(0, 0);              // เปลี่ยนหน้าแล้วเริ่มอ่านจากบนสุดเสมอ
 }
 
 const NAME_KEY = 'lobby.name';
@@ -99,8 +106,8 @@ function paintGames(room) {
   host.innerHTML = '';
   Games.all().forEach(g => {
     const card = document.createElement('button');
-    card.className = 'game-card' + (g.id === chosen ? ' on' : '');
-    card.disabled = !room.isHost;
+    card.className = 'game-card' + (g.id === chosen ? ' on' : '') + (g.comingSoon ? ' soon' : '');
+    card.disabled = !room.isHost || !!g.comingSoon;
 
     const art = document.createElement('div');
     art.className = 'game-art';
@@ -115,15 +122,23 @@ function paintGames(room) {
       art.classList.add('noimg');
     }
 
+    if (g.comingSoon) {
+      const tag = document.createElement('span');
+      tag.className = 'soon-tag';
+      tag.textContent = t('lobby.comingSoon');
+      art.appendChild(tag);
+    }
+
     const meta = document.createElement('div');
     meta.className = 'game-meta';
     meta.innerHTML =
       `<span class="game-name">${esc(t(g.nameKey))}</span>` +
-      `<span class="game-seats">${esc(t('lobby.players', { min: g.minPlayers, max: g.maxPlayers }))}</span>` +
+      (g.comingSoon ? ''
+        : `<span class="game-seats">${esc(t('lobby.players', { min: g.minPlayers, max: g.maxPlayers }))}</span>`) +
       `<span class="game-desc">${esc(t(g.descKey))}</span>`;
 
     card.append(art, meta);
-    card.onclick = () => Room.pickGame(g.id);
+    if (!g.comingSoon) card.onclick = () => Room.pickGame(g.id);
     host.appendChild(card);
   });
 
@@ -174,7 +189,7 @@ function paintRoom() {
   $('outCode').textContent = room.code;
 
   if (room.doc.status === 'playing') {
-    show('view-play');
+    if (!onOverlay()) show('view-play');
     const game = Room.currentGame();
     $('view-play').style.backgroundImage = game?.table ? `url("${game.table}")` : '';
     $('playCode').textContent = room.code;
@@ -191,7 +206,7 @@ function paintRoom() {
   }
 
   Music.setTrack(Music.defaultTrack());
-  show('view-lobby');
+  if (!onOverlay()) show('view-lobby');
   listInto($('players'), room.members, room.doc.hostUid, {
     manage: room.isHost ? (act, m) => {
       if (act === 'kick') Room.kick(m.uid);
@@ -232,7 +247,8 @@ Room.watch((room) => {
     room.closed = false; room.kicked = false;
     lastRoom = null;
     paintChat(null);
-    show('view-home');
+    rulesGame = null;
+    show('view-home');            // ห้องหายไปแล้ว กรณีนี้ต้องลากออกมาจริง ๆ
     err(why);
     return;
   }
@@ -372,8 +388,9 @@ function paintRules() {
       b.className = 'rule-pick';
       b.innerHTML =
         (g.cover ? `<img src="${g.cover}" alt="" loading="lazy" onerror="this.remove()">` : '') +
-        `<span><span class="rule-pick-name">${esc(t(g.nameKey))}</span>` +
-        `<span class="rule-pick-desc">${esc(t(g.descKey))}</span></span>`;
+        `<span><span class="rule-pick-name">${esc(t(g.nameKey))}` +
+        (g.comingSoon ? ` <span class="soon-inline">${esc(t('lobby.comingSoon'))}</span>` : '') +
+        `</span><span class="rule-pick-desc">${esc(t(g.descKey))}</span></span>`;
       b.onclick = () => { rulesGame = g.id; paintRules(); };
       list.appendChild(b);
     });
@@ -463,6 +480,7 @@ $('btnSetting').onclick = () => { cameFrom = current; paintLangPick(); paintAudi
 const openRules = () => { cameFrom = current; rulesGame = null; paintRules(); show('view-rules'); };
 $('btnRules').onclick = openRules;
 $('btnRulesPlay').onclick = openRules;
+$('btnRulesHome').onclick = openRules;
 $('btnRulesBack').onclick = () => {
   if (rulesGame) { rulesGame = null; paintRules(); return; }   // ชั้นในกลับไปชั้นรายชื่อก่อน
   show(cameFrom === 'view-rules' ? 'view-home' : cameFrom);

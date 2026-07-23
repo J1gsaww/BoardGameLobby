@@ -257,6 +257,7 @@ export const setReady = (on) =>
 export async function pickGame(gameId) {
   if (!room.isHost) return;
   const game = Games.get(gameId);
+  if (game && game.comingSoon) return;      // ยังไม่เปิดให้เล่น
   await fb.updateDoc(roomRef(), {
     gameId,
     gameSettings: game ? Games.defaultSettings(game) : {},
