@@ -263,7 +263,8 @@ export async function backToLobby() {
    ผู้เล่นแก้ state เองไม่ได้ (Security Rules ปิดไว้) จึงยื่นคำขอมาให้
    เจ้าของห้องตัดสินแทน นี่คือหัวใจของ Host Authority */
 export const send = (type, payload = {}) =>
-  fb.addDoc(actionsOf(), { uid: me.uid, type, payload, at: Date.now() });
+  fb.addDoc(actionsOf(), { uid: me.uid, type, payload, at: Date.now() })
+    .catch(e => { console.error('[room] ส่งคำขอไม่สำเร็จ', type, e); throw e; });
 
 export function canStart() {
   if (room.doc?.status !== 'lobby') return false;
@@ -293,7 +294,14 @@ function syncHostDuties() {
 
 function startHostDuties() {
   console.info('[room] เริ่มทำหน้าที่เจ้าของห้อง');
+  try { attachHostListeners(); }
+  catch (e) {
+    stopHostDuties();                 // ล้มไม่สุดจะแย่กว่า ล้างทิ้งแล้วให้ลองใหม่รอบหน้า
+    console.error('[room] เปิดหน้าที่เจ้าของห้องไม่สำเร็จ', e);
+  }
+}
 
+function attachHostListeners() {
   hostUnsubs.push(fb.onSnapshot(secretsOf(), s => {
     room.secrets = Object.fromEntries(s.docs.map(d => [d.id, d.data()]));
     emit();

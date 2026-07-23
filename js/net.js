@@ -7,6 +7,15 @@ import { AppError } from './i18n.js';
 
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.2';
 
+/* ทุกฟังก์ชันของ Firestore ที่แอปนี้ใช้ — เพิ่มฟีเจอร์ที่ต้องใช้ตัวใหม่ ให้เติมที่นี่ */
+const FIRESTORE_API = [
+  'doc', 'collection',
+  'getDoc', 'getDocs',
+  'setDoc', 'updateDoc', 'deleteDoc', 'addDoc',
+  'onSnapshot', 'query', 'orderBy', 'where', 'limit',
+  'serverTimestamp', 'writeBatch', 'runTransaction'
+];
+
 export let db = null;
 export let fb = {};
 export const me = { uid: null };
@@ -35,13 +44,15 @@ export async function connect() {
     console.warn('[dev] โหมดหลายแท็บ — แท็บนี้เป็นผู้เล่นแยกอีกคน รีเฟรชแล้วจะกลายเป็นคนใหม่');
   }
 
-  fb = {
-    doc: f.doc, collection: f.collection,
-    getDoc: f.getDoc, getDocs: f.getDocs,
-    setDoc: f.setDoc, updateDoc: f.updateDoc, deleteDoc: f.deleteDoc,
-    onSnapshot: f.onSnapshot, serverTimestamp: f.serverTimestamp,
-    writeBatch: f.writeBatch, runTransaction: f.runTransaction
-  };
+  // ประกาศเป็นรายชื่อแล้วหยิบตามรายชื่อ — กันลืมเติมตอนเพิ่มฟีเจอร์
+  // (เคยลืม addDoc / query / orderBy มาแล้ว ปุ่มกดได้แต่ไม่มีอะไรเกิดขึ้น)
+  fb = Object.fromEntries(FIRESTORE_API.map(k => [k, f[k]]));
+
+  const missing = FIRESTORE_API.filter(k => typeof fb[k] !== 'function');
+  if (missing.length) {
+    console.error('[net] ฟังก์ชัน Firestore ที่หายไป:', missing);
+    throw new AppError('err.signInFailed', { msg: 'Firestore API ไม่ครบ: ' + missing.join(', ') });
+  }
 
   const user = await new Promise((res, rej) => {
     const stop = a.onAuthStateChanged(auth, u => { if (u) { stop(); res(u); } });
