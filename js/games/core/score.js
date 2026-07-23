@@ -8,13 +8,23 @@
      3. โบนัสล้มคิง คิดจากอันดับเดิมของคนล้ม
    ───────────────────────────────────────────────────────────── */
 
-export const RANK_POINTS = { king: 500, queen: 300, viceSlave: 50, slave: 0 };
-export const PEOPLE_TOP = 150;      // ประชาชนคนแรกได้เท่านี้
-export const PEOPLE_STEP = 20;      // แล้วลดลงคนละเท่านี้
-export const PEOPLE_FLOOR = 80;     // แต่ไม่ต่ำกว่านี้
-export const TOPPLED_KING = -200;   // คิงที่โดนล้มติดลบเท่านี้
+export const RANK_POINTS = { king: 300, queen: 200, viceSlave: 60, slave: 0 };
+export const PEOPLE_TOP = 100;      // ประชาชนคนแรกได้เท่านี้
+export const PEOPLE_STEP = 10;      // แล้วลดลงคนละเท่านี้
+export const PEOPLE_FLOOR = 60;     // แต่ไม่ต่ำกว่านี้
+/* คิงที่โดนล้มติดลบเท่านี้ — ตั้งไว้ราว 40% ของคะแนนคิง
+   ให้เจ็บพอที่จะต้องระวัง แต่ไม่ถึงขั้นล้างคะแนนทั้งรอบทิ้ง */
+export const TOPPLED_KING = -120;
+
+/* รอบที่มีการล้มคิง คิงคนใหม่ได้น้อยลง เพราะได้โบนัสล้มไปแล้ว
+   สลาฟที่ล้มคิงสำเร็จจึงได้สูงสุด 200 + 250 = 450 */
+export const KING_AFTER_TOPPLE = 200;
 
 export const TOPPLE_BONUS = { queen: 50, people: 100, viceSlave: 150, slave: 250 };
+
+/* แต้มกำลังใจของคนที่เล่นไม่จบ — ไพ่ที่เหลือในมือหารสองปัดลง แล้วคูณเท่านี้ */
+export const LEFTOVER_PER = 5;
+export const leftoverPoints = (cardsLeft) => Math.floor((cardsLeft || 0) / 2) * LEFTOVER_PER;
 
 /* คะแนนตามอันดับ
    titled = ผลจาก engine.titles() เรียงจากคิงลงมาถึงสลาฟ
@@ -27,6 +37,8 @@ export function rankPoints(titled, toppled = null) {
     if (title === 'people') {
       out[uid] = Math.max(PEOPLE_FLOOR, PEOPLE_TOP - PEOPLE_STEP * peopleSeen);
       peopleSeen++;
+    } else if (title === 'king') {
+      out[uid] = toppled ? KING_AFTER_TOPPLE : RANK_POINTS.king;
     } else {
       out[uid] = RANK_POINTS[title];
     }

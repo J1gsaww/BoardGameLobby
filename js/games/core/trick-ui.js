@@ -9,6 +9,7 @@ import { cardFace, cardBack, cardRow } from './face.js';
 import { readCombo, beats, sortForHand, isJoker, rankIndex } from './cards.js';
 import { titles } from './engine.js';
 import { makeSound } from './trick-sound.js';
+import { face as avatarFace } from '../../avatar.js';
 import { resolve } from './trick-game.js';
 
 const CARD_W = 68;
@@ -111,6 +112,7 @@ function table(st, ctx, got) {
 
   // เลือกได้แต้มเดียวเท่านั้น ใบแต้มอื่นจะกดไม่ได้จนกว่าจะเอาใบที่เลือกไว้ออกก่อน
   const lockedRank = pickedRank();
+  const playable = holding ? null : playableSet(st, ctx, rules, rev);
 
   return `
     ${seatStrip(st, ctx)}
@@ -127,9 +129,11 @@ function table(st, ctx, got) {
       <div class="slave-hand" style="${handStyle(mine.length)}">
         ${mine.map(c => {
           const on = picked.includes(c);
-          const locked = lockedRank !== null && !isJoker(c) && rankIndex(c) !== lockedRank && !on;
-          return `<button class="hand-card${on ? ' on' : ''}${locked ? ' locked' : ''}` +
-                 `${got.includes(c) ? ' fresh' : ''}" data-card="${c}"${locked ? ' disabled' : ''}>` +
+          const offRank = lockedRank !== null && !isJoker(c) && rankIndex(c) !== lockedRank && !on;
+          const unplayable = !!playable && !playable.has(c) && !on;
+          const masked = offRank || unplayable;
+          return `<button class="hand-card${on ? ' on' : ''}${masked ? ' masked' : ''}` +
+                 `${got.includes(c) ? ' fresh' : ''}" data-card="${c}"${masked ? ' disabled' : ''}>` +
                  cardFace(c, CARD_W) + '</button>';
         }).join('')}
       </div>
@@ -139,6 +143,44 @@ function table(st, ctx, got) {
       </div>
     `}
   `;
+}
+
+/* ใบไหนพอจะลงได้บ้างในกองตอนนี้
+   ต้องดูเป็นชุด ไม่ใช่ทีละใบ — 7 เดี่ยวทับคู่ 5 ไม่ได้ แต่คู่ 7 ทับได้
+   ถ้าเช็กทีละใบจะทับดำผิดจนคนเล่นสับสน */
+function playableSet(st, ctx, rules, rev) {
+  const hand = myHand(ctx);
+  const set = new Set();
+  if (!st.pile) { hand.forEach(c => set.add(c)); return set; }
+
+  const jokers = hand.filter(isJoker);
+  const byRank = new Map();
+  hand.filter(c => !isJoker(c)).forEach(c => {
+    const r = rankIndex(c);
+    if (!byRank.has(r)) byRank.set(r, []);
+    byRank.get(r).push(c);
+  });
+
+  const ok = (cards) => cards.length <= 4
+    && beats(cards, st.pile, rules, rev)
+    && (!st.mustInclude || cards.includes(st.mustInclude));
+
+  let jokersUseful = false;
+  for (const cards of byRank.values()) {
+    let good = false, usedJokers = 0;
+    for (let n = 1; n <= cards.length && !good; n++) {
+      for (let j = 0; n + j <= 4 && j <= jokers.length && !good; j++) {
+        if (ok([...cards.slice(0, n), ...jokers.slice(0, j)])) { good = true; usedJokers = j; }
+      }
+    }
+    if (good) { cards.forEach(c => set.add(c)); if (usedJokers) jokersUseful = true; }
+  }
+  for (let j = 1; j <= jokers.length && !jokersUseful; j++) {
+    if (ok(jokers.slice(0, j))) jokersUseful = true;
+  }
+  if (jokersUseful) jokers.forEach(c => set.add(c));
+
+  return set;
 }
 
 /* แต้มที่ล็อกอยู่จากไพ่ที่เลือกไว้ — โจ๊กเกอร์ไม่ล็อกเพราะเป็นไพ่แทน */
@@ -152,11 +194,12 @@ function pileStack(st) {
   const log = st.pileLog || [];
   if (!log.length) return `<p class="slave-empty">${esc(t('trick.emptyPile'))}</p>`;
 
+  const closed = !st.pile;                 // กองปิดไปแล้ว กำลังค้างให้ดู
   const shown = log.slice(-4);
   const top = shown[shown.length - 1];
   const past = shown.slice(0, -1);
 
-  return `<div class="pile-stack">` +
+  return `<div class="pile-stack${closed ? ' closed' : ''}">` +
     past.map((p, i) => `<div class="pile-past" style="--depth:${past.length - i}">${cardRow(p.cards, 46)}</div>`).join('') +
     `<div class="pile-top">${cardRow(top.cards, 58)}</div>` +
     `</div><p class="slave-by">${esc(t('trick.playedBy', { name: nameOf(st, top.by) }))}</p>`;
@@ -181,6 +224,7 @@ function seatStrip(st, ctx) {
     if (passed) tags.push(`<span class="chip-passed">${esc(t('trick.passed'))}</span>`);
 
     return `<div class="seat-chip${isTurn ? ' turn' : ''}${gone || done >= 0 ? ' finished' : ''}">
+      ${avatarFace(uid, nameOf(st, uid), (ctx.avatars || {})[uid], 34)}
       <span class="seat-chip-name">${esc(nameOf(st, uid))}${uid === ctx.me.uid ? ' \u00b7' : ''}</span>
       <span class="seat-chip-cards">${n ? cardBack(15).repeat(Math.min(n, 8)) : ''}</span>
       <span class="seat-chip-n">${n}</span>
@@ -281,8 +325,10 @@ function result(st, ctx) {
     <li class="rank-row">
       <span class="rank-place">${x.place}</span>
       <span class="rank-title">${esc(t('trick.title.' + x.title))}</span>
-      <span class="rank-name">${esc(nameOf(st, x.uid))}</span>
-      ${!over && voted[x.uid] !== undefined ? `<span class="rank-ready">${esc(t('trick.isReady'))}</span>` : ''}
+      <span class="rank-name">${avatarFace(x.uid, nameOf(st, x.uid), (ctx.avatars || {})[x.uid], 24)}${esc(nameOf(st, x.uid))}</span>
+      ${!over && voted[x.uid] !== undefined
+        ? `<span class="rank-${voted[x.uid] ? 'ready' : 'stop'}">${esc(t(voted[x.uid] ? 'trick.isReady' : 'trick.isStopping'))}</span>`
+        : ''}
       ${st.mode === 'endless'
         ? `<span class="rank-pts">${st.gained?.[x.uid] >= 0 ? '+' : ''}${st.gained?.[x.uid] ?? 0}</span>`
         : ''}

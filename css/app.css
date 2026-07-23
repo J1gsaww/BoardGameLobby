@@ -321,14 +321,28 @@ button{ cursor:pointer; border:0; background:none; }
 
 /* กองไพ่ — ของเก่าซ้อนอยู่ข้างหลังแบบมืด ๆ */
 .pile-stack{ position:relative; min-height:96px; display:grid; place-items:center; }
+/* ของเก่าซ้อนอยู่ข้างหลัง — ใช้สีดำทับแทนการลดความทึบ
+   เพราะลดความทึบแล้วไพ่ข้างหลังทะลุขึ้นมาปนกันจนดูไม่ออกว่าใบไหนเป็นใบไหน */
 .pile-past{
   position:absolute; top:calc(var(--depth) * 9px);
-  opacity:calc(.42 - var(--depth) * .09);
-  filter:brightness(.45) saturate(.6);
   transform:scale(calc(1 - var(--depth) * .04));
   pointer-events:none;
 }
+.pile-past::after{
+  content:''; position:absolute; inset:-6px;
+  background:rgba(8,6,20,calc(.42 + var(--depth) * .13));
+  border-radius:12px;
+}
 .pile-top{ position:relative; z-index:2; }
+
+/* กองที่ปิดไปแล้ว คลุมดำบาง ๆ ให้รู้ว่าจบแล้ว ไม่ใช่กองที่กำลังเล่นอยู่ */
+.pile-stack.closed .pile-top::after{
+  content:''; position:absolute; inset:-8px;
+  background:rgba(8,6,20,.42);
+  border-radius:14px;
+  pointer-events:none;
+}
+.pile-stack.closed .pile-top{ position:relative; }
 
 .card-fan{ display:flex; justify-content:center; align-items:flex-start; padding:8px 0 14px; }
 .fan-slot{
@@ -353,7 +367,16 @@ button{ cursor:pointer; border:0; background:none; }
 .hand-card:hover:not(:disabled){ transform:translateY(-8px); z-index:4; }
 .hand-card.on{ transform:translateY(-18px); z-index:5; }
 .hand-card.on .cardface > rect{ stroke:#f4a949; stroke-width:3.5; }
-.hand-card.locked{ opacity:.34; cursor:not-allowed; }   /* เลือกได้แต้มเดียวเท่านั้น */
+/* ใบที่ลงไม่ได้ตอนนี้ หรือคนละแต้มกับที่เลือกไว้ — เอาสีดำทับ ไม่ลดความทึบ
+   ลดความทึบแล้วใบที่ซ้อนอยู่ข้างหลังจะทะลุขึ้นมา อ่านไม่ออกว่าใบไหนเป็นใบไหน */
+.hand-card.masked{ cursor:not-allowed; }
+.hand-card.masked::after{
+  content:''; position:absolute; inset:0;
+  background:rgba(8,6,20,.58);
+  border-radius:9px;
+  pointer-events:none;
+}
+.hand-card.masked:hover{ transform:none; }
 .hand-card.still{ cursor:default; }
 .hand-card.fresh .cardface > rect{ stroke:#6ee3b4; stroke-width:3.5; }
 .hand-card.fresh{ transform:translateY(-10px); z-index:3; }
@@ -376,6 +399,7 @@ button{ cursor:pointer; border:0; background:none; }
 .rank-title{ font-family:var(--display); font-weight:600; font-size:14px; color:var(--lamp); min-width:74px; }
 .rank-name{ flex:1; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .rank-ready{ font-family:var(--mono); font-size:11px; color:var(--mint); }
+.rank-stop{ font-family:var(--mono); font-size:11px; color:var(--rose); font-weight:600; }
 .rank-pts{ font-family:var(--mono); font-size:13px; color:var(--mint); }
 
 .scoreboard{
@@ -499,3 +523,23 @@ button{ cursor:pointer; border:0; background:none; }
   color:var(--lamp); border:1px solid var(--line); border-radius:999px; padding:2px 8px;
   vertical-align:middle; margin-left:6px;
 }
+
+/* ── รูปประจำตัว ─────────────────────────────────── */
+.avatar{
+  display:inline-grid; place-items:center; flex:0 0 auto;
+  border-radius:50%; overflow:hidden; vertical-align:middle;
+  background:var(--sunk); border:1px solid var(--line);
+  font-family:var(--display); font-weight:700; color:#1b1530; line-height:1;
+}
+.avatar img{ width:100%; height:100%; object-fit:cover; display:block; }
+.avatar.broken{ background:var(--line); }
+
+.avatar-pick{ display:flex; align-items:center; gap:16px; }
+.avatar-btns{ display:flex; gap:8px; flex-wrap:wrap; }
+
+.players li .avatar{ margin-right:2px; }
+.seat-chip .avatar{ margin-bottom:1px; }
+.rank-name .avatar{ margin-right:8px; }
+.chat-list li{ display:flex; align-items:flex-start; gap:7px; flex-wrap:wrap; }
+.chat-list li .avatar{ margin-top:1px; }
+.chat-list .chat-text{ flex:1 1 100%; padding-left:27px; }

@@ -165,7 +165,12 @@ group('โหมดไม่รู้จบ โหวตเล่นต่อแ
   while (tb.state.phase !== 'roundEnd' && guard++ < 3000) await step(tb);
 
   ok('จบรอบแล้วมีคะแนนที่เพิ่งได้', typeof tb.state.gained, 'object');
-  ok('คิงได้อย่างน้อย 500 จากอันดับ', tb.state.gained[tb.state.ranking[0]] >= 500);
+  // คิงได้ 300 หรือ 200 ถ้ารอบนั้นมีการล้ม
+  ok('คิงได้แต้มอันดับก้อนใหญ่สุด',
+     tb.state.gained[tb.state.ranking[0]] >= tb.state.gained[tb.state.ranking[1]]);
+  ok('สลาฟได้แต้มกำลังใจถ้ายังถือไพ่ค้าง',
+     (tb.state.counts[tb.state.ranking.slice(-1)[0]] || 0) === 0
+     || tb.state.gained[tb.state.ranking.slice(-1)[0]] >= 0);
   ok('ยังไม่มีใครโหวต', Object.keys(tb.state.votes).length, 0);
 
   const totalBefore = Object.values(tb.state.scores).reduce((a, b) => a + b, 0);

@@ -7,9 +7,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@600&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/app.css?v=2026-07-23.22">
+<link rel="stylesheet" href="css/app.css?v=2026-07-23.26">
 </head>
-<body data-build="2026-07-23.22">
+<body data-build="2026-07-23.26">
 
 <!-- home -->
 <section id="view-home" class="view" hidden>
@@ -46,6 +46,19 @@
 <section id="view-setting" class="view" hidden>
   <button class="link" id="btnSettingBack" data-i18n="set.back"></button>
   <h2 class="view-title" data-i18n="set.title"></h2>
+
+  <div class="field">
+    <span class="field-label" data-i18n="set.avatar"></span>
+    <div class="avatar-pick">
+      <span id="avatarPreview"></span>
+      <div class="avatar-btns">
+        <button class="btn btn-slim" id="btnAvatarPick" data-i18n="set.avatarPick"></button>
+        <button class="btn btn-slim" id="btnAvatarClear" data-i18n="set.avatarClear"></button>
+      </div>
+    </div>
+    <input type="file" id="avatarFile" accept="image/*" hidden>
+    <p class="hint" id="avatarNote" data-i18n="set.avatarNote"></p>
+  </div>
 
   <div class="field">
     <span class="field-label" data-i18n="set.language"></span>
@@ -157,7 +170,7 @@
 })();
 </script>
 
-<script src="js/env.js?v=2026-07-23.22"></script>
-<script type="module" src="js/app.js?v=2026-07-23.22"></script>
+<script src="js/env.js?v=2026-07-23.26"></script>
+<script type="module" src="js/app.js?v=2026-07-23.26"></script>
 </body>
 </html>

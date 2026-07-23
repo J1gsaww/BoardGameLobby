@@ -35,6 +35,12 @@ const DICT = {
 
     'set.title': 'ตั้งค่า',
     'set.back': 'กลับ',
+    'set.avatar': 'รูปประจำตัว',
+    'set.avatarPick': 'เลือกรูป',
+    'set.avatarClear': 'เอาออก',
+    'set.avatarNote': 'เก็บไว้ในเครื่องนี้ · จะถูกส่งขึ้นตอนเข้าห้องเพื่อให้เพื่อนเห็น และหายจากหลังบ้านทันทีที่ห้องปิด',
+    'set.avatarNotImage': 'ไฟล์นี้ไม่ใช่รูปภาพ',
+    'set.avatarTooBig': 'ย่อรูปไม่สำเร็จ ลองใช้รูปอื่นดูนะ',
     'set.language': 'ภาษา',
     'set.langNote': 'เก็บไว้ในเครื่องนี้เท่านั้น เพื่อนในห้องเดียวกันเลือกคนละภาษาได้',
 
@@ -130,6 +136,12 @@ const DICT = {
 
     'set.title': 'Setting',
     'set.back': 'Back',
+    'set.avatar': 'Profile picture',
+    'set.avatarPick': 'Choose',
+    'set.avatarClear': 'Remove',
+    'set.avatarNote': 'Kept on this device · uploaded when you join a room so friends can see it, and wiped from the backend the moment the room closes',
+    'set.avatarNotImage': 'That file is not an image',
+    'set.avatarTooBig': 'Could not shrink that image — try another one',
     'set.language': 'Language',
     'set.langNote': 'Saved on this device only — everyone in a room can pick their own language',
 

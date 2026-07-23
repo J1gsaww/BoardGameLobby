@@ -16,6 +16,9 @@
      ข้อมูลลับรายคน                    เจ้าของห้องเขียน เจ้าตัวกับเจ้าของห้องอ่าน
    rooms/{code}/chat/{id}
      uid · name · text · at            ทุกคนในห้องอ่านได้ · เขียนได้ในนามตัวเอง
+   rooms/{code}/avatars/{uid}
+     img                               รูปประจำตัว แยกออกมาเพราะเอกสารสมาชิก
+                                       ถูกเขียนทับทุก 5 วินาที ถ้าเก็บรวมกันจะส่งรูปซ้ำทั้งวง
 
    หน้าที่ที่เป็นของเจ้าของห้องอย่างเดียว: แจกเลขที่นั่ง, เปลี่ยน status,
    ล้างสถานะพร้อมตอนกลับเข้าห้อง  — คนอื่นเขียนได้แค่เอกสารของตัวเอง
@@ -24,6 +27,7 @@
 import { db, fb, me } from './net.js';
 import { AppError } from './i18n.js';
 import * as Games from './games.js';
+import * as Avatar from './avatar.js';
 
 const ALPHA = 'ACDEFGHJKLMNPQRTUVWXY34679';   // ตัดตัวที่อ่านสับสนออก
 const HEARTBEAT = 5000;
@@ -40,6 +44,7 @@ export const room = {
   secret: null,      // ข้อมูลลับของเราคนเดียว
   secrets: {},       // ของทุกคน — มีครบเฉพาะตอนเราเป็นเจ้าของห้อง
   chat: [],          // ข้อความล่าสุดในห้อง
+  avatars: {},       // รูปประจำตัวของทุกคนในห้อง
   kicked: false,     // โดนเจ้าของห้องเตะออก
   get isHost() { return !!room.doc && room.doc.hostUid === me.uid; },
   get mine()   { return room.members.find(m => m.uid === me.uid) || null; }
@@ -62,6 +67,8 @@ const secretRef = (uid, code = room.code) => fb.doc(db, 'rooms', code, 'secrets'
 const secretsOf = (code = room.code) => fb.collection(db, 'rooms', code, 'secrets');
 const actionsOf = (code = room.code) => fb.collection(db, 'rooms', code, 'actions');
 const chatOf    = (code = room.code) => fb.collection(db, 'rooms', code, 'chat');
+const facesOf   = (code = room.code) => fb.collection(db, 'rooms', code, 'avatars');
+const faceRef   = (uid, code = room.code) => fb.doc(db, 'rooms', code, 'avatars', uid);
 const memberRef = (uid, code = room.code) => fb.doc(db, 'rooms', code, 'members', uid);
 const membersOf = (code = room.code) => fb.collection(db, 'rooms', code, 'members');
 
@@ -73,6 +80,17 @@ const ms  = (t) => (t && typeof t.toMillis === 'function') ? t.toMillis() : 0;
 const randomCode = () =>
   Array.from({ length: 4 }, () => ALPHA[Math.floor(Math.random() * ALPHA.length)]).join('');
 
+/* ปิดห้องแล้วลบของข้างในให้หมด รูปประจำตัวและแชทต้องไม่ค้างอยู่หลังบ้าน */
+const SUBS = ['members', 'secrets', 'actions', 'chat', 'avatars'];
+
+async function wipeRoom(code) {
+  for (const sub of SUBS) {
+    const snap = await fb.getDocs(fb.collection(db, 'rooms', code, sub)).catch(() => null);
+    if (snap) await Promise.all(snap.docs.map(d => fb.deleteDoc(d.ref).catch(() => {})));
+  }
+  await fb.deleteDoc(roomRef(code)).catch(() => {});
+}
+
 /* กวาดห้องร้างทิ้งตอนสร้างห้องใหม่ — ห้องที่ไม่มีใครแตะเกิน 12 ชั่วโมง
    ทำตอนนี้เพราะเป็นจังหวะเดียวที่มีคนกำลังใช้งานอยู่แน่ ๆ และไม่รบกวนใคร */
 async function sweepStaleRooms() {
@@ -80,13 +98,7 @@ async function sweepStaleRooms() {
     const cutoff = new Date(Date.now() - STALE_MS);
     const q = fb.query(fb.collection(db, 'rooms'), fb.where('touchedAt', '<', cutoff), fb.limit(5));
     const stale = await fb.getDocs(q);
-    for (const d of stale.docs) {
-      for (const sub of ['members', 'secrets', 'actions', 'chat']) {
-        const inner = await fb.getDocs(fb.collection(db, 'rooms', d.id, sub));
-        await Promise.all(inner.docs.map(x => fb.deleteDoc(x.ref).catch(() => {})));
-      }
-      await fb.deleteDoc(d.ref).catch(() => {});
-    }
+    for (const d of stale.docs) await wipeRoom(d.id);
     if (stale.size) console.info('[room] ล้างห้องร้าง', stale.size, 'ห้อง');
   } catch (e) {
     console.warn('[room] ล้างห้องร้างไม่สำเร็จ (ข้ามไป)', e.code || e);
@@ -197,6 +209,17 @@ function attach(code) {
     emit();
   }, err => console.error('[members]', err)));
 
+  unsubs.push(fb.onSnapshot(facesOf(code), s => {
+    room.avatars = Object.fromEntries(s.docs.map(d => [d.id, d.data().img]));
+    emit();
+  }, err => console.error('[avatars]', err)));
+
+  // อัปรูปของตัวเองครั้งเดียวตอนเข้าห้อง ไม่แตะอีกจนกว่าจะออก
+  const mine = Avatar.load();
+  if (mine) fb.setDoc(faceRef(me.uid, code), { img: mine, at: Date.now() })
+              .catch(e => console.warn('[avatar] อัปไม่สำเร็จ', e.code || e));
+  else fb.deleteDoc(faceRef(me.uid, code)).catch(() => {});
+
   unsubs.push(fb.onSnapshot(fb.query(chatOf(code), fb.orderBy('at')), s => {
     room.chat = s.docs.map(d => ({ id: d.id, ...d.data() })).slice(-CHAT_KEEP);
     emit();
@@ -222,7 +245,7 @@ function detach() {
   unsubs.forEach(u => u()); unsubs = [];
   stopHostDuties();
   room.code = null; room.doc = null; room.members = [];
-  room.secret = null; room.secrets = {}; room.chat = [];
+  room.secret = null; room.secrets = {}; room.chat = []; room.avatars = {};
 }
 
 function bail() {
@@ -240,9 +263,13 @@ export async function leaveRoom() {
   detach();
   room.closed = false;
   try {
-    if (midGame) await fb.updateDoc(memberRef(me.uid, code), { left: true, ready: false });
-    else await fb.deleteDoc(memberRef(me.uid, code));
-    if (lastOne) await fb.deleteDoc(roomRef(code)).catch(() => {});
+    if (midGame) {
+      await fb.updateDoc(memberRef(me.uid, code), { left: true, ready: false });
+    } else {
+      await fb.deleteDoc(memberRef(me.uid, code));
+      await fb.deleteDoc(faceRef(me.uid, code)).catch(() => {});   // ออกแล้วรูปไม่ต้องค้าง
+    }
+    if (lastOne) await wipeRoom(code);
   } catch (e) { console.warn('ออกจากห้องไม่สมบูรณ์', e); }
   emit();
 }
@@ -347,6 +374,7 @@ async function prune() {
 export async function kick(uid) {
   if (!room.isHost || uid === me.uid) return;
   await fb.updateDoc(memberRef(uid), { kicked: true });
+  await fb.deleteDoc(faceRef(uid)).catch(() => {});
 }
 
 /* ย้ายคนเข้าหรือออกจากที่นั่ง ทำได้เฉพาะตอนยังไม่เริ่มเกม */
@@ -510,6 +538,7 @@ export function context() {
     hostUid: room.doc?.hostUid || null,
     state: room.doc?.state || {},
     settings: room.doc?.gameSettings || {},
+    avatars: room.avatars,        // รูปประจำตัวของทุกคนในห้อง
     secret: room.secret,          // ของเราคนเดียว
     secrets: room.secrets,        // ครบทุกคน เฉพาะเจ้าของห้อง
     send,

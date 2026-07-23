@@ -81,6 +81,17 @@ service cloud.firestore {
         allow delete: if isHost() || roomStale();
       }
 
+      // รูปประจำตัว: แยกออกมาจากเอกสารสมาชิกเพราะสมาชิกถูกเขียนทับทุก 5 วินาที
+      // ถ้าเก็บรวมกัน Firestore จะส่งรูปซ้ำให้ทุกคนทุกครั้งที่มีสัญญาณชีพ
+      // จำกัดความยาวไว้กันเอกสารบวมและกันคนยัดไฟล์ใหญ่เข้ามา
+      match /avatars/{uid} {
+        allow read:   if signedIn();
+        allow create, update: if signedIn() && request.auth.uid == uid
+                      && request.resource.data.img is string
+                      && request.resource.data.img.size() <= 70000;
+        allow delete: if signedIn() && (request.auth.uid == uid || isHost() || roomStale());
+      }
+
       // แชท: ทุกคนในห้องอ่านได้ · เขียนได้ในนามตัวเองเท่านั้น แก้ย้อนหลังไม่ได้
       // เจ้าของห้องลบข้อความเก่าทิ้งได้เพื่อไม่ให้ห้องบวม
       match /chat/{id} {

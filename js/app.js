@@ -7,6 +7,7 @@ import * as Games from './games.js';
 import './games/index.js';      // ต้องมาหลัง games.js เสมอ
 import { t, apply, setLang, onLangChange, lang, LANGS, messageOf } from './i18n.js';
 import * as Music from './music.js';
+import * as Avatar from './avatar.js';
 
 const $ = (id) => document.getElementById(id);
 const VIEWS = ['view-home', 'view-setting', 'view-rules', 'view-lobby', 'view-play'];
@@ -69,6 +70,7 @@ function listInto(ul, members, hostUid, opts = {}) {
     if (!m.online && !m.left) badges.push(`<span class="badge">${t('badge.offline')}</span>`);
 
     li.innerHTML =
+      Avatar.face(m.uid, m.name, (lastRoom?.avatars || {})[m.uid], 30) +
       `<span class="pName">${esc(m.name || '')}</span>` +
       (m.uid === me.uid ? `<span class="pMe">${t('badge.you')}</span>` : '') +
       (badges.length ? badges.join('') : '<span class="badge"></span>');
@@ -345,6 +347,7 @@ function paintChat(room) {
   const list = $('chatList');
   list.innerHTML = msgs.length
     ? msgs.map(m => `<li${m.uid === me.uid ? ' class="mine"' : ''}>` +
+        Avatar.face(m.uid, m.name, (room.avatars || {})[m.uid], 20) +
         `<span class="chat-who">${esc(m.name || '')}</span>` +
         `<span class="chat-text">${esc(m.text || '')}</span></li>`).join('')
     : `<li class="chat-none">${esc(t('chat.empty'))}</li>`;
@@ -430,6 +433,31 @@ function paintRules() {
   });
 }
 
+/* ── รูปประจำตัว ──────────────────────────────────
+   เก็บในเครื่อง อัปขึ้นตอนเข้าห้อง ห้องปิดแล้วหายจากหลังบ้าน */
+function paintAvatar() {
+  $('avatarPreview').innerHTML = Avatar.face(me.uid || 'me', name, Avatar.load(), 64);
+  $('btnAvatarClear').hidden = !Avatar.load();
+}
+
+$('btnAvatarPick').onclick = () => $('avatarFile').click();
+$('btnAvatarClear').onclick = () => { Avatar.clear(); paintAvatar(); };
+$('avatarFile').addEventListener('change', async (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  const note = $('avatarNote');
+  try {
+    const url = await Avatar.fromFile(file);
+    Avatar.save(url);
+    paintAvatar();
+    note.textContent = t('set.avatarNote');
+  } catch (err) {
+    console.error('ย่อรูปไม่สำเร็จ', err);
+    note.textContent = t(err.message === 'notAnImage' ? 'set.avatarNotImage' : 'set.avatarTooBig');
+  }
+});
+
 /* ── หน้าตั้งค่า ──────────────────────────────────── */
 function paintLangPick() {
   const host = $('langPick');
@@ -458,6 +486,7 @@ onLangChange(() => {
 $('inName').addEventListener('input', e => {
   name = e.target.value.trim().slice(0, 16);
   localStorage.setItem(NAME_KEY, name);
+  if (current === 'view-setting') paintAvatar();
 });
 $('inCode').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase(); });
 $('inCode').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnJoin').click(); });
@@ -485,7 +514,7 @@ $('btnJoin').onclick = async () => {
   finally { $('btnJoin').disabled = false; }
 };
 
-$('btnSetting').onclick = () => { cameFrom = current; paintLangPick(); paintAudio(); show('view-setting'); };
+$('btnSetting').onclick = () => { cameFrom = current; paintLangPick(); paintAudio(); paintAvatar(); show('view-setting'); };
 
 const openRules = () => { cameFrom = current; rulesGame = null; paintRules(); show('view-rules'); };
 $('btnRules').onclick = openRules;

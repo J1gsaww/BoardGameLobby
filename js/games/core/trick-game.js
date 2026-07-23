@@ -17,7 +17,7 @@ import {
   handCounts, exchangePairs, applyExchange, PHASE
 } from './engine.js';
 import { readCombo, bestCards } from './cards.js';
-import { rankPoints, playPoints, toppleBonus, addScores } from './score.js';
+import { rankPoints, playPoints, toppleBonus, addScores, leftoverPoints } from './score.js';
 
 /* ── ตัวช่วย ───────────────────────────────────────────────── */
 
@@ -213,6 +213,12 @@ function endRound(ctx, state, g, secrets) {
 
   if (state.mode === 'endless') {
     const delta = rankPoints(titled, g.toppled);
+
+    // คนที่เล่นไม่จบ ยังถือไพ่ค้างอยู่ ได้แต้มกำลังใจตามจำนวนที่เหลือ
+    for (const [uid, n] of Object.entries(handCounts(g))) {
+      if (n > 0) delta[uid] = (delta[uid] || 0) + leftoverPoints(n);
+    }
+
     if (g.toppled) {
       const toppler = g.finished[0];
       const prev = (state.prevRanking || []).indexOf(toppler);
