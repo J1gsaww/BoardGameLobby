@@ -7,10 +7,21 @@
 import { t } from '../../i18n.js';
 import { cardFace, cardBack, cardRow } from './face.js';
 import { readCombo, beats, sortHand } from './cards.js';
+import * as Sound from './sound.js';
 
 let picked = [];          // ไพ่ที่เลือกอยู่ ต้องอยู่นอกฟังก์ชันวาด ไม่งั้นหายทุกครั้งที่รีเฟรช
 let pickedFor = '';       // ปุ่มสถานะที่ picked ผูกอยู่ ใช้ล้างเมื่อเปลี่ยนตา
 let showBoard = false;
+
+const CARD_W = 68;
+const HAND_MAX = 860;      // ความกว้างที่ยอมให้มือกางได้บนจอคอม
+
+/* ระยะเลื่อนต่อใบ — ยิ่งไพ่เยอะยิ่งซ้อนกันมากขึ้นเอง แต่ไม่แคบกว่ามุมไพ่ */
+function handStep(n) {
+  if (n <= 1) return CARD_W;
+  return Math.round(Math.max(26, Math.min(CARD_W * 0.62, (HAND_MAX - CARD_W) / (n - 1))));
+}
+const handStyle = (n) => `--cw:${CARD_W}px; --step:${handStep(n)}px`;
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
 
@@ -19,7 +30,8 @@ const myHand = (ctx) => sortHand((ctx.secret && ctx.secret.hand) || []);
 
 export function render(el, ctx) {
   const st = ctx.state;
-  if (!st || !st.phase) { el.innerHTML = ''; return; }
+  if (!st || !st.phase) { el.innerHTML = ''; Sound.reset(); return; }
+  Sound.react(st);
 
   const key = `${st.phase}:${st.roundNo}:${st.turn}:${st.seq || ''}`;
   if (key !== pickedFor) { picked = []; pickedFor = key; }
@@ -81,8 +93,8 @@ function table(st, ctx) {
     </div>
 
     ${out ? `<p class="slave-done">${esc(t('slave.youAreOut'))}</p>` : `
-      <div class="slave-hand" id="slaveHand">
-        ${mine.map(c => `<button class="hand-card${picked.includes(c) ? ' on' : ''}" data-card="${c}">${cardFace(c, 68)}</button>`).join('')}
+      <div class="slave-hand" id="slaveHand" style="${handStyle(mine.length)}">
+        ${mine.map(c => `<button class="hand-card${picked.includes(c) ? ' on' : ''}" data-card="${c}">${cardFace(c, CARD_W)}</button>`).join('')}
       </div>
       <div class="slave-actions">
         <button class="btn btn-primary" data-act="play" ${canPlay ? '' : 'disabled'}>${esc(t('slave.play'))}</button>
@@ -155,8 +167,8 @@ function exchange(st, ctx) {
     <div class="slave-centre">
       <p class="slave-status">${esc(t('slave.pickGive', { n: pair.count, name: nameOf(st, pair.lower) }))}</p>
     </div>
-    <div class="slave-hand">
-      ${mine.map(c => `<button class="hand-card${picked.includes(c) ? ' on' : ''}" data-card="${c}">${cardFace(c, 68)}</button>`).join('')}
+    <div class="slave-hand" style="${handStyle(mine.length)}">
+      ${mine.map(c => `<button class="hand-card${picked.includes(c) ? ' on' : ''}" data-card="${c}">${cardFace(c, CARD_W)}</button>`).join('')}
     </div>
     <div class="slave-actions">
       <button class="btn btn-primary" data-act="give" ${picked.length === pair.count ? '' : 'disabled'}>

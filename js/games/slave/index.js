@@ -9,6 +9,7 @@ register({
   id: 'slave',
   cover: 'assets/game/slave/cover.png',
   table: 'assets/game/slave/table.png',
+  music: 'assets/music/slave.mp3',
   minPlayers: 4,
   maxPlayers: 10,
 

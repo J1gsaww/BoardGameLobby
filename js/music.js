@@ -18,6 +18,7 @@ const FADE_MS  = 1200;
 const GESTURES = ['pointerdown', 'keydown', 'touchstart'];
 
 let el = null;
+let currentSrc = null;
 let armed = false;
 let fadeTimer = null;
 const listeners = [];
@@ -41,7 +42,8 @@ export function init() {
   music.muted = localStorage.getItem(MUTE_KEY) === '1';
 
   el = new Audio();
-  el.src = window.MUSIC_SRC;
+  currentSrc = window.MUSIC_SRC;
+  el.src = currentSrc;
   console.info('[music] กำลังหาไฟล์ที่', new URL(window.MUSIC_SRC, location.href).href);
   el.loop = true;
   el.preload = 'auto';
@@ -118,6 +120,31 @@ function fadeTo(target, from) {
     if (i >= steps) clearInterval(fadeTimer);
   }, FADE_MS / steps);
 }
+
+/* ── สลับเพลง ──────────────────────────────────────────────
+   เกมประกาศเพลงของตัวเองมาได้ เข้าเกมแล้วเปลี่ยน ออกจากเกมแล้วกลับเพลงเดิม
+   หรี่ลงก่อนแล้วค่อยสลับ ไม่ให้ตัดกลางคันจนสะดุด */
+export function setTrack(src) {
+  if (!el || !src || src === currentSrc) return;
+  currentSrc = src;
+  music.missing = false;
+
+  const swap = () => {
+    el.src = src;
+    el.load();
+    if (music.muted) { el.pause(); emit(); return; }
+    el.muted = music.pending;          // ยังไม่ได้แตะจอ ก็เล่นแบบเงียบต่อไป
+    el.play()
+      .then(() => { if (!music.pending) fadeTo(music.volume, 0); })
+      .catch(() => { music.pending = true; arm(); emit(); });
+    emit();
+  };
+
+  if (el.paused || music.muted) swap();
+  else { fadeTo(0); setTimeout(swap, 520); }
+}
+
+export const defaultTrack = () => window.MUSIC_SRC;
 
 /* ── ปุ่มควบคุม ────────────────────────────────────── */
 

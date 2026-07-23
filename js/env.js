@@ -21,7 +21,7 @@
                 location.protocol === 'file:';
   const env = local ? 'dev' : (PROJECTS.prod ? 'prod' : 'dev');
 
-  window.BUILD = '2026-07-23.8';
+  window.BUILD = '2026-07-23.11';
   window.APP_ENV = env;
   window.FIREBASE_CONFIG = PROJECTS[env];
   window.MAX_IN_ROOM = 15;

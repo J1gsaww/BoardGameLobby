@@ -156,6 +156,7 @@ function paintRoom() {
     const game = Room.currentGame();
     $('view-play').style.backgroundImage = game?.table ? `url("${game.table}")` : '';
     $('playCode').textContent = room.code;
+    Music.setTrack(game?.music || Music.defaultTrack());
     $('btnBack').hidden = !room.isHost;
     $('btnBack').textContent = t('play.leaveGame');
 
@@ -167,6 +168,7 @@ function paintRoom() {
     return;
   }
 
+  Music.setTrack(Music.defaultTrack());
   show('view-lobby');
   listInto($('players'), room.members, room.doc.hostUid);
   $('outCount').textContent = `${room.members.length}/${window.MAX_IN_ROOM}`;
@@ -211,7 +213,9 @@ Room.watch((room) => {
 /* ── แถบเสียงเพลง ─────────────────────────────────── */
 /* วาดจากฟังก์ชันเดียว แต่ลงได้หลายที่ — หน้าห้องและหน้าตั้งค่า
    หน้าตั้งค่าสำคัญกว่า เพราะเพลงเริ่มตั้งแต่เปิดเว็บ ก่อนจะเข้าห้องเสียอีก */
-const AUDIO_HOSTS = ['audioLobby', 'audioSetting'];
+/* แถบเสียงโผล่ทุกที่ที่เพลงกำลังเล่นอยู่ — หน้าแรก หน้าห้อง และหน้าตั้งค่า
+   วาดจากฟังก์ชันเดียว เลื่อนที่ไหนอีกสองที่ก็ขยับตาม */
+const AUDIO_HOSTS = ['audioHome', 'audioLobby', 'audioSetting'];
 
 function buildAudio(host) {
   host.dataset.built = '1';
@@ -313,7 +317,13 @@ $('btnSettingBack').onclick = () => { show(cameFrom === 'view-setting' ? 'view-h
 $('btnReady').onclick = () => Room.setReady(!Room.room.mine?.ready);
 $('btnStart').onclick = () => Room.start();
 $('btnBack').onclick  = () => Room.backToLobby();
-$('btnLeave').onclick = async () => { await Room.leaveRoom(); lastRoom = null; show('view-home'); err(null); };
+$('btnLeave').onclick = async () => {
+  await Room.leaveRoom();
+  lastRoom = null;
+  Music.setTrack(Music.defaultTrack());
+  show('view-home');
+  err(null);
+};
 
 $('codeChip').onclick = async () => {
   try {

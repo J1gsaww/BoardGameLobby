@@ -308,18 +308,28 @@ button{ cursor:pointer; border:0; background:none; }
 .card-row .card-slot + .card-slot{ margin-left:calc(-1 * (1 - var(--ov, .78)) * 100px); }
 .cardface{ display:block; }
 
-/* ไพ่ในมือ */
+/* ไพ่ในมือ — แถวเดียว ซ้อนกันแบบไพ่จริง ไม่ตกบรรทัด
+   --step คือระยะเลื่อนต่อใบ ui.js คำนวณมาให้ตามจำนวนไพ่
+   บนจอแคบให้ 7vw คุมอีกชั้น จะได้ไม่ล้นขอบ */
 .slave-hand{
-  display:flex; flex-wrap:wrap; justify-content:center; gap:2px;
-  padding:12px 0 4px;
+  display:flex;
+  flex-wrap:nowrap;
+  justify-content:center;
+  padding:16px 0 4px;
+  min-height:112px;
 }
 .hand-card{
   padding:0; border-radius:8px; line-height:0;
-  transform:translateY(0); transition:transform .12s, filter .12s;
+  position:relative;
+  transition:transform .12s;
 }
-.hand-card:hover{ transform:translateY(-6px); }
-.hand-card.on{ transform:translateY(-14px); filter:drop-shadow(0 0 0 2px var(--lamp)); }
-.hand-card.on .cardface rect:first-of-type{ stroke:var(--lamp); stroke-width:3; }
+.hand-card + .hand-card{
+  margin-left:calc(min(var(--step, 42px), 7vw) - var(--cw, 68px));
+}
+.hand-card:hover{ transform:translateY(-8px); z-index:4; }
+.hand-card.on{ transform:translateY(-18px); z-index:5; }
+.hand-card.on .cardface > rect{ stroke:#f4a949; stroke-width:3.5; }
+.hand-card:focus-visible{ z-index:6; }
 
 .slave-actions{ display:flex; gap:10px; justify-content:center; margin-top:16px; flex-wrap:wrap; }
 .slave-actions .btn{ min-width:130px; }
@@ -344,5 +354,8 @@ button{ cursor:pointer; border:0; background:none; }
 
 @media (max-width:640px){
   .seat-chip{ min-width:76px; }
-  .slave-hand .hand-card svg{ width:52px; height:73px; }
 }
+
+/* แถบเสียงบนหน้าแรก — เว้นระยะจากปุ่มด้านบนให้ชัดว่าเป็นคนละกลุ่ม */
+#audioHome{ margin-top:22px; }
+#audioHome .audio-bar{ background:var(--sunk); }
