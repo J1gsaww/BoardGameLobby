@@ -257,11 +257,16 @@ button{ cursor:pointer; border:0; background:none; }
   .games-scroll{ max-height:none; }
 }
 
-/* แถบเตือนตอนไฟล์ค้างแคช ไม่ควรได้เห็นในสถานการณ์ปกติ */
+/* แถบเตือนตอนหน้าเว็บค้างรุ่นเก่า ไม่ควรได้เห็นในสถานการณ์ปกติ */
 .build-warn{
   position:sticky; bottom:0; z-index:60;
+  display:flex; align-items:center; justify-content:center; gap:12px;
   background:var(--rose); color:#2a0710;
-  font-family:var(--mono); font-size:12px; text-align:center; padding:8px 12px;
+  font-family:var(--mono); font-size:12px; text-align:center; padding:9px 12px;
+}
+.build-warn button{
+  background:#2a0710; color:#ffd9e0; border-radius:8px; padding:5px 13px;
+  font-family:var(--display); font-weight:600; font-size:12px;
 }
 
 /* ══ เกมสลาฟ ═══════════════════════════════════════ */

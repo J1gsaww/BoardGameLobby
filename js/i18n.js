@@ -98,6 +98,8 @@ const DICT = {
     'audio.missing': 'ไม่พบไฟล์เพลงที่ {src}',
 
     'boot.connecting': 'กำลังเชื่อมต่อ…',
+    'build.stale': 'หน้าเว็บค้างอยู่ที่รุ่น {old} · รุ่นล่าสุดคือ {now}',
+    'build.reload': 'โหลดใหม่',
 
     'err.roomClosed': 'ห้องถูกปิดแล้ว',
     'err.codeLength': 'รหัสห้องมี 4 ตัว',
@@ -190,6 +192,8 @@ const DICT = {
     'audio.missing': 'Music file not found at {src}',
 
     'boot.connecting': 'Connecting…',
+    'build.stale': 'This page is stuck on build {old} — the latest is {now}',
+    'build.reload': 'Reload',
 
     'err.roomClosed': 'That room was closed',
     'err.codeLength': 'A room code is 4 characters',

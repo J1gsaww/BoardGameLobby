@@ -521,20 +521,39 @@ $('codeChip').onclick = async () => {
   } catch { /* บางเบราว์เซอร์ไม่อนุญาต */ }
 };
 
-/* index.html กับ js/env.js ต้องเป็นรุ่นเดียวกัน ถ้าไม่ตรงแปลว่ามีไฟล์ค้างแคช
-   เป็นอาการที่เสียเวลาหาสาเหตุนานมากถ้าไม่มีอะไรบอก */
-function checkBuild() {
+/* ตรวจว่า index.html ที่กำลังใช้อยู่เป็นรุ่นล่าสุดหรือยัง
+   ─────────────────────────────────────────────────────────────
+   ตัวเทียบรุ่นแบบเดิม (data-build เทียบกับ window.BUILD) ใช้ไม่ได้จริง
+   เพราะ index.html ตัวเก่าจะเรียก js/env.js?v=<รุ่นเก่า> ซึ่งได้ไฟล์เก่ากลับมา
+   สองค่าจึงค้างเก่าพร้อมกันอย่างสอดคล้อง แล้วไม่มีอะไรผิดปกติให้จับ
+
+   ต้องอ่านจากที่ที่ index.html แตะไม่ถึง — version.json ดึงสด ๆ ทุกครั้ง */
+async function checkBuild() {
   const html = document.body.dataset.build || '(ไม่มี)';
-  const js = window.BUILD || '(ไม่มี)';
-  if (html === js) { console.info('[build]', js); return; }
-  console.warn(
-    `[build] ไฟล์ไม่ตรงรุ่นกัน — index.html = ${html} · js = ${js}\n` +
-    'แปลว่ามีไฟล์ค้างแคชอยู่ กด Ctrl+Shift+R หรือรอ GitHub Pages อัปเดตสัก 10 นาที'
-  );
-  const bar = document.createElement('div');
-  bar.className = 'build-warn';
-  bar.textContent = `ไฟล์ไม่ตรงรุ่น · html ${html} · js ${js} — กด Ctrl+Shift+R`;
-  document.body.appendChild(bar);
+  console.info('[build]', html);
+  try {
+    const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
+    const latest = (await res.json()).build;
+    if (!latest || latest === html) return;
+
+    console.warn(`[build] หน้าเว็บค้างอยู่ที่ ${html} · รุ่นล่าสุดคือ ${latest}`);
+    const bar = document.createElement('div');
+    bar.className = 'build-warn';
+    bar.innerHTML = `<span>${esc(t('build.stale', { old: html, now: latest }))}</span>`;
+    const btn = document.createElement('button');
+    btn.textContent = t('build.reload');
+    btn.onclick = hardReload;
+    bar.appendChild(btn);
+    document.body.appendChild(bar);
+  } catch { /* เปิดแบบออฟไลน์หรือไม่มีไฟล์ ก็ไม่เป็นไร */ }
+}
+
+/* โหลดใหม่โดยเลี่ยงแคช — เติมพารามิเตอร์ให้ URL ต่างจากเดิม เบราว์เซอร์จะไปเอาของใหม่
+   เก็บพารามิเตอร์เดิมไว้ด้วย จะได้ไม่หลุดรหัสห้องจากลิงก์เชิญ */
+function hardReload() {
+  const u = new URL(location.href);
+  u.searchParams.set('_cb', Date.now().toString(36));
+  location.replace(u.toString());
 }
 
 /* ── บูต ──────────────────────────────────────────── */
