@@ -42,6 +42,7 @@ export function init() {
 
   el = new Audio();
   el.src = window.MUSIC_SRC;
+  console.info('[music] กำลังหาไฟล์ที่', new URL(window.MUSIC_SRC, location.href).href);
   el.loop = true;
   el.preload = 'auto';
   el.volume = music.volume;

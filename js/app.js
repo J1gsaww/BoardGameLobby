@@ -116,25 +116,51 @@ Room.watch((room) => {
 });
 
 /* ── แถบเสียงเพลง ─────────────────────────────────── */
+/* วาดจากฟังก์ชันเดียว แต่ลงได้หลายที่ — หน้าห้องและหน้าตั้งค่า
+   หน้าตั้งค่าสำคัญกว่า เพราะเพลงเริ่มตั้งแต่เปิดเว็บ ก่อนจะเข้าห้องเสียอีก */
+const AUDIO_HOSTS = ['audioLobby', 'audioSetting'];
+
+function buildAudio(host) {
+  host.dataset.built = '1';
+  host.innerHTML =
+    '<div class="audio-bar">' +
+      '<button class="audio-btn" aria-label="volume"></button>' +
+      '<input type="range" class="vol" min="0" max="100" step="1">' +
+      '<span class="audio-pct"></span>' +
+    '</div>' +
+    '<p class="audio-note" hidden></p>';
+  host.querySelector('.audio-btn').onclick = () => Music.toggleMute();
+  host.querySelector('.vol').addEventListener('input', e => Music.setVolume(e.target.value / 100));
+}
+
 function paintAudio() {
   const m = Music.music;
-  $('volRange').value = Math.round((m.muted ? 0 : m.volume) * 100);
-  $('volPct').textContent = `${Math.round((m.muted ? 0 : m.volume) * 100)}%`;
-  $('btnMute').textContent = m.muted ? '\u{1F507}' : '\u{1F50A}';
-  $('btnMute').title = t(m.muted ? 'audio.unmute' : 'audio.mute');
-  $('btnMute').classList.toggle('off', m.muted);
-
-  const note = m.missing ? t('audio.missing', { src: decodeURI(window.MUSIC_SRC) })
+  const pct = Math.round((m.muted ? 0 : m.volume) * 100);
+  const note = m.missing      ? t('audio.missing', { src: decodeURI(window.MUSIC_SRC) })
              : (m.pending && !m.muted) ? t('audio.blocked')
              : '';
-  $('audioNote').textContent = note;
-  $('audioNote').hidden = !note;
-  $('audioNote').classList.toggle('bad', m.missing);
+
+  AUDIO_HOSTS.forEach(id => {
+    const host = $(id);
+    if (!host) return;
+    if (!host.dataset.built) buildAudio(host);
+
+    host.querySelector('.vol').value = pct;
+    host.querySelector('.audio-pct').textContent = pct + '%';
+
+    const b = host.querySelector('.audio-btn');
+    b.textContent = m.muted ? '\u{1F507}' : '\u{1F50A}';
+    b.title = t(m.muted ? 'audio.unmute' : 'audio.mute');
+    b.classList.toggle('off', m.muted);
+
+    const n = host.querySelector('.audio-note');
+    n.textContent = note;
+    n.hidden = !note;
+    n.classList.toggle('bad', m.missing);
+  });
 }
 
 Music.onChange(paintAudio);
-$('btnMute').onclick = () => Music.toggleMute();
-$('volRange').addEventListener('input', e => Music.setVolume(e.target.value / 100));
 
 /* ── หน้าตั้งค่า ──────────────────────────────────── */
 function paintLangPick() {
@@ -188,7 +214,7 @@ $('btnJoin').onclick = async () => {
   finally { $('btnJoin').disabled = false; }
 };
 
-$('btnSetting').onclick = () => { cameFrom = current; paintLangPick(); show('view-setting'); };
+$('btnSetting').onclick = () => { cameFrom = current; paintLangPick(); paintAudio(); show('view-setting'); };
 $('btnSettingBack').onclick = () => { show(cameFrom === 'view-setting' ? 'view-home' : cameFrom); if (lastRoom) paintRoom(); };
 
 $('btnReady').onclick = () => Room.setReady(!Room.room.mine?.ready);

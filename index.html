@@ -48,6 +48,11 @@
     <div class="segmented" id="langPick"></div>
   </div>
   <p class="hint" data-i18n="set.langNote"></p>
+
+  <div class="field">
+    <span class="field-label" data-i18n="audio.label"></span>
+    <div id="audioSetting"></div>
+  </div>
 </section>
 
 <!-- lobby -->
@@ -69,13 +74,7 @@
   </div>
   <p class="note" id="lobbyNote"></p>
 
-  <div class="audio-bar">
-    <button class="audio-btn" id="btnMute" aria-label="mute"></button>
-    <input type="range" id="volRange" class="vol" min="0" max="100" step="1"
-           data-i18n-title="audio.label">
-    <span class="audio-pct" id="volPct"></span>
-  </div>
-  <p class="audio-note" id="audioNote" hidden></p>
+  <div id="audioLobby"></div>
 </section>
 
 <!-- game slot for the next slice -->
