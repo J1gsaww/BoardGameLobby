@@ -24,5 +24,9 @@
   window.APP_ENV = env;
   window.FIREBASE_CONFIG = PROJECTS[env];
   window.MAX_IN_ROOM = 15;
+
+  // ที่อยู่ไฟล์เพลง — เปลี่ยนชื่อไฟล์แล้วแก้ที่นี่ที่เดียว
+  // encodeURI จัดการช่องว่างในชื่อไฟล์ให้เอง ('Lobby Music.mp3' -> 'Lobby%20Music.mp3')
+  window.MUSIC_SRC = encodeURI('assets/music/Lobby Music.mp3');
   window.__envInfo = () => ({ env, host: h, projectId: PROJECTS[env].projectId });
 })();

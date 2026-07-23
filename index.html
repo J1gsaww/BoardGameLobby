@@ -68,6 +68,14 @@
     <button class="btn btn-primary" id="btnStart" hidden></button>
   </div>
   <p class="note" id="lobbyNote"></p>
+
+  <div class="audio-bar">
+    <button class="audio-btn" id="btnMute" aria-label="mute"></button>
+    <input type="range" id="volRange" class="vol" min="0" max="100" step="1"
+           data-i18n-title="audio.label">
+    <span class="audio-pct" id="volPct"></span>
+  </div>
+  <p class="audio-note" id="audioNote" hidden></p>
 </section>
 
 <!-- game slot for the next slice -->

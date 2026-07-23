@@ -63,6 +63,12 @@ const DICT = {
     'play.hostNote': 'คุณเป็นเจ้าของห้อง — กดกลับไปที่ห้องได้',
     'play.guestNote': 'รอเจ้าของห้องพากลับไปที่ห้อง',
 
+    'audio.label': 'ระดับเสียงเพลง',
+    'audio.mute': 'ปิดเสียง',
+    'audio.unmute': 'เปิดเสียง',
+    'audio.blocked': 'แตะที่ไหนก็ได้สักครั้ง เพลงถึงจะเริ่ม — เบราว์เซอร์ไม่ยอมให้เล่นเสียงเอง',
+    'audio.missing': 'ไม่พบไฟล์เพลงที่ {src}',
+
     'boot.connecting': 'กำลังเชื่อมต่อ…',
 
     'err.roomClosed': 'ห้องถูกปิดแล้ว',
@@ -120,6 +126,12 @@ const DICT = {
     'play.back': 'Back to room',
     'play.hostNote': 'You are the host — you can go back to the room',
     'play.guestNote': 'Waiting for the host to go back to the room',
+
+    'audio.label': 'Music volume',
+    'audio.mute': 'Mute',
+    'audio.unmute': 'Unmute',
+    'audio.blocked': 'Tap anywhere once to start the music — browsers block audio until you do',
+    'audio.missing': 'Music file not found at {src}',
 
     'boot.connecting': 'Connecting…',
 

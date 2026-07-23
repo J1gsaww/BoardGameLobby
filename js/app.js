@@ -4,6 +4,7 @@
 import { connect, me } from './net.js';
 import * as Room from './room.js';
 import { t, apply, setLang, onLangChange, lang, LANGS, messageOf } from './i18n.js';
+import * as Music from './music.js';
 
 const $ = (id) => document.getElementById(id);
 const VIEWS = ['view-home', 'view-setting', 'view-lobby', 'view-play'];
@@ -114,6 +115,27 @@ Room.watch((room) => {
   paintRoom();
 });
 
+/* ── แถบเสียงเพลง ─────────────────────────────────── */
+function paintAudio() {
+  const m = Music.music;
+  $('volRange').value = Math.round((m.muted ? 0 : m.volume) * 100);
+  $('volPct').textContent = `${Math.round((m.muted ? 0 : m.volume) * 100)}%`;
+  $('btnMute').textContent = m.muted ? '\u{1F507}' : '\u{1F50A}';
+  $('btnMute').title = t(m.muted ? 'audio.unmute' : 'audio.mute');
+  $('btnMute').classList.toggle('off', m.muted);
+
+  const note = m.missing ? t('audio.missing', { src: decodeURI(window.MUSIC_SRC) })
+             : (m.blocked && !m.muted) ? t('audio.blocked')
+             : '';
+  $('audioNote').textContent = note;
+  $('audioNote').hidden = !note;
+  $('audioNote').classList.toggle('bad', m.missing);
+}
+
+Music.onChange(paintAudio);
+$('btnMute').onclick = () => Music.toggleMute();
+$('volRange').addEventListener('input', e => Music.setVolume(e.target.value / 100));
+
 /* ── หน้าตั้งค่า ──────────────────────────────────── */
 function paintLangPick() {
   const host = $('langPick');
@@ -131,6 +153,7 @@ function paintLangPick() {
 onLangChange(() => {
   paintLangPick();
   paintError();
+  paintAudio();
   if (current === 'view-lobby' || current === 'view-play') paintRoom();
 });
 
@@ -188,6 +211,8 @@ $('codeChip').onclick = async () => {
   $('bootText').textContent = t('boot.connecting');
   $('inName').value = name;
   paintLangPick();
+  Music.init();
+  paintAudio();
   try {
     await connect();
     $('boot').hidden = true;
