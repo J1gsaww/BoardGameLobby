@@ -3,10 +3,11 @@
 import { execFileSync } from 'node:child_process';
 
 const files = [
-  'js/games/slave/cards.test.mjs',
-  'js/games/slave/engine.test.mjs',
-  'js/games/slave/score.test.mjs',
-  'js/games/slave/flow.test.mjs'
+  'js/games/core/cards.test.mjs',
+  'js/games/core/engine.test.mjs',
+  'js/games/core/score.test.mjs',
+  'js/games/core/flow.test.mjs',
+  'js/games/core/tycoon.test.mjs'
 ];
 
 let bad = 0;

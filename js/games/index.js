@@ -4,3 +4,4 @@
    ต้องโหลดหลัง games.js เสมอ (ES module ยกคำสั่ง import ขึ้นก่อน) */
 
 import './slave/index.js';
+import './tycoon/index.js';

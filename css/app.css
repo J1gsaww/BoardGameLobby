@@ -369,3 +369,10 @@ button{ cursor:pointer; border:0; background:none; }
 /* แถบเสียงบนหน้าแรก — เว้นระยะจากปุ่มด้านบนให้ชัดว่าเป็นคนละกลุ่ม */
 #audioHome{ margin-top:22px; }
 #audioHome .audio-bar{ background:var(--sunk); }
+
+/* ป้ายบอกว่ากำลังปฏิวัติอยู่ — ถ้าไม่บอก คนเล่นจะงงว่าทำไมลงไพ่ใหญ่ไม่ได้ */
+.rev-badge{
+  font-family:var(--display); font-weight:600; font-size:12px;
+  color:#2a0710; background:var(--rose);
+  border-radius:999px; padding:4px 12px; letter-spacing:.02em;
+}
