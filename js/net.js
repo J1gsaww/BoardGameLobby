@@ -3,6 +3,8 @@
    แต่ต้องมี เพราะ Security Rules ต้องรู้ว่า "ใคร" กำลังเขียน
    และเพราะรหัสนี้เองที่ทำให้คนที่รีเฟรชหน้ากลับเข้าที่เดิมได้ */
 
+import { AppError } from './i18n.js';
+
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.2';
 
 export let db = null;
@@ -11,10 +13,8 @@ export const me = { uid: null };
 
 export async function connect() {
   const cfg = window.FIREBASE_CONFIG;
-  if (!cfg || !cfg.apiKey) throw new Error('ไม่พบค่า Firebase ใน js/env.js');
-  if (location.protocol === 'file:') {
-    throw new Error('เปิดผ่าน file:// ไม่ได้\n\nต้องเสิร์ฟผ่าน http — ใช้ GitHub Pages\nหรือรัน  npx serve  ในโฟลเดอร์นี้');
-  }
+  if (!cfg || !cfg.apiKey) throw new AppError('err.noConfig');
+  if (location.protocol === 'file:') throw new AppError('err.fileProtocol');
 
   const [{ initializeApp }, a, f] = await Promise.all([
     import(`${SDK}/firebase-app.js`),
@@ -38,11 +38,12 @@ export async function connect() {
     const stop = a.onAuthStateChanged(auth, u => { if (u) { stop(); res(u); } });
     a.signInAnonymously(auth).catch(e => {
       stop();
-      rej(new Error(e.code === 'auth/operation-not-allowed'
-        ? 'ยังไม่ได้เปิด Anonymous sign-in\n\nFirebase console → Authentication\n→ Sign-in method → Anonymous → Enable'
-        : e.code === 'auth/unauthorized-domain'
-          ? `โดเมนนี้ยังไม่ได้รับอนุญาต\n\nAuthentication → Settings → Authorized domains\n→ เพิ่ม ${location.hostname}`
-          : 'เข้าสู่ระบบไม่สำเร็จ: ' + e.message));
+      rej(
+        e.code === 'auth/configuration-not-found' ? new AppError('err.authNotConfigured')
+      : e.code === 'auth/operation-not-allowed'   ? new AppError('err.authAnonDisabled')
+      : e.code === 'auth/unauthorized-domain'     ? new AppError('err.unauthorizedDomain', { host: location.hostname })
+      : new AppError('err.signInFailed', { msg: e.message })
+      );
     });
   });
 

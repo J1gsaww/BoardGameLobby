@@ -109,3 +109,16 @@ button{ cursor:pointer; border:0; background:none; }
 
 :focus-visible{ outline:2px solid var(--lamp); outline-offset:2px; }
 @media (prefers-reduced-motion:reduce){ *{ transition:none !important; } }
+
+/* ── ตัวเลือกแบบแบ่งช่อง (ใช้เลือกภาษา) ──────────── */
+.segmented{
+  display:flex; gap:6px; background:var(--sunk);
+  border:1px solid var(--line); border-radius:var(--r); padding:6px;
+}
+.seg{
+  flex:1; border-radius:10px; padding:11px 12px;
+  font-family:var(--display); font-weight:600; font-size:15px; color:var(--muted);
+  transition:background .15s, color .15s;
+}
+.seg:hover{ color:var(--ink); }
+.seg.on{ background:var(--lamp); color:#241704; }

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ห้องเกม</title>
+<title>Game Room</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@600&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
@@ -11,66 +11,77 @@
 </head>
 <body>
 
-<!-- ── หน้าแรก ──────────────────────────────────────── -->
+<!-- home -->
 <section id="view-home" class="view" hidden>
   <div class="lamp" aria-hidden="true"></div>
 
   <header class="brand">
-    <p class="eyebrow">board game lobby</p>
-    <h1>ห้องเกม</h1>
+    <p class="eyebrow" data-i18n="home.eyebrow"></p>
+    <h1 data-i18n="home.title"></h1>
   </header>
 
   <label class="field">
-    <span class="field-label">ชื่อของคุณ</span>
-    <input id="inName" maxlength="16" autocomplete="off" placeholder="ตั้งชื่อที่เพื่อนจะเห็น">
+    <span class="field-label" data-i18n="home.nameLabel"></span>
+    <input id="inName" maxlength="16" autocomplete="off" data-i18n-placeholder="home.namePlaceholder">
   </label>
 
-  <button class="btn btn-primary btn-block" id="btnHost">Host Game</button>
+  <button class="btn btn-primary btn-block" id="btnHost" data-i18n="home.host"></button>
 
   <div class="join-row">
     <input id="inCode" class="code-input" maxlength="4" autocomplete="off"
-           autocapitalize="characters" spellcheck="false" placeholder="รหัส">
-    <button class="btn btn-block" id="btnJoin">Join Game</button>
+           autocapitalize="characters" spellcheck="false" data-i18n-placeholder="home.codePlaceholder">
+    <button class="btn btn-block" id="btnJoin" data-i18n="home.join"></button>
   </div>
 
-  <button class="btn btn-block btn-muted" id="btnSetting" disabled>Setting</button>
-  <p class="hint">ปุ่ม Setting ยังไม่เปิดใช้ในรอบนี้</p>
+  <button class="btn btn-block btn-muted" id="btnSetting" data-i18n="home.setting"></button>
 
   <p class="err" id="homeErr" hidden></p>
 </section>
 
-<!-- ── ห้อง ─────────────────────────────────────────── -->
+<!-- setting -->
+<section id="view-setting" class="view" hidden>
+  <button class="link" id="btnSettingBack" data-i18n="set.back"></button>
+  <h2 class="view-title" data-i18n="set.title"></h2>
+
+  <div class="field">
+    <span class="field-label" data-i18n="set.language"></span>
+    <div class="segmented" id="langPick"></div>
+  </div>
+  <p class="hint" data-i18n="set.langNote"></p>
+</section>
+
+<!-- lobby -->
 <section id="view-lobby" class="view" hidden>
   <div class="row-top">
-    <button class="link" id="btnLeave">ออกจากห้อง</button>
-    <button class="code-chip" id="codeChip" title="แตะเพื่อคัดลอก">
-      <span class="code-chip-label">รหัสห้อง</span>
-      <span class="code-chip-value" id="outCode">––––</span>
+    <button class="link" id="btnLeave" data-i18n="lobby.leave"></button>
+    <button class="code-chip" id="codeChip" data-i18n-title="lobby.copy">
+      <span class="code-chip-label" data-i18n="lobby.codeLabel"></span>
+      <span class="code-chip-value" id="outCode">--</span>
     </button>
   </div>
 
-  <h2 class="view-title">ผู้เล่นในห้อง <span class="count" id="outCount"></span></h2>
+  <h2 class="view-title"><span data-i18n="lobby.title"></span> <span class="count" id="outCount"></span></h2>
   <ul class="players" id="players"></ul>
 
   <div class="actions">
-    <button class="btn btn-ready" id="btnReady">Ready</button>
-    <button class="btn btn-primary" id="btnStart" hidden>Start</button>
+    <button class="btn btn-ready" id="btnReady"></button>
+    <button class="btn btn-primary" id="btnStart" hidden></button>
   </div>
   <p class="note" id="lobbyNote"></p>
 </section>
 
-<!-- ── ที่ว่างของเกม (สไลซ์ถัดไป) ───────────────────── -->
+<!-- game slot for the next slice -->
 <section id="view-play" class="view" hidden>
-  <h2 class="view-title">เริ่มเกมแล้ว</h2>
-  <p class="hint">ตรงนี้คือที่ที่เกมจะมาเสียบในสไลซ์ถัดไป ตอนนี้มีไว้พิสูจน์ว่าสถานะห้องเปลี่ยนถึงทุกเครื่องจริง</p>
+  <h2 class="view-title" data-i18n="play.title"></h2>
+  <p class="hint" data-i18n="play.hint"></p>
   <ul class="players" id="playersPlay"></ul>
   <div class="actions">
-    <button class="btn" id="btnBack" hidden>กลับไปที่ห้อง</button>
+    <button class="btn" id="btnBack" hidden data-i18n="play.back"></button>
   </div>
   <p class="note" id="playNote"></p>
 </section>
 
-<div id="boot" class="boot"><p id="bootText">กำลังเชื่อมต่อ…</p></div>
+<div id="boot" class="boot"><p id="bootText"></p></div>
 
 <script src="js/env.js"></script>
 <script type="module" src="js/app.js"></script>

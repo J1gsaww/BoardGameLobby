@@ -15,6 +15,7 @@
    ───────────────────────────────────────────────────────────── */
 
 import { db, fb, me } from './net.js';
+import { AppError } from './i18n.js';
 
 const ALPHA = 'ACDEFGHJKLMNPQRTUVWXY34679';   // ตัดตัวที่อ่านสับสนออก
 const HEARTBEAT = 5000;
@@ -73,20 +74,20 @@ export async function createRoom(name) {
     attach(code);
     return code;
   }
-  throw new Error('สุ่มรหัสห้องไม่ได้ ลองอีกครั้ง');
+  throw new AppError('err.codeGenFail');
 }
 
 export async function joinRoom(code, name) {
   profileName = name;
   code = String(code || '').trim().toUpperCase();
-  if (code.length !== 4) throw new Error('รหัสห้องมี 4 ตัว');
+  if (code.length !== 4) throw new AppError('err.codeLength');
 
   const snap = await fb.getDoc(roomRef(code));
-  if (!snap.exists()) throw new Error(`ไม่พบห้อง ${code}`);
+  if (!snap.exists()) throw new AppError('err.roomNotFound', { code });
 
   const members = await fb.getDocs(membersOf(code));
   const already = members.docs.some(d => d.id === me.uid);
-  if (!already && members.size >= (window.MAX_IN_ROOM || 15)) throw new Error('ห้องเต็มแล้ว');
+  if (!already && members.size >= (window.MAX_IN_ROOM || 15)) throw new AppError('err.roomFull');
 
   // เข้าตอนเกมเริ่มไปแล้ว = เป็นคนดู · เจ้าของห้องจะแจกที่นั่งให้เองถ้ายังอยู่ในห้อง
   const playing = snap.data().status === 'playing';
