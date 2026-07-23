@@ -78,7 +78,7 @@ const allHands = (g) =>
 const withClock = (st) => ({
   ...st,
   deadline: (st.phase === 'play' && st.turnSeconds > 0 && st.turn)
-    ? Date.now() + st.turnSeconds * 1000
+    ? Math.max(Date.now(), st.holdUntil || 0) + st.turnSeconds * 1000
     : null
 });
 
@@ -89,6 +89,8 @@ const nameMap = (members) => Object.fromEntries(members.map(m => [m.uid, m.name 
    แกนกลางไม่รู้จักเกมไหนเป็นการเฉพาะเลย */
 export const resolve = (rules, settings) =>
   rules.fromSettings ? rules.fromSettings(settings || {}) : rules;
+
+const HOLD_MS = 3000;   // ค้างกองที่เพิ่งจบไว้เท่านี้ ให้ทันเห็นว่าใครปิดกอง
 
 export function makeGame(baseRules) {
   const MIN_PLAYERS = baseRules.minPlayers;
@@ -114,7 +116,9 @@ function init(ctx) {
     prevRanking: null,
     votes: {},
     exchange: null,
-    notice: null
+    notice: null,
+    pileLog: [],
+    holdUntil: null
   }));
 
   return { state, secrets: allHands(g) };
@@ -139,8 +143,13 @@ async function onAction(ctx, action) {
 
 function move(ctx, st, act) {
   const rules = resolve(baseRules, ctx.settings);
+
+  // ระหว่างค้างกอง ใครกดอะไรก็ไม่รับ ให้ทุกคนได้ดูก่อนว่ากองจบยังไง
+  if (st.holdUntil && Date.now() < st.holdUntil) return null;
+
   const g = hydrate(st, ctx.secrets);
   const before = { ...g.hands };
+  const pileWasEmpty = !g.pile;
   const r = apply(g, act.type === 'play'
     ? { type: 'play', uid: act.uid, cards: act.cards }
     : { type: 'pass', uid: act.uid }, rules);
@@ -149,6 +158,17 @@ function move(ctx, st, act) {
   const g2 = r.state;
 
   let state = publish(g2, { ...st, notice: null });
+
+  // ประวัติกอง — เริ่มนับใหม่เมื่อขึ้นกองใหม่ เก็บไว้ 4 ครั้งล่าสุด
+  if (act.type === 'play') {
+    const prior = pileWasEmpty ? [] : (st.pileLog || []);
+    state.pileLog = [...prior, { cards: [...act.cards].sort(), by: act.uid }].slice(-4);
+  }
+
+  // กองเพิ่งจบ ให้ค้างไว้สักครู่ ทุกคนจะได้ทันเห็นว่าใครปิดกองด้วยอะไร
+  state.holdUntil = (g.pile && !g2.pile && g2.phase !== PHASE.DONE)
+    ? Date.now() + HOLD_MS
+    : null;
 
   if (st.mode === 'endless' && act.type === 'play') {
     const combo = readCombo(act.cards, rules);
@@ -210,6 +230,7 @@ function endRound(ctx, state, g, secrets) {
       ...state,
       phase: twoRoundsDone ? 'gameOver' : 'roundEnd',
       deadline: null,
+      holdUntil: null,
       ranking: rank,
       titles: titled,
       scores,
@@ -245,7 +266,9 @@ function nextRound(ctx, st) {
     titles: null,
     gained: null,
     votes: {},
-    notice: null
+    notice: null,
+    pileLog: [],
+    holdUntil: null
   });
 
   const pairs = prevRanking.length >= MIN_PLAYERS ? exchangePairs(prevRanking) : [];
@@ -276,23 +299,42 @@ function give(ctx, st, uid, cards) {
 
   // ครบทุกคู่แล้ว สลับไพ่จริง — ฝั่งล่างเลือกไม่ได้ ระบบหยิบใบดีที่สุดให้
   let hands = Object.fromEntries(st.seats.map(u => [u, [...((ctx.secrets[u] || {}).hand || [])]]));
+  const swapped = {};
   for (const p of ex.pairs) {
     const fromLower = bestCards(hands[p.lower], p.count);
+    swapped[p.lower] = fromLower;
     hands = applyExchange(hands, p.upper, p.lower, given[p.upper], fromLower);
   }
 
   const counts = Object.fromEntries(Object.entries(hands).map(([u, h]) => [u, h.length]));
+
+  // จดไว้ในข้อมูลลับของแต่ละคนว่าเสียอะไรไปและได้อะไรมา
+  // หน้าจอจะได้ไฮไลต์ให้ทันเห็น — ของเดิมแลกเงียบจนไม่รู้ว่าโดนอะไรไป
+  const notes = {};
+  for (const p of ex.pairs) {
+    const fromLower = swapped[p.lower];
+    notes[p.upper] = { gave: given[p.upper], got: fromLower };
+    notes[p.lower] = { gave: fromLower, got: given[p.upper] };
+  }
+
   return {
-    state: withClock({ ...st, phase: 'play', exchange: null, counts }),
-    secrets: Object.fromEntries(Object.entries(hands).map(([u, h]) => [u, { hand: h }]))
+    state: withClock({ ...st, phase: 'play', exchange: null, counts, pileLog: [], holdUntil: null }),
+    secrets: Object.fromEntries(Object.entries(hands).map(([u, h]) => [u, {
+      hand: h,
+      lastGave: notes[u]?.gave || null,
+      lastGot: notes[u]?.got || null
+    }]))
   };
 }
 
 /* ── โหวตเล่นต่อ ───────────────────────────────────────────── */
 
+/* ใช้ทั้งสองโหมด — โหมดปกติทุกคนกด "พร้อมไปต่อ" (ถือเป็น yes)
+   โหมดไม่รู้จบเลือกได้ว่าจะไปต่อหรือพอ · ต้องครบทุกคนก่อนเสมอ
+   จะได้ไม่มีใครโดนลากไปรอบใหม่ทั้งที่ยังดูผลไม่ทัน */
 function vote(ctx, st, uid, yes) {
   if (!st.seats.includes(uid)) return null;
-  const votes = { ...st.votes, [uid]: yes };
+  const votes = { ...st.votes, [uid]: st.mode === 'endless' ? yes : true };
   const here = seatedPlayers(ctx.members).map(p => p.uid);
   const waiting = here.some(u => votes[u] === undefined);
 

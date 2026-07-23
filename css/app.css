@@ -269,9 +269,14 @@ button{ cursor:pointer; border:0; background:none; }
   font-family:var(--display); font-weight:600; font-size:12px;
 }
 
-/* ══ เกมสลาฟ ═══════════════════════════════════════ */
-#view-play{ max-width:980px; }
+/* ══ หน้าเกมไพ่ ════════════════════════════════════ */
+#view-play{ max-width:1120px; padding-bottom:96px; }   /* เว้นที่ให้แผงแชทที่ลอยอยู่มุมขวาล่าง */
+#view-lobby{ padding-bottom:96px; }
 .play-code{ font-family:var(--mono); font-size:13px; color:var(--muted); letter-spacing:.18em; }
+
+/* ตารางคะแนนปักไว้ด้านขวา ไม่ต้องกดเปิดปิดอีก */
+.trick-wrap{ display:grid; grid-template-columns:1fr; gap:16px; margin-top:12px; }
+.trick-wrap.has-side{ grid-template-columns:minmax(0,1fr) 246px; align-items:start; }
 
 .slave{
   background:rgba(14,11,28,.72);
@@ -279,7 +284,8 @@ button{ cursor:pointer; border:0; background:none; }
   border:1px solid var(--line);
   border-radius:20px;
   padding:18px 20px 22px;
-  margin-top:12px;
+  min-height:560px;              /* กันจอเด้งตอนเปลี่ยนช่วง ไม่งั้นความสูงกระโดดตอนแจกไพ่ */
+  display:flex; flex-direction:column;
 }
 
 .slave-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
@@ -287,33 +293,44 @@ button{ cursor:pointer; border:0; background:none; }
 .btn-slim{ padding:7px 13px; font-size:13px; border-radius:10px; }
 
 /* แถบผู้เล่น */
-.slave-seats{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-bottom:16px; }
+.slave-seats{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-bottom:14px; }
 .seat-chip{
   display:flex; flex-direction:column; align-items:center; gap:3px;
-  min-width:92px; padding:8px 10px;
+  min-width:96px; padding:8px 10px;
   background:rgba(33,27,58,.85); border:1px solid var(--line); border-radius:13px;
 }
 .seat-chip.turn{ border-color:var(--lamp); box-shadow:0 0 0 1px var(--lamp) inset; }
 .seat-chip.finished{ opacity:.55; }
-.seat-chip-name{ font-size:12.5px; font-weight:500; max-width:96px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.seat-chip-name{ font-size:12.5px; font-weight:500; max-width:104px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .seat-chip-cards{ display:flex; }
 .seat-chip-cards svg + svg{ margin-left:-9px; }
 .seat-chip-n{ font-family:var(--mono); font-size:11px; color:var(--lamp); }
-.seat-chip-tag{ font-family:var(--mono); font-size:10px; color:var(--muted); }
+.seat-chip-tag{ display:flex; flex-wrap:wrap; gap:4px; justify-content:center; font-family:var(--mono); font-size:10px; }
+.chip-title{ color:var(--lamp); }
+.chip-done{ color:var(--muted); }
+.chip-passed{ color:var(--rose); font-weight:600; }   /* ผ่านแล้วต้องเห็นชัด */
 
 /* กลางโต๊ะ */
-.slave-centre{ text-align:center; padding:12px 0 16px; }
+.slave-centre{ text-align:center; padding:10px 0 14px; }
 .slave-status{ font-family:var(--display); font-size:19px; font-weight:600; margin:10px 0 0; }
 .slave-by{ font-size:12px; color:var(--muted); margin:8px 0 0; }
 .slave-empty{ color:var(--muted); font-size:14px; margin:8px 0 0; }
 .slave-notice{ color:var(--lamp); font-size:13px; margin:8px 0 0; }
 .slave-done{ text-align:center; color:var(--muted); padding:18px 0; }
+.got-note{ text-align:center; color:var(--mint); font-size:13px; margin:14px 0 0; }
 
-/* กองไพ่บนโต๊ะ — เอียงคนละนิด มีเงาใต้ใบให้ดูเหมือนวางซ้อนกันจริง */
-.card-fan{
-  display:flex; justify-content:center; align-items:flex-start;
-  padding:8px 0 14px;
+/* กองไพ่ — ของเก่าซ้อนอยู่ข้างหลังแบบมืด ๆ */
+.pile-stack{ position:relative; min-height:96px; display:grid; place-items:center; }
+.pile-past{
+  position:absolute; top:calc(var(--depth) * 9px);
+  opacity:calc(.42 - var(--depth) * .09);
+  filter:brightness(.45) saturate(.6);
+  transform:scale(calc(1 - var(--depth) * .04));
+  pointer-events:none;
 }
+.pile-top{ position:relative; z-index:2; }
+
+.card-fan{ display:flex; justify-content:center; align-items:flex-start; padding:8px 0 14px; }
 .fan-slot{
   display:block;
   transform:rotate(var(--rot, 0deg)) translateY(var(--lift, 0));
@@ -323,64 +340,58 @@ button{ cursor:pointer; border:0; background:none; }
 .fan-slot + .fan-slot{ margin-left:calc(-1 * var(--overlap, 32px)); }
 .cardface{ display:block; }
 
-/* ไพ่ในมือ — แถวเดียว ซ้อนกันแบบไพ่จริง ไม่ตกบรรทัด
-   --step คือระยะเลื่อนต่อใบ ui.js คำนวณมาให้ตามจำนวนไพ่
-   บนจอแคบให้ 7vw คุมอีกชั้น จะได้ไม่ล้นขอบ */
+/* ไพ่ในมือ */
 .slave-hand{
-  display:flex;
-  flex-wrap:nowrap;
-  justify-content:center;
-  padding:16px 0 4px;
-  min-height:112px;
+  display:flex; flex-wrap:nowrap; justify-content:center;
+  padding:16px 0 4px; min-height:112px; margin-top:auto;
 }
 .hand-card{
-  padding:0; border-radius:8px; line-height:0;
-  position:relative;
-  transition:transform .12s;
+  padding:0; border-radius:8px; line-height:0; position:relative;
+  transition:transform .12s, opacity .12s;
 }
-.hand-card + .hand-card{
-  margin-left:calc(min(var(--step, 42px), 7vw) - var(--cw, 68px));
-}
-.hand-card:hover{ transform:translateY(-8px); z-index:4; }
+.hand-card + .hand-card{ margin-left:calc(min(var(--step, 42px), 7vw) - var(--cw, 68px)); }
+.hand-card:hover:not(:disabled){ transform:translateY(-8px); z-index:4; }
 .hand-card.on{ transform:translateY(-18px); z-index:5; }
 .hand-card.on .cardface > rect{ stroke:#f4a949; stroke-width:3.5; }
+.hand-card.locked{ opacity:.34; cursor:not-allowed; }   /* เลือกได้แต้มเดียวเท่านั้น */
+.hand-card.still{ cursor:default; }
+.hand-card.fresh .cardface > rect{ stroke:#6ee3b4; stroke-width:3.5; }
+.hand-card.fresh{ transform:translateY(-10px); z-index:3; }
 .hand-card:focus-visible{ z-index:6; }
 
 .slave-actions{ display:flex; gap:10px; justify-content:center; margin-top:16px; flex-wrap:wrap; }
 .slave-actions .btn{ min-width:130px; }
 
+.trick-clock{ margin:8px 0 0; font-family:var(--mono); font-size:13px; color:var(--muted); }
+.trick-clock.urgent{ color:var(--rose); font-weight:600; }
+
 /* อันดับและคะแนน */
 .ranks{ list-style:none; margin:14px 0 0; padding:0; display:grid; gap:6px; }
 .rank-row{
-  display:flex; align-items:center; gap:12px;
+  display:flex; align-items:center; gap:10px;
   background:rgba(33,27,58,.85); border:1px solid var(--line);
   border-radius:12px; padding:10px 14px;
 }
 .rank-place{ font-family:var(--mono); font-size:12px; color:var(--muted); width:18px; }
 .rank-title{ font-family:var(--display); font-weight:600; font-size:14px; color:var(--lamp); min-width:74px; }
 .rank-name{ flex:1; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.rank-ready{ font-family:var(--mono); font-size:11px; color:var(--mint); }
 .rank-pts{ font-family:var(--mono); font-size:13px; color:var(--mint); }
 
 .scoreboard{
-  margin-top:14px; padding:16px 18px;
+  padding:16px 18px;
   background:rgba(14,11,28,.8); border:1px solid var(--line); border-radius:18px;
+  position:sticky; top:14px;
 }
-.scoreboard h3{ font-family:var(--display); font-size:16px; margin:0; }
+.scoreboard h3{ font-family:var(--display); font-size:15px; margin:0; }
+.scoreboard .rank-row{ padding:8px 11px; gap:8px; }
+.scoreboard .rank-name{ font-size:13px; }
 
-@media (max-width:640px){
-  .seat-chip{ min-width:76px; }
+@media (max-width:900px){
+  .trick-wrap.has-side{ grid-template-columns:1fr; }
+  .scoreboard{ position:static; }
 }
-
-/* แถบเสียงบนหน้าแรก — เว้นระยะจากปุ่มด้านบนให้ชัดว่าเป็นคนละกลุ่ม */
-#audioHome{ margin-top:22px; }
-#audioHome .audio-bar{ background:var(--sunk); }
-
-/* ป้ายบอกว่ากำลังปฏิวัติอยู่ — ถ้าไม่บอก คนเล่นจะงงว่าทำไมลงไพ่ใหญ่ไม่ได้ */
-.rev-badge{
-  font-family:var(--display); font-weight:600; font-size:12px;
-  color:#2a0710; background:var(--rose);
-  border-radius:999px; padding:4px 12px; letter-spacing:.02em;
-}
+@media (max-width:640px){ .seat-chip{ min-width:80px; } }
 
 /* ── หน้ากติกาเกม ────────────────────────────────── */
 #view-rules{ max-width:720px; }

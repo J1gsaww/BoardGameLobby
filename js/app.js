@@ -265,7 +265,7 @@ Room.watch((room) => {
    หน้าตั้งค่าสำคัญกว่า เพราะเพลงเริ่มตั้งแต่เปิดเว็บ ก่อนจะเข้าห้องเสียอีก */
 /* แถบเสียงโผล่ทุกที่ที่เพลงกำลังเล่นอยู่ — หน้าแรก หน้าห้อง และหน้าตั้งค่า
    วาดจากฟังก์ชันเดียว เลื่อนที่ไหนอีกสองที่ก็ขยับตาม */
-const AUDIO_HOSTS = ['audioHome', 'audioLobby', 'audioSetting'];
+const AUDIO_HOSTS = ['audioHome', 'audioLobby', 'audioPlay', 'audioSetting'];
 
 function buildAudio(host) {
   host.dataset.built = '1';
@@ -362,7 +362,14 @@ function submitChat() {
   const text = box.value.trim();
   if (!text) return;
   box.value = '';
-  Room.sendChat(text).catch(e => console.error('ส่งแชทไม่สำเร็จ', e));
+  Room.sendChat(text).catch(e => {
+    console.error('ส่งแชทไม่สำเร็จ', e);
+    // ต้องเห็นบนจอ ไม่ใช่ซ่อนใน console — สาเหตุที่พบบ่อยคือยังไม่ได้วาง Security Rules ใหม่
+    const note = $('chatNote');
+    note.hidden = false;
+    note.textContent = t('chat.failed', { why: e.code || e.message || '' });
+    box.value = text;
+  });
 }
 
 /* ── หน้ากติกาเกม ─────────────────────────────────

@@ -47,7 +47,8 @@ function makeTable(n, settings) {
     members, hostUid,
     boot, act, clock,
     get state() { return state; },
-    hand: (uid) => (secrets[uid] || {}).hand || []
+    hand: (uid) => (secrets[uid] || {}).hand || [],
+    secret: (uid) => secrets[uid] || {}
   };
 }
 
@@ -56,6 +57,9 @@ async function step(tb) {
   const st = tb.state;
 
   if (st.phase === 'play') {
+    // กองเพิ่งจบ ระบบค้างไว้ให้คนดูทัน — ในเทสให้เดินเวลาข้ามไปเลย
+    if (st.holdUntil && Date.now() < st.holdUntil) { st.holdUntil = 0; return true; }
+
     const uid = st.turn;
     const hand = tb.hand(uid);
     for (const c of hand) {                       // ลองลงทีละใบจากเล็กไปใหญ่
@@ -203,6 +207,89 @@ group('นาฬิกาหมดตา');
   ok('หมดเวลาแล้วระบบลงให้', await tb.clock(), true);
   ok('เปลี่ยนตาแล้ว', tb.state.turn !== before);
   ok('มีข้อความบอกว่าหมดเวลา', tb.state.notice.t, 'timeout');
+}
+
+/* ── ค้างกองหลังจบ ─────────────────────────────────── */
+group('ค้างกองไว้ให้ทันดูว่าใครปิดกอง');
+{
+  const tb = makeTable(4, { mode: 'normal', turnSeconds: 10 });
+  tb.boot();
+
+  // เดินจนกองแรกจบ
+  let guard = 0;
+  while (!tb.state.holdUntil && tb.state.phase === 'play' && guard++ < 500) {
+    const st = tb.state;
+    const uid = st.turn;
+    let moved = false;
+    for (const c of tb.hand(uid)) {
+      if (await tb.act({ uid, type: 'play', payload: { cards: [c] } })) { moved = true; break; }
+    }
+    if (!moved) await tb.act({ uid, type: 'pass', payload: {} });
+  }
+
+  ok('กองจบแล้วตั้งเวลาค้างไว้', typeof tb.state.holdUntil, 'number');
+  ok('ค้างอยู่ในอนาคต', tb.state.holdUntil > Date.now());
+  ok('มีประวัติกองเก็บไว้ให้ดู', tb.state.pileLog.length > 0);
+  ok('เก็บประวัติไม่เกิน 4 ครั้ง', tb.state.pileLog.length <= 4);
+  ok('นาฬิกาต่อตาเริ่มนับหลังหมดช่วงค้าง', tb.state.deadline >= tb.state.holdUntil);
+
+  const turn = tb.state.turn;
+  ok('ระหว่างค้าง ลงไพ่ไม่ได้',
+     await tb.act({ uid: turn, type: 'play', payload: { cards: [tb.hand(turn)[0]] } }), false);
+
+  tb.state.holdUntil = 0;                       // เดินเวลาข้ามช่วงค้าง
+  let played = false;
+  for (const c of tb.hand(tb.state.turn)) {
+    if (await tb.act({ uid: tb.state.turn, type: 'play', payload: { cards: [c] } })) { played = true; break; }
+  }
+  ok('หมดช่วงค้างแล้วลงได้ตามปกติ', played);
+  ok('ขึ้นกองใหม่แล้วประวัติเริ่มนับใหม่', tb.state.pileLog.length, 1);
+}
+
+/* ── ทุกคนต้องกดพร้อมก่อนไปรอบต่อไป ────────────────── */
+group('โหมดปกติต้องรอทุกคนกดพร้อม');
+{
+  const tb = makeTable(4, { mode: 'normal', turnSeconds: 0 });
+  tb.boot();
+  let guard = 0;
+  while (tb.state.phase !== 'roundEnd' && guard++ < 3000) await step(tb);
+
+  const seats = [...tb.state.seats];
+  ok('จบรอบแล้วยังไม่มีใครกดพร้อม', Object.keys(tb.state.votes).length, 0);
+
+  await tb.act({ uid: seats[0], type: 'vote', payload: { yes: true } });
+  ok('คนแรกกดแล้วยังอยู่หน้าผล', tb.state.phase, 'roundEnd');
+  ok('เห็นว่าใครกดพร้อมแล้ว', tb.state.votes[seats[0]], true);
+
+  for (const uid of seats.slice(1, 3)) await tb.act({ uid, type: 'vote', payload: { yes: true } });
+  ok('ยังไม่ครบก็ยังไม่ไปต่อ', tb.state.phase, 'roundEnd');
+
+  await tb.act({ uid: seats[3], type: 'vote', payload: { yes: true } });
+  ok('ครบทุกคนแล้วไปรอบสอง', tb.state.roundNo, 2);
+}
+
+/* ── การแลกไพ่ต้องบอกว่าเสียอะไรได้อะไร ────────────── */
+group('บันทึกผลการแลกไพ่ไว้ให้เห็น');
+{
+  const tb = makeTable(4, { mode: 'normal', turnSeconds: 0 });
+  tb.boot();
+  let guard = 0;
+  while (tb.state.phase !== 'roundEnd' && guard++ < 3000) await step(tb);
+  const rank = [...tb.state.ranking];
+  for (const uid of tb.state.seats) {
+    if (tb.state.phase !== 'roundEnd') break;
+    await tb.act({ uid, type: 'vote', payload: { yes: true } });
+  }
+  while (tb.state.phase === 'exchange') await step(tb);
+
+  const king = rank[0], slave = rank[3];
+  ok('คิงรู้ว่าได้อะไรมา', (tb.secret(king).lastGot || []).length, 2);
+  ok('คิงรู้ว่าให้อะไรไป', (tb.secret(king).lastGave || []).length, 2);
+  ok('สลาฟรู้ว่าเสียอะไรไป', (tb.secret(slave).lastGave || []).length, 2);
+  ok('ของที่คิงได้ คือของที่สลาฟเสีย',
+     tb.secret(king).lastGot.slice().sort(), tb.secret(slave).lastGave.slice().sort());
+  ok('ไพ่ที่ได้มายังอยู่ในมือจริง',
+     tb.secret(king).lastGot.every(c => tb.hand(king).includes(c)));
 }
 
 /* ── คำขอที่ผิดกติกาต้องถูกปฏิเสธเงียบ ─────────────── */

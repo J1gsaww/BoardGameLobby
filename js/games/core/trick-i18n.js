@@ -6,6 +6,12 @@ import { extend } from '../../i18n.js';
 extend({
   th: {
     'trick.round': 'รอบ {n}',
+    'trick.trickOver': '{name} ปิดกองนี้',
+    'trick.resuming': 'ไปต่อในอีก {n} วิ',
+    'trick.gotCards': 'ไพ่ที่เพิ่งได้มา {n} ใบ',
+    'trick.isReady': 'พร้อม',
+    'trick.readyNext': 'พร้อมไปต่อ',
+    'trick.skipWait': 'ข้ามการรอ',
     'trick.watching': 'คุณกำลังนั่งดูอยู่',
     'trick.timeLeft': 'เหลือ {n} วิ',
     'trick.showBoard': 'ตารางคะแนน',
@@ -48,6 +54,12 @@ extend({
   },
   en: {
     'trick.round': 'Round {n}',
+    'trick.trickOver': '{name} took the trick',
+    'trick.resuming': 'resuming in {n}s',
+    'trick.gotCards': '{n} card(s) just received',
+    'trick.isReady': 'ready',
+    'trick.readyNext': 'Ready to continue',
+    'trick.skipWait': 'Skip waiting',
     'trick.watching': 'You are watching',
     'trick.timeLeft': '{n}s left',
     'trick.showBoard': 'Scores',

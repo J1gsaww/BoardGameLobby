@@ -1,27 +1,20 @@
 /* trick-ui.js — หน้าจอของเกมไพ่ตระกูลสลาฟ
    ─────────────────────────────────────────────────────────────
    วาดอย่างเดียว ห้ามตัดสินอะไรทั้งสิ้น เพราะไฟล์นี้รันบนเครื่องผู้เล่นทุกคน
-   ส่วนกติกาตัดสินที่ game.js ซึ่งรันบนเครื่องเจ้าของห้องคนเดียว
+   ส่วนกติกาตัดสินที่ trick-game.js ซึ่งรันบนเครื่องเจ้าของห้องคนเดียว
    ───────────────────────────────────────────────────────────── */
 
 import { t } from '../../i18n.js';
 import { cardFace, cardBack, cardRow } from './face.js';
-import { readCombo, beats, sortForHand } from './cards.js';
+import { readCombo, beats, sortForHand, isJoker, rankIndex } from './cards.js';
+import { titles } from './engine.js';
 import { makeSound } from './trick-sound.js';
 import { resolve } from './trick-game.js';
 
-export function makeUI(baseRules, effects) {
-const Sound = makeSound(effects);
-
-let clockTimer = null;
-let picked = [];          // ไพ่ที่เลือกอยู่ ต้องอยู่นอกฟังก์ชันวาด ไม่งั้นหายทุกครั้งที่รีเฟรช
-let pickedFor = '';       // ปุ่มสถานะที่ picked ผูกอยู่ ใช้ล้างเมื่อเปลี่ยนตา
-let showBoard = false;
-
 const CARD_W = 68;
-const HAND_MAX = 860;      // ความกว้างที่ยอมให้มือกางได้บนจอคอม
+const HAND_MAX = 860;
+const GOT_MS = 6000;          // ไฮไลต์ไพ่ที่เพิ่งได้จากการแลกนานเท่านี้
 
-/* ระยะเลื่อนต่อใบ — ยิ่งไพ่เยอะยิ่งซ้อนกันมากขึ้นเอง แต่ไม่แคบกว่ามุมไพ่ */
 function handStep(n) {
   if (n <= 1) return CARD_W;
   return Math.round(Math.max(26, Math.min(CARD_W * 0.62, (HAND_MAX - CARD_W) / (n - 1))));
@@ -30,84 +23,115 @@ const handStyle = (n) => `--cw:${CARD_W}px; --step:${handStep(n)}px`;
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
 
-const nameOf = (st, uid) => st.names?.[uid] || '?';
+export function makeUI(baseRules, effects) {
+const Sound = makeSound(effects);
+
+let picked = [];
+let pickedFor = '';
+let clockTimer = null;
+let gotSince = 0;             // เวลาที่เริ่มเห็นไพ่ที่เพิ่งแลกมา
+let gotKey = '';
+
 const rulesOf = (ctx) => resolve(baseRules, ctx.settings);
+const nameOf = (st, uid) => st.names?.[uid] || '?';
 const myHand = (ctx) => sortForHand((ctx.secret && ctx.secret.hand) || [], !!ctx.state?.revolution);
+
+/* ตำแหน่งของทุกคนจากรอบที่แล้ว — ไม่ใช่บอกแค่ว่าใครเป็นคิง */
+function titleMap(st) {
+  const rank = st.prevRanking;
+  if (!rank || !rank.length) return {};
+  const out = {};
+  titles(rank).forEach(x => { out[x.uid] = x.title; });
+  return out;
+}
 
 function render(el, ctx) {
   const st = ctx.state;
   if (!st || !st.phase) { el.innerHTML = ''; clearInterval(clockTimer); Sound.reset(); return; }
   Sound.react(st);
 
-  const key = `${st.phase}:${st.roundNo}:${st.turn}:${st.seq || ''}`;
+  const key = `${st.phase}:${st.roundNo}:${st.turn}`;
   if (key !== pickedFor) { picked = []; pickedFor = key; }
 
+  // ไพ่ที่เพิ่งได้จากการแลก ไฮไลต์ไว้ชั่วครู่แล้วค่อยจาง
+  const got = (ctx.secret && ctx.secret.lastGot) || [];
+  const nowKey = got.join(',') + ':' + st.roundNo;
+  if (got.length && nowKey !== gotKey) { gotKey = nowKey; gotSince = Date.now(); }
+  const showGot = got.length && (Date.now() - gotSince < GOT_MS);
+
+  const board = st.mode === 'endless' ? scoreboard(st) : '';
+
   el.innerHTML = `
-    <div class="slave">
-      ${header(st)}
-      ${body(st, ctx)}
+    <div class="trick-wrap${board ? ' has-side' : ''}">
+      <div class="slave">
+        ${header(st)}
+        ${body(st, ctx, showGot ? got : [])}
+      </div>
+      ${board}
     </div>
-    ${showBoard ? board(st) : ''}
   `;
   bind(el, ctx);
-  runClock(el, st);
+  runClock(el, st, ctx);
+
+  if (showGot) setTimeout(() => { if (Date.now() - gotSince >= GOT_MS) render(el, ctx); }, GOT_MS + 60);
 }
 
 /* ── หัวโต๊ะ ───────────────────────────────────────────────── */
 
 function header(st) {
-  const bits = [
-    t('trick.round', { n: st.roundNo }),
-    t(`game.${baseRules.id}.mode.${st.mode}`)
-  ];
+  const bits = [t('trick.round', { n: st.roundNo }), t(`game.${baseRules.id}.mode.${st.mode}`)];
   return `<div class="slave-head">
-    <span class="slave-round">${esc(bits.join(' · '))}</span>
+    <span class="slave-round">${esc(bits.join(' \u00b7 '))}</span>
     ${st.revolution ? `<span class="rev-badge">${esc(t('trick.revolution'))}</span>` : ''}
-    ${st.mode === 'endless'
-      ? `<button class="btn btn-slim" data-act="board">${esc(t(showBoard ? 'slave.hideBoard' : 'slave.showBoard'))}</button>`
-      : ''}
   </div>`;
 }
 
-/* ── ตัวเนื้อตามช่วงของเกม ─────────────────────────────────── */
-
-function body(st, ctx) {
+function body(st, ctx, got) {
   if (st.phase === 'exchange') return exchange(st, ctx);
   if (st.phase === 'roundEnd' || st.phase === 'gameOver') return result(st, ctx);
-  return table(st, ctx);
+  return table(st, ctx, got);
 }
 
 /* ── โต๊ะระหว่างเล่น ───────────────────────────────────────── */
 
-function table(st, ctx) {
+function table(st, ctx, got) {
   const me = ctx.me.uid;
   const mine = myHand(ctx);
-  const myTurn = st.turn === me;
-  const watching = !(st.seats || []).includes(me);          // คนดู ไม่ได้อยู่ในวง
+  const rules = rulesOf(ctx);
+  const rev = !!st.revolution;
+  const holding = !!st.holdUntil && Date.now() < st.holdUntil;
+  const myTurn = st.turn === me && !holding;
+  const watching = !(st.seats || []).includes(me);
   const out = (st.finished || []).includes(me) || st.toppled === me;
 
-  const rev = !!st.revolution;
-  const rules = rulesOf(ctx);
   const combo = picked.length ? readCombo(picked, rules) : null;
   const canPlay = myTurn && combo && beats(picked, st.pile, rules, rev)
     && (!st.mustInclude || picked.includes(st.mustInclude));
   const canPass = myTurn && !!st.pile;
 
+  // เลือกได้แต้มเดียวเท่านั้น ใบแต้มอื่นจะกดไม่ได้จนกว่าจะเอาใบที่เลือกไว้ออกก่อน
+  const lockedRank = pickedRank();
+
   return `
     ${seatStrip(st, ctx)}
     <div class="slave-centre">
-      ${st.pile
-        ? cardRow(st.pile.cards, 58) + `<p class="slave-by">${esc(t('trick.playedBy', { name: nameOf(st, st.pile.by) }))}</p>`
-        : `<p class="slave-empty">${esc(t('trick.emptyPile'))}</p>`}
-      <p class="slave-status">${esc(statusLine(st, ctx))}</p>
-      ${st.deadline ? '<p class="trick-clock" id="trickClock"></p>' : ''}
+      ${pileStack(st)}
+      <p class="slave-status">${esc(statusLine(st, ctx, holding))}</p>
+      ${st.deadline || holding ? '<p class="trick-clock" id="trickClock"></p>' : ''}
       ${st.notice ? `<p class="slave-notice">${esc(noticeLine(st))}</p>` : ''}
     </div>
 
     ${watching ? `<p class="slave-done">${esc(t('trick.watching'))}</p>`
       : out ? `<p class="slave-done">${esc(t('trick.youAreOut'))}</p>` : `
-      <div class="slave-hand" id="slaveHand" style="${handStyle(mine.length)}">
-        ${mine.map(c => `<button class="hand-card${picked.includes(c) ? ' on' : ''}" data-card="${c}">${cardFace(c, CARD_W)}</button>`).join('')}
+      ${got.length ? `<p class="got-note">${esc(t('trick.gotCards', { n: got.length }))}</p>` : ''}
+      <div class="slave-hand" style="${handStyle(mine.length)}">
+        ${mine.map(c => {
+          const on = picked.includes(c);
+          const locked = lockedRank !== null && !isJoker(c) && rankIndex(c) !== lockedRank && !on;
+          return `<button class="hand-card${on ? ' on' : ''}${locked ? ' locked' : ''}` +
+                 `${got.includes(c) ? ' fresh' : ''}" data-card="${c}"${locked ? ' disabled' : ''}>` +
+                 cardFace(c, CARD_W) + '</button>';
+        }).join('')}
       </div>
       <div class="slave-actions">
         <button class="btn btn-primary" data-act="play" ${canPlay ? '' : 'disabled'}>${esc(t('trick.play'))}</button>
@@ -117,50 +141,57 @@ function table(st, ctx) {
   `;
 }
 
-/* แถบผู้เล่นรอบโต๊ะ — จำนวนไพ่ในมือคือข้อมูลสำคัญของเกมนี้ ต้องเห็นเสมอ */
+/* แต้มที่ล็อกอยู่จากไพ่ที่เลือกไว้ — โจ๊กเกอร์ไม่ล็อกเพราะเป็นไพ่แทน */
+function pickedRank() {
+  const real = picked.filter(c => !isJoker(c));
+  return real.length ? rankIndex(real[0]) : null;
+}
+
+/* กองไพ่ — ซ้อนของเก่าไว้ข้างหลังแบบมืด ๆ ให้เห็นว่ากองนี้เดินมายังไง */
+function pileStack(st) {
+  const log = st.pileLog || [];
+  if (!log.length) return `<p class="slave-empty">${esc(t('trick.emptyPile'))}</p>`;
+
+  const shown = log.slice(-4);
+  const top = shown[shown.length - 1];
+  const past = shown.slice(0, -1);
+
+  return `<div class="pile-stack">` +
+    past.map((p, i) => `<div class="pile-past" style="--depth:${past.length - i}">${cardRow(p.cards, 46)}</div>`).join('') +
+    `<div class="pile-top">${cardRow(top.cards, 58)}</div>` +
+    `</div><p class="slave-by">${esc(t('trick.playedBy', { name: nameOf(st, top.by) }))}</p>`;
+}
+
+/* แถบผู้เล่นรอบโต๊ะ */
 function seatStrip(st, ctx) {
   const order = st.seats || [];
+  const tmap = titleMap(st);
+
   return `<div class="slave-seats">${order.map(uid => {
     const n = st.counts?.[uid] ?? 0;
     const isTurn = st.turn === uid;
     const done = (st.finished || []).indexOf(uid);
     const gone = st.toppled === uid;
+    const passed = (st.passed || []).includes(uid);
+
     const tags = [];
-    if (uid === st.king) tags.push(t('trick.title.king'));
-    if (done >= 0) tags.push(t('trick.place', { n: done + 1 }));
-    if (gone) tags.push(t('trick.toppled'));
-    if ((st.passed || []).includes(uid)) tags.push(t('trick.passed'));
+    if (tmap[uid]) tags.push(`<span class="chip-title">${esc(t('trick.title.' + tmap[uid]))}</span>`);
+    if (done >= 0) tags.push(`<span class="chip-done">${esc(t('trick.place', { n: done + 1 }))}</span>`);
+    if (gone) tags.push(`<span class="chip-done">${esc(t('trick.toppled'))}</span>`);
+    if (passed) tags.push(`<span class="chip-passed">${esc(t('trick.passed'))}</span>`);
 
     return `<div class="seat-chip${isTurn ? ' turn' : ''}${gone || done >= 0 ? ' finished' : ''}">
-      <span class="seat-chip-name">${esc(nameOf(st, uid))}${uid === ctx.me.uid ? ' ·' : ''}</span>
+      <span class="seat-chip-name">${esc(nameOf(st, uid))}${uid === ctx.me.uid ? ' \u00b7' : ''}</span>
       <span class="seat-chip-cards">${n ? cardBack(15).repeat(Math.min(n, 8)) : ''}</span>
       <span class="seat-chip-n">${n}</span>
-      ${tags.length ? `<span class="seat-chip-tag">${esc(tags.join(' · '))}</span>` : ''}
+      ${tags.length ? `<span class="seat-chip-tag">${tags.join('')}</span>` : ''}
     </div>`;
   }).join('')}</div>`;
 }
 
-/* นาฬิกานับถอยหลัง — เดินเองในเครื่องทุกวินาที ไม่ต้องรอสถานะใหม่จากเซิร์ฟเวอร์
-   ถ้าไม่มีตัวเลขให้เห็น คนเล่นจะโดนระบบลงไพ่ให้โดยไม่รู้ตัวว่าใกล้หมดเวลา */
-function runClock(el, st) {
-  clearInterval(clockTimer);
-  const slot = el.querySelector('#trickClock');
-  if (!slot || !st.deadline) return;
-
-  const paint = () => {
-    const left = Math.max(0, Math.ceil((st.deadline - Date.now()) / 1000));
-    slot.textContent = t('trick.timeLeft', { n: left });
-    slot.classList.toggle('urgent', left <= 3);
-    if (left <= 0) clearInterval(clockTimer);
-  };
-  paint();
-  clockTimer = setInterval(paint, 250);
-}
-
-function statusLine(st, ctx) {
-  if (st.turn === ctx.me.uid) {
-    return st.mustInclude ? t('trick.yourTurnOpening') : t('trick.yourTurn');
-  }
+function statusLine(st, ctx, holding) {
+  if (holding) return t('trick.trickOver', { name: nameOf(st, st.pileLog?.slice(-1)[0]?.by) });
+  if (st.turn === ctx.me.uid) return st.mustInclude ? t('trick.yourTurnOpening') : t('trick.yourTurn');
   return t('trick.waitingFor', { name: nameOf(st, st.turn) });
 }
 
@@ -170,6 +201,29 @@ function noticeLine(st) {
   if (n.t === 'timeout') return t('trick.noticeTimeout', { name: nameOf(st, n.uid) });
   if (n.t === 'tooFew') return t('trick.noticeTooFew');
   return '';
+}
+
+/* นาฬิกา — ใช้ทั้งนับถอยหลังตาตัวเอง และช่วงหยุดค้างหลังจบกอง */
+function runClock(el, st, ctx) {
+  clearInterval(clockTimer);
+  const slot = el.querySelector('#trickClock');
+  if (!slot) return;
+
+  const holding = !!st.holdUntil && Date.now() < st.holdUntil;
+  const until = holding ? st.holdUntil : st.deadline;
+  if (!until) return;
+
+  const paint = () => {
+    const left = Math.max(0, Math.ceil((until - Date.now()) / 1000));
+    slot.textContent = holding ? t('trick.resuming', { n: left }) : t('trick.timeLeft', { n: left });
+    slot.classList.toggle('urgent', !holding && left <= 3);
+    if (left <= 0) {
+      clearInterval(clockTimer);
+      if (holding) render(el, ctx);          // หมดช่วงหยุดค้าง วาดใหม่ให้ปุ่มกลับมากดได้
+    }
+  };
+  paint();
+  clockTimer = setInterval(paint, 250);
 }
 
 /* ── ช่วงแลกไพ่ ────────────────────────────────────────────── */
@@ -184,12 +238,12 @@ function exchange(st, ctx) {
     return `<div class="slave-centre">
       <p class="slave-status">${esc(t('trick.youGiveBest', { n: lower.count }))}</p>
       <p class="slave-empty">${esc(t('trick.waitExchange'))}</p>
-    </div>`;
+    </div>${handOnly(ctx)}`;
   }
   if (!pair || already) {
     return `<div class="slave-centre">
       <p class="slave-status">${esc(t('trick.waitExchange'))}</p>
-    </div>`;
+    </div>${handOnly(ctx)}`;
   }
 
   const mine = myHand(ctx);
@@ -207,23 +261,36 @@ function exchange(st, ctx) {
     </div>`;
 }
 
+/* โชว์ไพ่ตัวเองเฉย ๆ ระหว่างรอ จะได้เห็นว่าตอนนี้ถืออะไรอยู่ */
+function handOnly(ctx) {
+  const mine = myHand(ctx);
+  if (!mine.length) return '';
+  return `<div class="slave-hand" style="${handStyle(mine.length)}">
+    ${mine.map(c => `<span class="hand-card still">${cardFace(c, CARD_W)}</span>`).join('')}
+  </div>`;
+}
+
 /* ── จบรอบ / จบเกม ─────────────────────────────────────────── */
 
 function result(st, ctx) {
   const over = st.phase === 'gameOver';
+  const voted = st.votes || {};
+  const seats = st.seats || [];
+
   const rows = (st.titles || []).map(x => `
     <li class="rank-row">
       <span class="rank-place">${x.place}</span>
       <span class="rank-title">${esc(t('trick.title.' + x.title))}</span>
       <span class="rank-name">${esc(nameOf(st, x.uid))}</span>
+      ${!over && voted[x.uid] !== undefined ? `<span class="rank-ready">${esc(t('trick.isReady'))}</span>` : ''}
       ${st.mode === 'endless'
         ? `<span class="rank-pts">${st.gained?.[x.uid] >= 0 ? '+' : ''}${st.gained?.[x.uid] ?? 0}</span>`
         : ''}
     </li>`).join('');
 
-  const voted = st.votes || {};
   const iVoted = voted[ctx.me.uid] !== undefined;
-  const inGame = (st.seats || []).includes(ctx.me.uid);
+  const inGame = seats.includes(ctx.me.uid);
+  const waiting = seats.filter(u => voted[u] === undefined).length;
 
   let controls = '';
   if (over) {
@@ -234,13 +301,15 @@ function result(st, ctx) {
     controls = inGame && !iVoted
       ? `<button class="btn btn-primary" data-act="voteYes">${esc(t('trick.voteYes'))}</button>
          <button class="btn" data-act="voteNo">${esc(t('trick.voteNo'))}</button>`
-      : `<p class="slave-empty">${esc(t('trick.waitVotes', {
-            n: (st.seats || []).filter(u => voted[u] === undefined).length }))}</p>`;
+      : `<p class="slave-empty">${esc(t('trick.waitVotes', { n: waiting }))}</p>`;
   } else {
-    controls = ctx.isHost
-      ? `<button class="btn btn-primary" data-act="next">${esc(t('trick.nextRound'))}</button>`
-      : `<p class="slave-empty">${esc(t('trick.waitHostNext'))}</p>`;
+    controls = inGame && !iVoted
+      ? `<button class="btn btn-primary" data-act="voteYes">${esc(t('trick.readyNext'))}</button>`
+      : `<p class="slave-empty">${esc(t('trick.waitVotes', { n: waiting }))}</p>`;
   }
+
+  const skip = (!over && ctx.isHost && waiting > 0)
+    ? `<button class="btn btn-slim" data-act="next">${esc(t('trick.skipWait'))}</button>` : '';
 
   return `
     <div class="slave-centre">
@@ -248,25 +317,25 @@ function result(st, ctx) {
       ${st.notice ? `<p class="slave-notice">${esc(noticeLine(st))}</p>` : ''}
     </div>
     <ol class="ranks">${rows}</ol>
-    ${over && st.mode === 'endless' ? board(st) : ''}
-    <div class="slave-actions">${controls}</div>`;
+    <div class="slave-actions">${controls}${skip}</div>`;
 }
 
-/* ── ตารางคะแนน ───────────────────────────────────────────── */
+/* ── ตารางคะแนน ปักไว้ด้านขวา ─────────────────────────────── */
 
-function board(st) {
+function scoreboard(st) {
+  const tmap = titleMap(st);
   const rows = Object.entries(st.scores || {})
     .sort((a, b) => b[1] - a[1])
     .map(([uid, pts], i) => `
       <li class="rank-row">
         <span class="rank-place">${i + 1}</span>
-        <span class="rank-name">${esc(nameOf(st, uid))}</span>
+        <span class="rank-name">${esc(nameOf(st, uid))}${tmap[uid] ? ` <span class="chip-title">${esc(t('trick.title.' + tmap[uid]))}</span>` : ''}</span>
         <span class="rank-pts">${pts}</span>
       </li>`).join('');
-  return `<div class="scoreboard">
+  return `<aside class="scoreboard">
     <h3>${esc(t('trick.scoreboard'))}</h3>
     <ol class="ranks">${rows}</ol>
-  </div>`;
+  </aside>`;
 }
 
 /* ── ผูกปุ่ม ───────────────────────────────────────────────── */
@@ -283,14 +352,13 @@ function bind(el, ctx) {
   el.querySelectorAll('[data-act]').forEach(b => {
     b.onclick = () => {
       const a = b.dataset.act;
-      if (a === 'board') { showBoard = !showBoard; render(el, ctx); return; }
-      if (a === 'play')  { ctx.send('play', { cards: picked }); picked = []; return; }
-      if (a === 'pass')  { ctx.send('pass'); return; }
-      if (a === 'give')  { ctx.send('give', { cards: picked }); picked = []; return; }
-      if (a === 'next')  { ctx.send('next'); return; }
+      if (a === 'play')    { ctx.send('play', { cards: picked }); picked = []; return; }
+      if (a === 'pass')    { ctx.send('pass'); return; }
+      if (a === 'give')    { ctx.send('give', { cards: picked }); picked = []; return; }
+      if (a === 'next')    { ctx.send('next'); return; }
       if (a === 'voteYes') { ctx.send('vote', { yes: true }); return; }
       if (a === 'voteNo')  { ctx.send('vote', { yes: false }); return; }
-      if (a === 'leave') { ctx.leave(); return; }
+      if (a === 'leave')   { ctx.leave(); return; }
     };
   });
 }
