@@ -11,7 +11,7 @@ import * as Music from './music.js';
 const $ = (id) => document.getElementById(id);
 const VIEWS = ['view-home', 'view-setting', 'view-rules', 'view-lobby', 'view-play'];
 
-let current = 'view-home';
+let current = '';               // ยังไม่ได้เปิดหน้าไหนเลยตอนเริ่ม
 let lastRoom = null;
 let cameFrom = 'view-home';
 
@@ -21,8 +21,11 @@ const OVERLAYS = ['view-rules', 'view-setting'];
 const onOverlay = () => OVERLAYS.includes(current);
 
 function show(id) {
-  if (current === id) return;
+  // เช็กจาก DOM จริง ไม่ใช่เชื่อตัวแปรอย่างเดียว
+  // เคยพลาดมาแล้ว: ตัวแปรบอกว่าอยู่หน้านี้ แต่หน้ายังซ่อนอยู่ เลยไม่มีอะไรโผล่เลย
+  const same = current === id && !$(id).hidden;
   current = id;
+  if (same) return;
   VIEWS.forEach(v => { $(v).hidden = v !== id; });
   window.scrollTo(0, 0);              // เปลี่ยนหน้าแล้วเริ่มอ่านจากบนสุดเสมอ
 }

@@ -7,9 +7,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@600&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/app.css?v=2026-07-23.20">
+<link rel="stylesheet" href="css/app.css?v=2026-07-23.21">
 </head>
-<body data-build="2026-07-23.20">
+<body data-build="2026-07-23.21">
 
 <!-- home -->
 <section id="view-home" class="view" hidden>
@@ -128,9 +128,35 @@
   </div>
 </div>
 
-<div id="boot" class="boot"><p id="bootText"></p></div>
+<div id="boot" class="boot"><p id="bootText">กำลังโหลดไฟล์…</p></div>
 
-<script src="js/env.js?v=2026-07-23.20"></script>
-<script type="module" src="js/app.js?v=2026-07-23.20"></script>
+<script>
+/* ตัวดักพังก่อนที่โมดูลจะเริ่มทำงาน — เขียนเป็นสคริปต์ธรรมดา ไม่ใช่โมดูล
+   จะได้รันได้แม้ไฟล์อื่นโหลดไม่ขึ้น จอว่างเปล่าที่ไม่บอกอะไรเลยคือสิ่งที่หาสาเหตุยากที่สุด */
+(function () {
+  function fail(msg) {
+    var box = document.getElementById('boot'), tx = document.getElementById('bootText');
+    if (!box || !tx) return;
+    box.hidden = false; box.className = 'boot bad'; tx.textContent = msg;
+  }
+  window.addEventListener('error', function (e) {
+    var src = e.target && (e.target.src || e.target.href);
+    if (src) fail('โหลดไฟล์ไม่สำเร็จ\n' + src + '\n\nไฟล์นี้อาจยังไม่ได้ push ขึ้นไป');
+    else if (e.message) fail('เกิดข้อผิดพลาด\n' + e.message);
+  }, true);
+  window.addEventListener('unhandledrejection', function (e) {
+    fail('เกิดข้อผิดพลาด\n' + ((e.reason && e.reason.message) || e.reason || ''));
+  });
+  // ถ้า 8 วินาทีแล้วยังไม่มีหน้าไหนโผล่ ให้บอกไปเลย ดีกว่าปล่อยจอว่าง
+  setTimeout(function () {
+    var any = document.querySelector('.view:not([hidden])');
+    var boot = document.getElementById('boot');
+    if (!any && boot && boot.hidden) fail('แอปเริ่มไม่สำเร็จ\nเปิด F12 แล้วดูแท็บ Console');
+  }, 8000);
+})();
+</script>
+
+<script src="js/env.js?v=2026-07-23.21"></script>
+<script type="module" src="js/app.js?v=2026-07-23.21"></script>
 </body>
 </html>
