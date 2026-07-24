@@ -16,6 +16,9 @@
 
 import { extend } from './i18n.js';
 
+/* หมวดของเกม — 'all' เป็นตัวกรองเท่านั้น ไม่ใช่หมวดที่เกมประกาศได้ */
+export const CATEGORIES = ['all', 'card', 'board'];
+
 const registry = new Map();
 
 export function register(game) {
@@ -26,6 +29,7 @@ export function register(game) {
     minPlayers: 2,
     maxPlayers: 15,
     settings: [],
+    category: 'card',
     cover: null,
     table: null,
     ...game,

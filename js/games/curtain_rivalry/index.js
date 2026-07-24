@@ -7,6 +7,7 @@ import { register } from '../../games.js';
 
 register({
   id: 'curtain_rivalry',
+  category: 'board',
   comingSoon: true,
   cover: 'assets/game/curtain_rivalry/cover.png',
 

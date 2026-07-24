@@ -513,3 +513,18 @@ button{ cursor:pointer; border:0; background:none; }
 .cardface.cardback{ opacity:.95; }
 .pane-left .players{ align-content:start; }
 .pane-right .games-scroll{ margin-top:2px; }
+
+/* ── ตัวกรองเกม ──────────────────────────────────── */
+.game-filter{ display:flex; gap:8px; margin-bottom:12px; }
+.game-filter .pick,
+.game-filter .find{
+  background:var(--sunk); border:1px solid var(--line); border-radius:11px;
+  padding:9px 11px; font-size:13.5px; min-width:0;
+}
+.game-filter .pick{ flex:0 0 auto; max-width:52%; color:var(--ink); }
+.game-filter .find{ flex:1; }
+.game-filter .find::placeholder{ color:#5b4f83; }
+.game-filter .pick:focus, .game-filter .find:focus{
+  outline:2px solid var(--lamp); outline-offset:1px; border-color:transparent;
+}
+@media (max-width:520px){ .game-filter{ flex-wrap:wrap; } .game-filter .pick{ max-width:100%; flex:1 1 100%; } }

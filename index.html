@@ -7,9 +7,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@600&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/app.css?v=2026-07-23.32">
+<link rel="stylesheet" href="css/app.css?v=2026-07-23.33">
 </head>
-<body data-build="2026-07-23.32">
+<body data-build="2026-07-23.33">
 
 <!-- home -->
 <section id="view-home" class="view" hidden>
@@ -99,6 +99,10 @@
 
     <div class="pane pane-right">
       <h2 class="view-title" data-i18n="lobby.pickGame"></h2>
+      <div class="game-filter">
+        <select id="gameCat" class="pick"></select>
+        <input id="gameSearch" class="find" autocomplete="off" data-i18n-placeholder="lobby.search">
+      </div>
       <div class="games-scroll">
         <div class="games" id="games"></div>
       </div>
@@ -187,7 +191,7 @@
 })();
 </script>
 
-<script src="js/env.js?v=2026-07-23.32"></script>
-<script type="module" src="js/app.js?v=2026-07-23.32"></script>
+<script src="js/env.js?v=2026-07-23.33"></script>
+<script type="module" src="js/app.js?v=2026-07-23.33"></script>
 </body>
 </html>

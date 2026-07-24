@@ -14,6 +14,7 @@ const ui = makeUI(TYCOON);
 
 register({
   id: 'tycoon',
+  category: 'card',
   cover: 'assets/game/tycoon/cover.png',
   table: 'assets/game/tycoon/table.png',
   music: 'assets/music/slave.mp3',

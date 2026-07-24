@@ -149,14 +149,56 @@ function paintMembers(room) {
 /* ── หน้าเลือกเกม ─────────────────────────────────── */
 /* วาดจากสิ่งที่เกมประกาศไว้ล้วน ๆ ไม่รู้จักเกมไหนเป็นการเฉพาะ
    เพิ่มเกมที่สองแล้วหน้านี้ขึ้นให้เองโดยไม่ต้องแก้อะไรตรงนี้ */
+/* ── ตัวกรองเกม ───────────────────────────────────
+   ช่องกรองอยู่ใน HTML คงที่ ไม่ได้วาดใหม่พร้อมรายการเกม
+   ไม่งั้นพิมพ์ค้นหาแล้วโฟกัสจะหลุดทุกครั้งที่ห้องอัปเดต ซึ่งเกิดทุก 5 วินาที */
+let gameCat = 'all';
+let gameQuery = '';
+
+function paintCatOptions() {
+  const sel = $('gameCat');
+  sel.innerHTML = Games.CATEGORIES
+    .map(c => `<option value="${c}"${c === gameCat ? ' selected' : ''}>${esc(t('cat.' + c))}</option>`)
+    .join('');
+}
+
+/* ตรงกับที่ค้นหาไหม — ดูทั้งชื่อ คำอธิบาย และรหัสเกม */
+function matches(g) {
+  if (gameCat !== 'all' && (g.category || 'card') !== gameCat) return false;
+  const q = gameQuery.trim().toLowerCase();
+  if (!q) return true;
+  return [t(g.nameKey), t(g.descKey), g.id].some(v => String(v).toLowerCase().includes(q));
+}
+
+$('gameCat').addEventListener('change', e => {
+  gameCat = e.target.value;
+  if (lastRoom) paintGames(lastRoom);
+});
+$('gameSearch').addEventListener('input', e => {
+  gameQuery = e.target.value;
+  if (lastRoom) paintGames(lastRoom);
+});
+
 let lastChosenGame;
 function paintGames(room) {
   const host = $('games');
   const chosen = room.doc.gameId;
   const count = room.members.filter(m => m.role === 'player').length;
 
+  // เกมที่เลือกไว้แล้วโชว์เสมอ แม้จะไม่ตรงตัวกรอง ไม่งั้นจะงงว่าเลือกอะไรอยู่
+  const list = Games.all().filter(g => g.id === chosen || matches(g));
+
   host.innerHTML = '';
-  Games.all().forEach(g => {
+  if (!list.length) {
+    const p = document.createElement('p');
+    p.className = 'hint';
+    p.textContent = t('lobby.noMatch');
+    host.appendChild(p);
+    paintGameSettings(room, Games.get(chosen), count);
+    return;
+  }
+
+  list.forEach(g => {
     const card = document.createElement('button');
     card.className = 'game-card' + (g.id === chosen ? ' on' : '') + (g.comingSoon ? ' soon' : '');
     card.disabled = !room.isHost || !!g.comingSoon;
@@ -634,6 +676,7 @@ function paintLangPick() {
 onLangChange(() => {
   paintLangPick();
   paintJoinAs();
+  paintCatOptions();
   paintChat(lastRoom);
   if (current === 'view-rules') paintRules();
   paintError();
@@ -761,6 +804,7 @@ function hardReload() {
   $('inName').value = name;
   paintLangPick();
   paintJoinAs();
+  paintCatOptions();
   Music.init();
   paintAudio();
 
