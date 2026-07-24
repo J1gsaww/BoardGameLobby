@@ -392,6 +392,14 @@ export async function kick(uid) {
   await fb.deleteDoc(faceRef(uid)).catch(() => {});
 }
 
+/* ย้ายตัวเองเข้าออกที่นั่งได้เอง ไม่ต้องรอเจ้าของห้อง
+   Security Rules ยอมให้เขียนเอกสารของตัวเองอยู่แล้ว จึงไม่ต้องแก้กฎ */
+export async function setMyRole(role) {
+  if (room.doc?.status !== 'lobby') return;
+  if (!room.mine || room.mine.role === role) return;
+  await fb.updateDoc(memberRef(me.uid), { role, seat: null, ready: false });
+}
+
 /* ย้ายคนเข้าหรือออกจากที่นั่ง ทำได้เฉพาะตอนยังไม่เริ่มเกม */
 export async function setRole(uid, role) {
   if (!room.isHost || room.doc?.status !== 'lobby') return;

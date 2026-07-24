@@ -7,6 +7,7 @@ import * as Games from './games.js';
 import './games/index.js';      // ต้องมาหลัง games.js เสมอ
 import { t, apply, setLang, onLangChange, lang, LANGS, messageOf } from './i18n.js';
 import * as Music from './music.js';
+import * as Mix from './mixer.js';
 import * as Avatar from './avatar.js';
 
 const $ = (id) => document.getElementById(id);
@@ -56,47 +57,93 @@ function boot(msg, bad) {
 }
 
 /* ── รายชื่อผู้เล่น ────────────────────────────────── */
-function listInto(ul, members, hostUid, opts = {}) {
-  ul.innerHTML = '';
-  members.forEach(m => {
-    const li = document.createElement('li');
-    if (!m.online || m.left) li.className = 'offline';
+function memberRow(m, hostUid, avatars, manage) {
+  const li = document.createElement('li');
+  if (!m.online || m.left) li.className = 'offline';
 
-    const badges = [];
-    if (m.uid === hostUid) badges.push(`<span class="badge host">${t('badge.host')}</span>`);
-    if (m.left) badges.push(`<span class="badge">${t('badge.left')}</span>`);
-    else if (m.role === 'spectator') badges.push(`<span class="badge">${t('badge.spectator')}</span>`);
-    else if (m.ready) badges.push(`<span class="badge ready">${t('badge.ready')}</span>`);
-    if (!m.online && !m.left) badges.push(`<span class="badge">${t('badge.offline')}</span>`);
+  const badges = [];
+  if (m.uid === hostUid) badges.push(`<span class="badge host">${t('badge.host')}</span>`);
+  if (m.left) badges.push(`<span class="badge">${t('badge.left')}</span>`);
+  else if (m.role !== 'spectator' && m.ready) badges.push(`<span class="badge ready">${t('badge.ready')}</span>`);
+  if (!m.online && !m.left) badges.push(`<span class="badge">${t('badge.offline')}</span>`);
 
-    li.innerHTML =
-      Avatar.face(m.uid, m.name, (lastRoom?.avatars || {})[m.uid], 30) +
-      `<span class="pName">${esc(m.name || '')}</span>` +
-      (m.uid === me.uid ? `<span class="pMe">${t('badge.you')}</span>` : '') +
-      (badges.length ? badges.join('') : '<span class="badge"></span>');
+  li.innerHTML =
+    Avatar.face(m.uid, m.name, avatars[m.uid], 30) +
+    `<span class="pName">${esc(m.name || '')}</span>` +
+    (m.uid === me.uid ? `<span class="pMe">${t('badge.you')}</span>` : '') +
+    badges.join('');
 
-    // เมนูจัดการ ขึ้นเฉพาะตอนเราเป็นเจ้าของห้องและยังไม่เริ่มเกม
-    if (opts.manage && m.uid !== me.uid) {
-      const tools = document.createElement('span');
-      tools.className = 'row-tools';
-      const btn = (act, label, arg) => {
-        const b = document.createElement('button');
-        b.className = 'tool';
-        b.title = t(label);
-        b.textContent = { up: '\u2191', down: '\u2193', seat: '\u21C4', kick: '\u2715' }[act];
-        b.onclick = () => opts.manage(act, m, arg);
-        return b;
-      };
-      if (m.role === 'player' && !m.left) {
-        tools.append(btn('up', 'lobby.up'), btn('down', 'lobby.down'), btn('seat', 'lobby.toWatch'));
-      } else if (!m.left) {
-        tools.append(btn('seat', 'lobby.toPlay'));
-      }
-      tools.append(btn('kick', 'lobby.kick'));
-      li.appendChild(tools);
+  if (manage && m.uid !== me.uid) {
+    const tools = document.createElement('span');
+    tools.className = 'row-tools';
+    const btn = (act, label) => {
+      const b = document.createElement('button');
+      b.className = 'tool';
+      b.title = t(label);
+      b.textContent = { up: '\u2191', down: '\u2193', seat: '\u21C4', kick: '\u2715' }[act];
+      b.onclick = () => manage(act, m);
+      return b;
+    };
+    if (m.role === 'player' && !m.left) {
+      tools.append(btn('up', 'lobby.up'), btn('down', 'lobby.down'), btn('seat', 'lobby.toWatch'));
+    } else if (!m.left) {
+      tools.append(btn('seat', 'lobby.toPlay'));
     }
-    ul.appendChild(li);
-  });
+    tools.append(btn('kick', 'lobby.kick'));
+    li.appendChild(tools);
+  }
+  return li;
+}
+
+/* รายชื่อในห้องแยกสองส่วน — ลงเล่น กับ นั่งดู
+   ย้ายตัวเองไปมาได้เอง ไม่ต้องรอเจ้าของห้องย้ายให้ */
+function paintMembers(room) {
+  const host = $('memberList');
+  const avatars = room.avatars || {};
+  const manage = room.isHost ? (act, m) => {
+    if (act === 'kick') Room.kick(m.uid);
+    else if (act === 'seat') Room.setRole(m.uid, m.role === 'player' ? 'spectator' : 'player');
+    else Room.moveSeat(m.uid, act === 'up' ? -1 : 1);
+  } : null;
+
+  const players = room.members.filter(m => m.role !== 'spectator');
+  const watchers = room.members.filter(m => m.role === 'spectator');
+
+  host.innerHTML = '';
+
+  const section = (titleKey, count) => {
+    const h = document.createElement('h2');
+    h.className = 'view-title';
+    h.innerHTML = `<span>${esc(t(titleKey))}</span> <span class="count">${count}</span>`;
+    host.appendChild(h);
+    const ul = document.createElement('ul');
+    ul.className = 'players';
+    host.appendChild(ul);
+    return ul;
+  };
+
+  const pList = section('lobby.title', `${players.length}/${window.MAX_IN_ROOM}`);
+  players.forEach(m => pList.appendChild(memberRow(m, room.doc.hostUid, avatars, manage)));
+
+  const wList = section('lobby.spectators', String(watchers.length));
+  if (watchers.length) watchers.forEach(m => wList.appendChild(memberRow(m, room.doc.hostUid, avatars, manage)));
+  else {
+    const li = document.createElement('li');
+    li.className = 'empty-row';
+    li.textContent = t('lobby.noSpectators');
+    wList.appendChild(li);
+  }
+
+  // ปุ่มย้ายตัวเอง ขึ้นเฉพาะตอนยังไม่เริ่มเกม
+  const mine = room.mine;
+  if (mine && !mine.left && room.doc.status === 'lobby') {
+    const watching = mine.role === 'spectator';
+    const b = document.createElement('button');
+    b.className = 'btn btn-slim side-switch';
+    b.textContent = t(watching ? 'lobby.bePlayer' : 'lobby.beSpectator');
+    b.onclick = () => Room.setMyRole(watching ? 'player' : 'spectator');
+    host.appendChild(b);
+  }
 }
 
 /* ── หน้าเลือกเกม ─────────────────────────────────── */
@@ -212,14 +259,7 @@ function paintRoom() {
 
   Music.setTrack(Music.defaultTrack());
   if (!onOverlay()) show('view-lobby');
-  listInto($('players'), room.members, room.doc.hostUid, {
-    manage: room.isHost ? (act, m) => {
-      if (act === 'kick') Room.kick(m.uid);
-      else if (act === 'seat') Room.setRole(m.uid, m.role === 'player' ? 'spectator' : 'player');
-      else Room.moveSeat(m.uid, act === 'up' ? -1 : 1);
-    } : null
-  });
-  $('outCount').textContent = `${room.members.length}/${window.MAX_IN_ROOM}`;
+  paintMembers(room);
   $('avatarWarn').hidden = !room.avatarError;
   $('avatarWarn').textContent = room.avatarError ? t('err.avatarUpload', { why: room.avatarError }) : '';
   paintGames(room);
@@ -264,31 +304,38 @@ Room.watch((room) => {
   paintRoom();
 });
 
-/* ── แถบเสียงเพลง ─────────────────────────────────── */
-/* วาดจากฟังก์ชันเดียว แต่ลงได้หลายที่ — หน้าห้องและหน้าตั้งค่า
-   หน้าตั้งค่าสำคัญกว่า เพราะเพลงเริ่มตั้งแต่เปิดเว็บ ก่อนจะเข้าห้องเสียอีก */
-/* แถบเสียงโผล่ทุกที่ที่เพลงกำลังเล่นอยู่ — หน้าแรก หน้าห้อง และหน้าตั้งค่า
-   วาดจากฟังก์ชันเดียว เลื่อนที่ไหนอีกสองที่ก็ขยับตาม */
+/* ── แถบเสียง สามหลอด ─────────────────────────────
+   รวม · เพลง · เสียงประกอบ
+   วาดจากฟังก์ชันเดียว ลงได้หลายที่ — หน้าแรก หน้าห้อง หน้าเกม หน้าตั้งค่า
+   เลื่อนที่ไหนที่อื่นก็ขยับตาม เพราะทุกที่อ่านจากตัวเดียวกัน */
 const AUDIO_HOSTS = ['audioHome', 'audioLobby', 'audioPlay', 'audioSetting'];
 
 function buildAudio(host) {
   host.dataset.built = '1';
   host.innerHTML =
-    '<div class="audio-bar">' +
-      '<button class="audio-btn" aria-label="volume"></button>' +
-      '<input type="range" class="vol" min="0" max="100" step="1">' +
-      '<span class="audio-pct"></span>' +
+    '<div class="mixer">' +
+      '<button class="audio-btn" data-mute aria-label="mute"></button>' +
+      '<div class="mix-rows">' +
+        Mix.CHANNELS.map(ch =>
+          `<label class="mix-row">
+             <span class="mix-name" data-name="${ch}"></span>
+             <input type="range" class="vol" min="0" max="100" step="1" data-ch="${ch}">
+             <span class="mix-pct" data-pct="${ch}"></span>
+           </label>`).join('') +
+      '</div>' +
     '</div>' +
     '<p class="audio-note" hidden></p>';
-  host.querySelector('.audio-btn').onclick = () => Music.toggleMute();
-  host.querySelector('.vol').addEventListener('input', e => Music.setVolume(e.target.value / 100));
+
+  host.querySelector('[data-mute]').onclick = () => Mix.toggleMute();
+  host.querySelectorAll('[data-ch]').forEach(inp => {
+    inp.addEventListener('input', e => Mix.set(e.target.dataset.ch, e.target.value / 100));
+  });
 }
 
 function paintAudio() {
   const m = Music.music;
-  const pct = Math.round((m.muted ? 0 : m.volume) * 100);
-  const note = m.missing      ? t('audio.missing', { src: decodeURI(window.MUSIC_SRC) })
-             : (m.pending && !m.muted) ? t('audio.blocked')
+  const note = m.missing ? t('audio.missing', { src: decodeURI(window.MUSIC_SRC) })
+             : (m.pending && !Mix.mixer.muted) ? t('audio.blocked')
              : '';
 
   AUDIO_HOSTS.forEach(id => {
@@ -296,13 +343,18 @@ function paintAudio() {
     if (!host) return;
     if (!host.dataset.built) buildAudio(host);
 
-    host.querySelector('.vol').value = pct;
-    host.querySelector('.audio-pct').textContent = pct + '%';
+    Mix.CHANNELS.forEach(ch => {
+      const pct = Math.round(Mix.mixer[ch] * 100);
+      host.querySelector(`[data-ch="${ch}"]`).value = pct;
+      host.querySelector(`[data-pct="${ch}"]`).textContent = pct + '%';
+      host.querySelector(`[data-name="${ch}"]`).textContent = t('audio.' + ch);
+    });
 
-    const b = host.querySelector('.audio-btn');
-    b.textContent = m.muted ? '\u{1F507}' : '\u{1F50A}';
-    b.title = t(m.muted ? 'audio.unmute' : 'audio.mute');
-    b.classList.toggle('off', m.muted);
+    const b = host.querySelector('[data-mute]');
+    b.textContent = Mix.mixer.muted ? '\u{1F507}' : '\u{1F50A}';
+    b.title = t(Mix.mixer.muted ? 'audio.unmute' : 'audio.mute');
+    b.classList.toggle('off', Mix.mixer.muted);
+    host.classList.toggle('muted', Mix.mixer.muted);
 
     const n = host.querySelector('.audio-note');
     n.textContent = note;
@@ -312,6 +364,7 @@ function paintAudio() {
 }
 
 Music.onChange(paintAudio);
+Mix.onChange(paintAudio);
 
 /* ── เข้าห้องแบบลงเล่นหรือนั่งดู ───────────────────── */
 let watchOnly = false;

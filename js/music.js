@@ -4,17 +4,15 @@
    ผู้ใช้แตะครั้งแรก
 
    ทำไมได้ผล — เบราว์เซอร์ห้ามเล่น "เสียง" เอง แต่ไม่เคยห้ามเล่นสื่อ
-   ที่ปิดเสียงไว้ เพลงจึงเริ่มเดินตั้งแต่วินาทีแรกจริง ๆ แค่ยังไม่ได้ยิน
+   ที่ปิดเสียงไว้ เพลงจึงเดินตั้งแต่วินาทีแรกจริง ๆ แค่ยังไม่ได้ยิน
    พอผู้ใช้คลิกอะไรสักอย่าง เราแค่เปิดเสียง ไม่ได้เริ่มเล่นใหม่
-   เสียงเลยมาทันทีแบบไม่มีสะดุด และไม่ต้องรอโหลด
 
-   getAutoplayPolicy บอกล่วงหน้าได้ว่าเว็บนี้ได้รับอนุญาตแล้วหรือยัง
-   ถ้าได้แล้วก็ข้ามขั้นปิดเสียงไปเลย (Chrome/Firefox รุ่นใหม่มี Safari ยังไม่มี)
+   ระดับเสียงมาจาก mixer.js ไม่ได้เก็บเอง จะได้ใช้หลอดร่วมกับเสียงประกอบ
    ───────────────────────────────────────────────────────────── */
 
-const VOL_KEY  = 'lobby.volume';
-const MUTE_KEY = 'lobby.muted';
-const FADE_MS  = 1200;
+import { mixer, musicLevel, onChange as onMix } from './mixer.js';
+
+const FADE_MS = 1200;
 const GESTURES = ['pointerdown', 'keydown', 'touchstart'];
 
 let el = null;
@@ -24,8 +22,6 @@ let fadeTimer = null;
 const listeners = [];
 
 export const music = {
-  volume: 0.35,
-  muted: false,      // ผู้ใช้เลือกปิดเสียงเอง (จำไว้ในเครื่อง)
   playing: false,
   pending: false,    // เพลงเดินอยู่แล้วแต่ยังปิดเสียง รอผู้ใช้แตะ
   missing: false
@@ -37,29 +33,26 @@ export const onChange = (fn) => listeners.push(fn);
 /* ── เริ่มต้น ──────────────────────────────────────── */
 
 export function init() {
-  const saved = parseFloat(localStorage.getItem(VOL_KEY));
-  if (!Number.isNaN(saved)) music.volume = Math.min(1, Math.max(0, saved));
-  music.muted = localStorage.getItem(MUTE_KEY) === '1';
-
   el = new Audio();
   currentSrc = window.MUSIC_SRC;
   el.src = currentSrc;
   console.info('[music] กำลังหาไฟล์ที่', new URL(window.MUSIC_SRC, location.href).href);
   el.loop = true;
   el.preload = 'auto';
-  el.volume = music.volume;
+  el.volume = musicLevel();
 
   el.addEventListener('error', () => {
     music.missing = true; music.playing = false; music.pending = false;
-    console.warn('[music] เปิดไฟล์ไม่ได้:', window.MUSIC_SRC);
+    console.warn('[music] เปิดไฟล์ไม่ได้:', currentSrc);
     emit();
   });
   el.addEventListener('playing', () => { music.playing = true; emit(); });
   el.addEventListener('pause',   () => { music.playing = false; emit(); });
 
-  if (music.muted) { emit(); return; }   // ผู้ใช้ปิดเสียงไว้แต่แรก ไม่ต้องเล่น
+  onMix(applyLevel);
 
-  // เว็บนี้ได้รับอนุญาตแล้วหรือยัง — ถ้ารู้ล่วงหน้าก็ไม่ต้องผ่านขั้นปิดเสียง
+  if (musicLevel() <= 0) { emit(); return; }   // ปิดเสียงไว้แต่แรก ไม่ต้องโหลดมาหมุนทิ้ง
+
   const policy = typeof navigator.getAutoplayPolicy === 'function'
     ? navigator.getAutoplayPolicy('mediaelement')
     : null;
@@ -67,11 +60,10 @@ export function init() {
   if (policy === 'allowed') {
     el.muted = false;
     music.pending = false;
-    el.play().catch(startSilent);          // เผื่อพลาด ก็ถอยไปท่าปิดเสียง
+    el.play().catch(startSilent);
     emit();
     return;
   }
-
   startSilent();
 }
 
@@ -79,9 +71,7 @@ export function init() {
 function startSilent() {
   el.muted = true;
   music.pending = true;
-  el.play()
-    .then(() => { arm(); emit(); })
-    .catch(() => { arm(); emit(); });     // ถึงจะโดนบล็อกหมด การแตะก็ยังกู้ได้
+  el.play().then(() => { arm(); emit(); }).catch(() => { arm(); emit(); });
 }
 
 function arm() {
@@ -97,15 +87,29 @@ function arm() {
 
 /* เปิดเสียง — ไม่ได้เริ่มเล่นใหม่ แค่เลิกปิดเสียง */
 function reveal() {
-  if (!el || music.missing || music.muted) { music.pending = false; emit(); return; }
+  if (!el || music.missing) { music.pending = false; emit(); return; }
   music.pending = false;
+  if (musicLevel() <= 0) { emit(); return; }
   el.muted = false;
   if (el.paused) el.play().catch(() => {});
-  fadeTo(music.volume, 0);
+  fadeTo(musicLevel(), 0);
   emit();
 }
 
-/* ── ไล่ระดับเสียง ─────────────────────────────────── */
+/* ── ระดับเสียงเปลี่ยน ─────────────────────────────── */
+
+function applyLevel() {
+  if (!el) return;
+  const level = musicLevel();
+  clearInterval(fadeTimer);
+
+  if (level <= 0) { el.muted = true; el.pause(); emit(); return; }
+
+  el.volume = level;
+  el.muted = music.pending;              // ยังไม่ได้แตะจอ ก็เล่นแบบเงียบต่อไป
+  if (el.paused && !music.missing) el.play().catch(() => { music.pending = true; arm(); });
+  emit();
+}
 
 function fadeTo(target, from) {
   if (!el) return;
@@ -122,8 +126,7 @@ function fadeTo(target, from) {
 }
 
 /* ── สลับเพลง ──────────────────────────────────────────────
-   เกมประกาศเพลงของตัวเองมาได้ เข้าเกมแล้วเปลี่ยน ออกจากเกมแล้วกลับเพลงเดิม
-   หรี่ลงก่อนแล้วค่อยสลับ ไม่ให้ตัดกลางคันจนสะดุด */
+   เกมประกาศเพลงของตัวเองมาได้ เข้าเกมแล้วเปลี่ยน ออกจากเกมแล้วกลับเพลงเดิม */
 export function setTrack(src) {
   if (!el || !src || src === currentSrc) return;
   currentSrc = src;
@@ -132,58 +135,16 @@ export function setTrack(src) {
   const swap = () => {
     el.src = src;
     el.load();
-    if (music.muted) { el.pause(); emit(); return; }
-    el.muted = music.pending;          // ยังไม่ได้แตะจอ ก็เล่นแบบเงียบต่อไป
+    if (musicLevel() <= 0) { el.pause(); emit(); return; }
+    el.muted = music.pending;
     el.play()
-      .then(() => { if (!music.pending) fadeTo(music.volume, 0); })
+      .then(() => { if (!music.pending) fadeTo(musicLevel(), 0); })
       .catch(() => { music.pending = true; arm(); emit(); });
     emit();
   };
 
-  if (el.paused || music.muted) swap();
+  if (el.paused || musicLevel() <= 0) swap();
   else { fadeTo(0); setTimeout(swap, 520); }
 }
 
 export const defaultTrack = () => window.MUSIC_SRC;
-
-/* ── ปุ่มควบคุม ────────────────────────────────────── */
-
-export function setVolume(v) {
-  music.volume = Math.min(1, Math.max(0, v));
-  localStorage.setItem(VOL_KEY, String(music.volume));
-
-  if (music.volume === 0) {
-    if (!music.muted) { music.muted = true; localStorage.setItem(MUTE_KEY, '1'); }
-  } else if (music.muted) {
-    music.muted = false; localStorage.setItem(MUTE_KEY, '0');
-  }
-
-  if (el) {
-    clearInterval(fadeTimer);
-    el.muted = music.muted;
-    el.volume = music.volume;
-    if (!music.muted && el.paused && !music.missing) el.play().catch(() => {});
-  }
-  music.pending = false;
-  emit();
-}
-
-export function toggleMute() {
-  music.muted = !music.muted;
-  localStorage.setItem(MUTE_KEY, music.muted ? '1' : '0');
-  music.pending = false;
-
-  if (!el || music.missing) { emit(); return; }
-
-  if (music.muted) {
-    clearInterval(fadeTimer);
-    el.muted = true;
-    el.pause();
-  } else {
-    if (music.volume === 0) { setVolume(0.35); return; }
-    el.muted = false;
-    if (el.paused) el.play().catch(() => {});
-    fadeTo(music.volume, 0);
-  }
-  emit();
-}
