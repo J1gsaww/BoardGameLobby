@@ -49,6 +49,7 @@ export function defaultSettings(game) {
 }
 
 export const settingKey = (gameId, key) => `game.${gameId}.${key}`;
+export const rarityLabel = (r) => ({ common: 'Common', rare: 'Rare', map: 'Map' }[r] || r);
 export const optionKey  = (gameId, key, value) => `game.${gameId}.${key}.${value}`;
 
 /* เกมนี้เล่นด้วยจำนวนคนเท่านี้ได้ไหม */

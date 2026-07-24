@@ -1,0 +1,578 @@
+/* ui.js — กระดาน Wreckers
+   ─────────────────────────────────────────────────────────────
+   ทุกอย่างวางด้วยเปอร์เซ็นต์บนเวทีที่ล็อกอัตราส่วนไว้
+   ย่อขยายหน้าต่างแล้วทุกชิ้นขยับตามกันหมด ไม่มีอะไรหลุดตำแหน่ง
+
+   สำคัญ: สร้าง element ของชิ้นส่วนครั้งเดียวแล้วเก็บไว้ตลอด
+   ห้องอัปเดตทุก 5 วินาทีจากสัญญาณชีพ ถ้าเขียนทับทั้งก้อนทุกครั้ง
+   แอนิเมชันโคลงเรือจะเริ่มนับหนึ่งใหม่ตลอดจนดูเหมือนเรือดีดกลับ
+   และรูปประจำตัวก็จะกะพริบเพราะถูกโหลดใหม่
+
+   ทุกรอบจึงอัปเดตแค่สามอย่าง — หมากในช่อง กล่องสมบัติ และข้อความ
+   ───────────────────────────────────────────────────────────── */
+
+import { t } from '../../i18n.js';
+import { face as avatarFace } from '../../avatar.js';
+import { mountSea, stopSea } from './sea.js';
+import { cardById as voteById, voteCard } from './vote.js';
+import { lang } from '../../i18n.js';
+import {
+  ART, PIECES, STAGE_RATIO, SHIP_SLOTS, ISLAND_SLOTS, BOAT_SLOT, roleOf, EVENT_SLOTS,
+  COMMON_ACTIONS, ROLE_ACTIONS, canShiftCargo, boatsFrom, boatFree, canTouchCargo,
+  SHIP_SLOT_SIZE, ISLAND_SLOT_SIZE,
+  SHIP_CARGO, SHIP_CARGO_SIZE, ISLAND_CARGO, ISLAND_CARGO_SIZE,
+  MERCHANT_CARGO, MERCHANT_CARGO_SIZE
+} from './board.js';
+
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+
+/* ความแรงกับจังหวะการโคลง — เรือเล็กโคลงแรงกว่าเพราะตัวเล็ก
+   หน่วงเวลาต่างกันทีละลำ ไม่งั้นจะโคลงพร้อมกันทั้งกระดานเหมือนของเล่นไขลาน */
+const BOB = { ship: [1, 4], merchant: [1.3, 3.5], boat: [2.6, 2.6], island: [0, 0] };
+
+/* สถานะเฉพาะหน้าจอ ไม่ต้องขึ้นเซิร์ฟเวอร์เพราะเป็นการเลือกที่ยังไม่ยืนยัน */
+let menu = null;        // { kind, uid, spot, place, x, y }
+let picks = [];         // การ์ดเหตุการณ์ที่เลือกไว้ สูงสุด 2 ใบ
+let forcing = null;     // uid ของคนที่กำลังจะบังคับให้เปิดการ์ด
+
+const closeMenu = () => { menu = null; };
+
+const slotsOf = (kind) =>
+  kind === 'ship'   ? SHIP_SLOTS.map(s => ({ ...s, size: SHIP_SLOT_SIZE })) :
+  kind === 'island' ? ISLAND_SLOTS.map(s => ({ ...s, size: ISLAND_SLOT_SIZE })) :
+  kind === 'boat'   ? [{ id: 'x', ...BOAT_SLOT }] : [];
+
+/* ── สร้างโครงครั้งเดียว ───────────────────────────────────── */
+
+function shell(el, ctx) {
+  if (el.querySelector('.wr-stage')) return;
+
+  el.innerHTML = `
+    <div class="wr">
+      <div class="wr-bar">
+        <span class="wr-title">${esc(t('wreck.board'))}</span>
+        <span class="wr-hint"></span>
+      </div>
+
+      <div class="wr-grid">
+        <aside class="wr-side wr-hand">
+          <h4>${esc(t('wreck.yourHand'))}</h4>
+          <div class="wr-hand-cards"></div>
+        </aside>
+
+        <div class="wr-stage" style="aspect-ratio:${STAGE_RATIO}">
+          <div class="wr-pieces">${PIECES.map(pieceShell).join('')}</div>
+          <div class="wr-score-bar"></div>
+          <div class="wr-menu" hidden></div>
+          <div class="wr-dice" hidden></div>
+        </div>
+
+        <aside class="wr-side wr-roster">
+          <h4>${esc(t('wreck.players'))}</h4>
+          <ul class="wr-list"></ul>
+        </aside>
+      </div>
+
+      <div class="wr-bottom">
+        <div class="wr-events">
+          <h4>${esc(t('wreck.events'))}</h4>
+          <div class="wr-event-row">
+            ${Array.from({ length: EVENT_SLOTS }, (_, i) =>
+              `<div class="wr-event-slot" data-event="${i + 1}">
+                 <button class="wr-card wr-event">
+                   <span class="wr-card-face">${esc(t('wreck.event'))}</span>
+                   <span class="wr-card-no">${i + 1}</span>
+                 </button>
+                 <div class="wr-event-acts">
+                   <button class="wr-mini" data-ev="activate">${esc(t('wreck.act.activate'))}</button>
+                   <button class="wr-mini" data-ev="peek">${esc(t('wreck.act.peek'))}</button>
+                 </div>
+               </div>`).join('')}
+          </div>
+          <p class="wr-event-note" hidden></p>
+          <div class="wr-decks"></div>
+        </div>
+
+        <div class="wr-actions">
+          <h4>${esc(t('wreck.actions'))}</h4>
+          <div class="wr-act-group" data-group="common"></div>
+          <div class="wr-act-group" data-group="role"></div>
+          <p class="wr-empty wr-act-note">${esc(t('wreck.notWired'))}</p>
+        </div>
+      </div>
+
+      <div class="wr-legend"></div>
+      <div class="wr-devbar" hidden></div>
+    </div>`;
+
+  mountSea(el.querySelector('.wr-stage'), ART);
+
+  // ผูกปุ่มครั้งเดียวด้วยการดักที่ตัวแม่ ปุ่มข้างในจึงไม่ต้องผูกใหม่ทุกรอบ
+  el.querySelector('.wr-pieces').addEventListener('click', e => {
+    const box = e.target.closest('[data-cargo]');
+    if (box) { openMenu(el, box, { kind: 'cargo', cargo: box.dataset.cargo }); return; }
+
+    const b = e.target.closest('[data-spot]');
+    if (!b) { closeMenu(); paint(el); return; }
+
+    if (b.dataset.who) {                                  // มีคนยืนอยู่ เปิดเมนู
+      openMenu(el, b, { kind: 'pawn', uid: b.dataset.who, spot: b.dataset.spot });
+      return;
+    }
+    if (!b.disabled) { closeMenu(); ctx.send('move', { spot: b.dataset.spot }); }
+  });
+
+  el.querySelector('.wr-stage').addEventListener('click', e => {
+    if (!e.target.closest('.wr-menu') && !e.target.closest('[data-spot]')
+        && !e.target.closest('[data-cargo]')) { closeMenu(); paint(el); }
+  });
+  el.querySelector('.wr-legend').addEventListener('click', e => {
+    if (e.target.closest('[data-act="leave"]')) ctx.leave();
+  });
+
+  el.querySelector('.wr-event-row').addEventListener('click', e => {
+    const mini = e.target.closest('[data-ev]');
+    if (mini && !mini.disabled) { picks = []; forcing = null; paint(el); return; }
+
+    const slot = e.target.closest('.wr-event-slot');
+    if (!slot) return;
+    const n = slot.dataset.event;
+    picks = picks.includes(n) ? picks.filter(x => x !== n)
+          : picks.length >= 2 ? [picks[1], n] : [...picks, n];
+    paint(el);
+  });
+}
+
+function pieceShell(p, i) {
+  const [amp, dur] = BOB[p.kind] || BOB.ship;
+  const bob = amp
+    ? `--bob:${amp}; animation-duration:${dur}s; animation-delay:-${(i * 1.3).toFixed(1)}s`
+    : '';
+
+  const slots = slotsOf(p.kind).map(s => `
+    <button class="wr-slot" data-spot="${p.id}:${s.id}"
+      style="left:${s.x}%; top:${s.y}%; width:${s.size}%" disabled></button>`).join('');
+
+  return `<div class="wr-piece wr-${p.kind}" data-piece="${p.id}"
+      style="left:${p.x}%; top:${p.y}%; width:${p.w}%; --rot:${p.rot || 0}deg; ${bob}">
+    <img class="wr-art" src="${ART}${p.art}.png" alt="" draggable="false">
+    <div class="wr-cargo"></div>
+    ${slots}
+  </div>`;
+}
+
+/* ── อัปเดตเฉพาะสิ่งที่เปลี่ยน ─────────────────────────────── */
+
+let live = null;                  // ctx ล่าสุด ใช้ตอนวาดซ้ำจากการกดปุ่มในเมนู
+const paint = (el) => { if (live) render(el, live); };
+
+export function render(el, ctx) {
+  const st = ctx.state;
+  if (!st || !st.phase) { el.innerHTML = ''; stopSea(); closeMenu(); return; }
+
+  live = ctx;
+  shell(el, ctx);
+
+  const who = Object.fromEntries(Object.entries(st.pos || {}).map(([uid, spot]) => [spot, uid]));
+  const mine = st.pos?.[ctx.me.uid] || null;
+  const canMove = (st.seats || []).includes(ctx.me.uid);
+
+  el.querySelector('.wr-hint').textContent = t(canMove ? 'wreck.tapToMove' : 'wreck.watchingOnly');
+
+  el.querySelectorAll('.wr-slot').forEach(b => {
+    const spot = b.dataset.spot;
+    const uid = who[spot];
+    const free = !uid;
+
+    b.disabled = !uid && !(free && canMove);
+    b.classList.toggle('free', free);
+    b.classList.toggle('taken', !free);
+    b.classList.toggle('me', spot === mine);
+
+    // เขียนทับเฉพาะตอนคนในช่องเปลี่ยนจริง ไม่งั้นรูปประจำตัวจะโหลดใหม่ทุกรอบ
+    if (uid) b.dataset.who = uid; else b.removeAttribute('data-who');
+    if (b.dataset.paint !== (uid || '')) {
+      b.dataset.paint = uid || '';
+      b.innerHTML = uid
+        ? `<span class="wr-pawn">${avatarFace(uid, st.names?.[uid] || '', (ctx.avatars || {})[uid], null)}</span>`
+        : '';
+    }
+  });
+
+  el.querySelectorAll('[data-piece]').forEach(node => {
+    const p = PIECES.find(x => x.id === node.dataset.piece);
+    const box = node.querySelector('.wr-cargo');
+    const html = cargoOf(p, st, ctx.me.uid);
+    if (box.dataset.sig !== html) { box.dataset.sig = html; box.innerHTML = html; }
+  });
+
+  paintHand(el, st, ctx);
+  paintRoster(el, st, ctx);
+  paintActions(el, st, ctx);
+  paintDecks(el, st);
+  paintEvents(el);
+
+  const scoreHtml = legend(st);
+  const sb = el.querySelector('.wr-score-bar');
+  if (sb.dataset.sig !== scoreHtml) { sb.dataset.sig = scoreHtml; sb.innerHTML = scoreHtml; }
+
+  paintMenu(el, st, ctx);
+  paintTurn(el, st, ctx);
+  paintDice(el, st);
+  paintDevBar(el, ctx);
+
+  const legendHtml =
+    (ctx.isHost ? `<button class="btn btn-slim" data-act="leave">${esc(t('wreck.back'))}</button>` : '');
+  const bar = el.querySelector('.wr-legend');
+  if (bar.dataset.sig !== legendHtml) { bar.dataset.sig = legendHtml; bar.innerHTML = legendHtml; }
+}
+
+/* ── ไพ่บนมือ ──────────────────────────────────────────────
+   ยังไม่มีกติกาโหวต จึงวาดเป็นไพ่คว่ำตามจำนวนที่ถืออยู่ไปก่อน */
+function paintHand(el, st, ctx) {
+  const me = ctx.me.uid;
+  const mine = ctx.secret?.vote || [];
+  const held = st.held?.[me] ?? 0;
+
+  const html =
+    mine.map(id => voteCard(voteById(id), lang)).join('') +
+    Array.from({ length: held }, () =>
+      `<div class="wr-card wr-held"><span class="wr-card-face">${esc(t('wreck.event'))}</span></div>`).join('') +
+    (mine.length + held ? '' : `<p class="wr-empty">${esc(t('wreck.noCards'))}</p>`);
+
+  const box = el.querySelector('.wr-hand-cards');
+  if (box.dataset.sig !== html) { box.dataset.sig = html; box.innerHTML = html; }
+}
+
+/* ── การ์ดเหตุการณ์ ────────────────────────────────────────
+   ชี้เมาส์แล้วปุ่มโผล่มาจาง ๆ แต่ยังกดไม่ได้
+   ต้องเลือกใบก่อนปุ่มถึงจะชัดและกดได้ — เปิดใช้ 1 ใบ แอบดูใช้ 2 ใบ */
+function paintEvents(el) {
+  el.querySelectorAll('.wr-event-slot').forEach(slot => {
+    const n = slot.dataset.event;
+    const on = picks.includes(n);
+    slot.classList.toggle('on', on);
+
+    const acts = slot.querySelector('.wr-event-acts');
+    acts.classList.toggle('ready', on);
+    slot.querySelector('[data-ev="activate"]').disabled = !(on && picks.length === 1);
+    slot.querySelector('[data-ev="peek"]').disabled = !on;   // เลือกใบเดียวก็แอบดูได้
+  });
+
+  const note = el.querySelector('.wr-event-note');
+  if (!note) return;
+  note.textContent = forcing
+    ? t('wreck.forcing', { name: live?.state?.names?.[forcing] || '?' })
+    : picks.length === 1 ? t('wreck.pickMore') : '';
+  note.hidden = !note.textContent;
+}
+
+/* ── แผงทดสอบ ──────────────────────────────────────────────
+   โผล่เฉพาะตอนเปิดโหมดทดสอบของห้อง ใช้ดูภาพลูกเต๋าโดยไม่ต้องเริ่มเกมใหม่
+   ทอยตรงนี้เป็นภาพล้วน ไม่แตะสถานะเกมและไม่ส่งให้ใคร */
+function paintDevBar(el, ctx) {
+  const bar = el.querySelector('.wr-devbar');
+  if (!bar) return;
+  bar.hidden = !ctx.devMode;
+  if (!ctx.devMode) { bar.innerHTML = ''; return; }
+  if (bar.dataset.built) return;
+
+  bar.dataset.built = '1';
+  bar.innerHTML = `<span class="wr-dev-label">${esc(t('wreck.devRoll'))}</span>` +
+    [4, 6, 12].map(n => `<button class="btn btn-slim" data-die="${n}">D${n}</button>`).join('');
+
+  bar.querySelectorAll('[data-die]').forEach(b => {
+    b.onclick = () => {
+      const sides = Number(b.dataset.die);
+      const seats = live?.state?.seats?.length || sides;
+      const max = Math.min(sides, seats);       // โชว์ได้แค่เลขที่มีคนจริง
+      showDice(el, sides, 1 + Math.floor(Math.random() * max), t('wreck.devRolled'));
+    };
+  });
+}
+
+/* ── ป้ายบอกตากับนาฬิกา ────────────────────────────────────
+   นับถอยหลังเดินเองในเครื่องทุกครึ่งวินาที ไม่ต้องรอสถานะใหม่จากเซิร์ฟเวอร์ */
+let clockTimer = null;
+
+function paintTurn(el, st, ctx) {
+  clearInterval(clockTimer);
+  const bar = el.querySelector('.wr-hint');
+  if (!bar || !st.turn) return;
+
+  const mine = st.turn === ctx.me.uid;
+  const who = st.names?.[st.turn] || '?';
+  const off = ctx.members?.find(m => m.uid === st.turn && !m.online);
+
+  const paintClock = () => {
+    const left = Math.max(0, Math.ceil(((st.deadline || 0) - Date.now()) / 1000));
+    const head = off ? t('wreck.offline', { name: who })
+               : mine ? t('wreck.yourTurn') : t('wreck.waitFor', { name: who });
+    bar.textContent = st.deadline ? `${head} \u00b7 ${t('wreck.left', { n: left })}` : head;
+    bar.classList.toggle('urgent', !off && left <= 5);
+    bar.classList.toggle('mine', mine);
+  };
+  paintClock();
+  clockTimer = setInterval(paintClock, 500);
+
+  // ช่องยืนกดได้เฉพาะตอนถึงตาตัวเอง
+  el.querySelectorAll('.wr-slot').forEach(b => {
+    if (!b.dataset.who && !mine) b.disabled = true;
+  });
+}
+
+/* ── ลูกเต๋าหาคนเริ่ม ──────────────────────────────────────
+   เจ้าของห้องทอยให้ตอนเริ่มเกม ทุกเครื่องจึงเห็นหน้าเดียวกัน
+   หน้าจอแค่เล่นภาพให้ดูสมจริง ไม่ได้สุ่มเอง
+
+   ระหว่างกลิ้งจะไม่โชว์เลขอะไรเลย เห็นแค่ตัวลูกเต๋าหมุน
+   เลขโผล่ตอนนิ่งแล้วเท่านั้น เหมือนทอยลูกเต๋าจริงที่อ่านค่าไม่ได้ตอนกำลังกลิ้ง */
+let dieShown = '';
+
+const DIE_SHAPE = { 4: 'tri', 6: 'cube', 12: 'dodeca' };
+
+export function showDice(el, sides, face, note) {
+  const box = el.querySelector('.wr-dice');
+  if (!box) return;
+
+  box.hidden = false;
+  box.innerHTML = `
+    <div class="wr-die wr-die-${DIE_SHAPE[sides] || 'cube'} rolling">
+      <span class="wr-die-face"></span>
+    </div>
+    <p class="wr-die-note">${esc(t('wreck.rolling'))}</p>`;
+
+  const dieEl = box.querySelector('.wr-die');
+  const faceEl = box.querySelector('.wr-die-face');
+  const noteEl = box.querySelector('.wr-die-note');
+
+  setTimeout(() => {
+    faceEl.textContent = face;                 // เลขโผล่ตอนนิ่งแล้วเท่านั้น
+    dieEl.classList.remove('rolling');
+    dieEl.classList.add('landed');
+    if (note) noteEl.textContent = note;
+  }, 1600);
+
+  setTimeout(() => { box.hidden = true; box.innerHTML = ''; }, 4200);
+}
+
+function paintDice(el, st) {
+  if (!st.die) return;
+  const key = st.die.sides + ':' + st.die.face + ':' + st.roundNo;
+  if (dieShown === key) return;
+  dieShown = key;
+  showDice(el, st.die.sides, st.die.face,
+    t('wreck.starts', { name: st.names?.[st.turn] || '?' }));
+}
+
+/* ── เมนูลอยข้างหมาก ───────────────────────────────────────
+   วางด้วยพิกัดจริงของปุ่มที่กด ไม่ใช่เปอร์เซ็นต์บนเวที
+   เพราะช่องยืนอยู่ในกล่องที่หมุนอยู่ คำนวณเป็นเปอร์เซ็นต์แล้วจะเพี้ยน */
+function openMenu(el, node, data) {
+  const stage = el.querySelector('.wr-stage');
+  const r = node.getBoundingClientRect();
+  const s = stage.getBoundingClientRect();
+  menu = {
+    ...data,
+    right: r.right - s.left + 10,          // จุดวางเมื่อออกทางขวา
+    left: r.left - s.left - 10,            // จุดวางเมื่อต้องพลิกไปทางซ้าย
+    y: r.top - s.top + r.height / 2
+  };
+  paint(el);
+}
+
+function paintMenu(el, st, ctx) {
+  const box = el.querySelector('.wr-menu');
+  if (!box) { console.warn('[wreckers] ไม่พบกล่องเมนูในโครง'); return; }
+  if (!menu) { box.hidden = true; box.innerHTML = ''; return; }
+
+  const html = menu.kind === 'cargo' ? cargoMenu() : pawnMenu(st, ctx);
+  if (!html) { box.hidden = true; box.innerHTML = ''; menu = null; return; }
+
+  box.hidden = false;
+  box.innerHTML = html;
+  box.style.left = '0px';
+  box.style.top = '0px';
+
+  // ออกทางขวาของหมากก่อน ถ้าชนขอบเวทีค่อยพลิกไปทางซ้าย
+  const stage = el.querySelector('.wr-stage');
+  const w = box.offsetWidth, h = box.offsetHeight;
+  const fitsRight = menu.right + w <= stage.clientWidth - 6;
+  const x = fitsRight ? menu.right : Math.max(6, menu.left - w);
+  const y = Math.max(6, Math.min(menu.y - h / 2, stage.clientHeight - h - 6));
+  box.style.left = x + 'px';
+  box.style.top = y + 'px';
+
+  box.querySelectorAll('[data-do]').forEach(b => {
+    b.onclick = () => runMenu(el, ctx, b.dataset.do, b.dataset.arg);
+  });
+}
+
+/* เมนูของหมาก — ของตัวเองได้ Action ตามตำแหน่ง ของคนอื่นได้บังคับเปิดการ์ดกับไล่ลงเรือ */
+function pawnMenu(st, ctx) {
+  const meUid = ctx.me.uid;
+  const spot = st.pos?.[menu.uid];
+  const mine = menu.uid === meUid;
+  const name = st.names?.[menu.uid] || '?';
+  const rows = [];
+
+  if (mine) {
+    const role = roleOf(spot);
+    const acts = [...(ROLE_ACTIONS[role] || [])];
+    if (canShiftCargo(spot, st.pos) && !acts.includes('shiftCargo')) acts.push('shiftCargo');
+    acts.forEach(k => rows.push(btnRow(k, t('wreck.act.' + k), true)));
+
+    const boats = boatsFrom(spot);
+    if (boats.length === 1) {
+      const free = boatFree(st.pos, boats[0]);
+      rows.push(btnRow('move', t('wreck.act.toBoat'), free, boats[0] + ':x',
+        free ? '' : t('wreck.boatTaken')));
+    } else if (boats.length === 2) {
+      rows.push(`<div class="wr-menu-two">` + boats.map(b => {
+        const free = boatFree(st.pos, b);
+        const label = t(b === 'boatL' ? 'wreck.act.toBoatL' : 'wreck.act.toBoatR');
+        return `<button class="wr-menu-btn" data-do="move" data-arg="${b}:x"
+          ${free ? '' : 'disabled'} title="${esc(free ? '' : t('wreck.boatTaken'))}">${esc(label)}</button>`;
+      }).join('') + `</div>`);
+    }
+  } else {
+    rows.push(btnRow('force', t('wreck.act.forceEvent'), true, menu.uid));
+
+    // กัปตันไล่คนบนเรือลำเดียวกันลงได้
+    const myPlace = (st.pos?.[meUid] || '').split(':');
+    const theirPlace = (spot || '').split(':');
+    if (myPlace[1] === 'C' && myPlace[0] === theirPlace[0])
+      rows.push(btnRow('kick', t('wreck.act.kickOff'), true, menu.uid));
+  }
+
+  if (!rows.length) return '';
+  return `<div class="wr-menu-head">${esc(name)}</div>` + rows.join('');
+}
+
+function cargoMenu() {
+  return `<div class="wr-menu-head">${esc(t('wreck.act.shiftCargo'))}</div>` +
+         btnRow('shiftCargo', t('wreck.shiftHere'), true);
+}
+
+const btnRow = (act, label, on, arg = '', tip = '') =>
+  `<button class="wr-menu-btn" data-do="${act}"${arg ? ` data-arg="${esc(arg)}"` : ''}
+    ${on ? '' : 'disabled'}${tip ? ` title="${esc(tip)}"` : ''}>${esc(label)}</button>`;
+
+function runMenu(el, ctx, act, arg) {
+  if (act === 'move') { closeMenu(); ctx.send('move', { spot: arg }); return; }
+  if (act === 'force') { forcing = arg; picks = []; closeMenu(); paint(el); return; }
+  closeMenu();                 // ที่เหลือยังไม่ต่อกติกา ปิดเมนูไปก่อน
+  paint(el);
+}
+
+/* ── จำนวนไพ่ที่เหลือในกอง ─────────────────────────────────── */
+function paintDecks(el, st) {
+  const html = `
+    <span class="wr-deck">
+      <span class="wr-deck-n">${st.eventDeck ?? 0}</span>
+      <span class="wr-deck-label">${esc(t('wreck.eventDeck'))}</span>
+    </span>
+    <span class="wr-deck">
+      <span class="wr-deck-n">${st.voteDeck ?? 0}</span>
+      <span class="wr-deck-label">${esc(t('wreck.voteDeck'))}</span>
+    </span>`;
+  const box = el.querySelector('.wr-decks');
+  if (box.dataset.sig !== html) { box.dataset.sig = html; box.innerHTML = html; }
+}
+
+/* ── Action ที่กดได้ในตานี้ ────────────────────────────────
+   ชุดล่างเปลี่ยนตามตำแหน่งที่ยืน ย้ายที่แล้วปุ่มเปลี่ยนทันที */
+function paintActions(el, st, ctx) {
+  const spot = st.pos?.[ctx.me.uid];
+  const role = roleOf(spot);
+  const btn = (k) => `<button class="wr-act" data-do="${k}" disabled>${esc(t('wreck.act.' + k))}</button>`;
+
+  const boats = boatsFrom(spot);
+  const boatBtn = (b) => {
+    const free = boatFree(st.pos, b);
+    const key = boats.length === 1 ? 'wreck.act.toBoat'
+              : b === 'boatL' ? 'wreck.act.toBoatL' : 'wreck.act.toBoatR';
+    return `<button class="wr-act" data-boat="${b}"${free ? '' : ' disabled'}
+      title="${esc(free ? '' : t('wreck.boatTaken'))}">${esc(t(key))}</button>`;
+  };
+  const boatRow = !boats.length ? ''
+    : boats.length === 1 ? boatBtn(boats[0])
+    : `<div class="wr-act-two">${boats.map(boatBtn).join('')}</div>`;
+
+  const common = COMMON_ACTIONS.map(btn).join('') + boatRow;
+
+  // ย้ายกล่องไม่ได้ผูกกับชื่อตำแหน่งอย่างเดียว ต้องนับคนบนเรือด้วย
+  const list = [...(ROLE_ACTIONS[role] || [])];
+  if (canShiftCargo(spot, st.pos) && !list.includes('shiftCargo')) list.push('shiftCargo');
+  const byRole = list.length
+    ? `<span class="wr-act-role">${esc(t('wreck.role.' + role))}</span>` + list.map(btn).join('')
+    : `<p class="wr-empty">${esc(t('wreck.noRoleAction'))}</p>`;
+
+  for (const [key, html] of [['common', common], ['role', byRole]]) {
+    const box = el.querySelector(`[data-group="${key}"]`);
+    if (box.dataset.sig !== html) { box.dataset.sig = html; box.innerHTML = html; }
+  }
+
+  el.querySelectorAll('[data-boat]').forEach(b => {
+    b.onclick = () => { closeMenu(); ctx.send('move', { spot: b.dataset.boat + ':x' }); };
+  });
+}
+
+/* ── รายชื่อผู้เล่นพร้อมบทบาท ─────────────────────────────── */
+function paintRoster(el, st, ctx) {
+  const html = (st.seats || []).map(uid => {
+    const role = roleOf(st.pos?.[uid]);
+    const turn = st.turn === uid;
+    return `<li class="wr-row${turn ? ' turn' : ''}">
+      ${avatarFace(uid, st.names?.[uid] || '', (ctx.avatars || {})[uid], 26)}
+      <span class="wr-row-name">${esc(st.names?.[uid] || '?')}${uid === ctx.me.uid ? ' \u00b7' : ''}</span>
+      ${role ? `<span class="wr-tag wr-tag-${role}">${esc(t('wreck.role.' + role))}</span>` : ''}
+    </li>`;
+  }).join('');
+
+  const box = el.querySelector('.wr-list');
+  if (box.dataset.sig !== html) { box.dataset.sig = html; box.innerHTML = html; }
+}
+
+/* ── กล่องสมบัติ ───────────────────────────────────────────── */
+
+function cargoOf(p, st, meUid) {
+  const c = st.cargo || {};
+  const hot = canTouchCargo(st.pos?.[meUid], st.pos, p.id);
+  const box = (s, size, side, i) =>
+    `<img class="wr-box wr-box-${side}${hot ? ' hot' : ''}" src="${ART}Cargo.png" alt=""
+      ${hot ? `data-cargo="${p.id}:${side}:${i}"` : ''}
+      style="left:${s.x}%; top:${s.y}%; width:${size}%; --boxrot:${s.r || 0}deg">`;
+
+  if (p.kind === 'ship') {
+    const d = c[p.id] || { B: 0, F: 0 };
+    return [
+      ...SHIP_CARGO.B.slice(0, d.B).map((s, i) => box(s, SHIP_CARGO_SIZE, 'b', i)),
+      ...SHIP_CARGO.F.slice(0, d.F).map((s, i) => box(s, SHIP_CARGO_SIZE, 'f', i))
+    ].join('');
+  }
+  if (p.kind === 'island') {
+    const d = c.island || { B: 0, F: 0 };
+    return [
+      ...ISLAND_CARGO.B.slice(0, d.B).map((s, i) => box(s, ISLAND_CARGO_SIZE, 'b', i)),
+      ...ISLAND_CARGO.F.slice(0, d.F).map((s, i) => box(s, ISLAND_CARGO_SIZE, 'f', i))
+    ].join('');
+  }
+  if (p.kind === 'merchant') {
+    return MERCHANT_CARGO.slice(0, c.merchant || 0)
+      .map((s, i) => box(s, MERCHANT_CARGO_SIZE, 'n', i)).join('');
+  }
+  return '';
+}
+
+/* ── แถบนับกล่อง ───────────────────────────────────────────── */
+
+function legend(st) {
+  const c = st.cargo || {};
+  const B = (c.shipL?.B || 0) + (c.shipR?.B || 0) + (c.island?.B || 0);
+  const F = (c.shipL?.F || 0) + (c.shipR?.F || 0) + (c.island?.F || 0);
+  return `
+    <span class="wr-score wr-b">${esc(t('wreck.british'))} ${B}</span>
+    <span class="wr-score wr-f">${esc(t('wreck.france'))} ${F}</span>
+    <span class="wr-score wr-n">${esc(t('wreck.merchant'))} ${c.merchant || 0}</span>`;
+}

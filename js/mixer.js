@@ -1,6 +1,6 @@
 /* mixer.js — ระดับเสียงสามหลอด
    ─────────────────────────────────────────────────────────────
-   รวม · เพลง · เสียงประกอบ
+   รวม · เพลง · เสียงประกอบ · เสียงบรรยากาศ
 
    หลอดรวมคูณทับอีกสองหลอด จึงหรี่ทั้งหมดพร้อมกันได้โดยไม่เสียสัดส่วน
    ที่ตั้งไว้ เช่นอยากให้เสียงประกอบดังกว่าเพลงเป็นสองเท่า พอหรี่หลอดรวมลง
@@ -14,9 +14,9 @@ const KEY = 'lobby.mixer';
 const OLD_VOL = 'lobby.volume';     // ของรุ่นก่อนที่มีหลอดเดียว
 const OLD_MUTE = 'lobby.muted';
 
-export const CHANNELS = ['master', 'music', 'sfx'];
+export const CHANNELS = ['master', 'music', 'sfx', 'ambience'];
 
-export const mixer = { master: 0.8, music: 0.35, sfx: 0.7, muted: false };
+export const mixer = { master: 0.8, music: 0.35, sfx: 0.7, ambience: 0.55, muted: false };
 
 const listeners = [];
 export const onChange = (fn) => listeners.push(fn);
@@ -27,6 +27,7 @@ const clamp = (v) => Math.min(1, Math.max(0, Number(v) || 0));
 /* ระดับที่เอาไปใช้จริง — หลอดรวมคูณทับเสมอ */
 export const musicLevel = () => (mixer.muted ? 0 : mixer.master * mixer.music);
 export const sfxLevel   = () => (mixer.muted ? 0 : mixer.master * mixer.sfx);
+export const ambienceLevel = () => (mixer.muted ? 0 : mixer.master * mixer.ambience);
 
 export function load() {
   try {

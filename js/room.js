@@ -121,6 +121,7 @@ export async function createRoom(name) {
       status: 'lobby',
       gameId: null,
       gameSettings: {},
+      devMode: false,
       seq: 0,
       createdAt: fb.serverTimestamp(),
       touchedAt: fb.serverTimestamp()
@@ -307,6 +308,13 @@ export async function pickGame(gameId) {
   });
 }
 
+/* โหมดทดสอบ — ข้ามเงื่อนไขจำนวนคนและการกดพร้อม
+   เก็บไว้ในเอกสารห้องเพราะทุกคนต้องเห็นว่ากำลังเปิดอยู่ ไม่ใช่ความลับของเจ้าของห้อง */
+export async function setDevMode(on) {
+  if (!room.isHost) return;
+  await fb.updateDoc(roomRef(), { devMode: !!on, touchedAt: fb.serverTimestamp() });
+}
+
 export async function setGameSetting(key, value) {
   if (!room.isHost) return;
   await fb.updateDoc(roomRef(), {
@@ -436,7 +444,12 @@ export function canStart() {
   if (room.doc?.status !== 'lobby') return false;
   const game = Games.get(room.doc?.gameId);
   if (!game) return false;
+
   const players = room.members.filter(m => m.role === 'player' && !m.left);
+
+  // โหมดทดสอบ: เริ่มได้เลยขอแค่มีคนนั่งอยู่ ไม่ต้องครบจำนวนและไม่ต้องกดพร้อม
+  if (room.doc.devMode) return players.length >= 1;
+
   return Games.fits(game, players.length) &&
          players.every(m => m.ready && m.online);
 }
@@ -559,6 +572,7 @@ export function context() {
     members: room.members,
     isHost: room.isHost,
     hostUid: room.doc?.hostUid || null,
+    devMode: !!room.doc?.devMode,
     state: room.doc?.state || {},
     settings: room.doc?.gameSettings || {},
     avatars: room.avatars,        // รูปประจำตัวของทุกคนในห้อง

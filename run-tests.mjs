@@ -16,5 +16,11 @@ for (const f of files) {
   try { process.stdout.write(execFileSync(process.execPath, [f], { encoding: 'utf8' })); }
   catch (e) { bad++; process.stdout.write(e.stdout || String(e)); }
 }
+for (const f of ['check-files.mjs', 'check-exports.mjs', 'check-shell.mjs', 'check-i18n.mjs']) {
+  process.stdout.write('\n\u2500\u2500 ' + f + ' \u2500\u2500\n');
+  try { process.stdout.write(execFileSync(process.execPath, [f], { encoding: 'utf8' })); }
+  catch (e) { bad++; process.stdout.write(e.stdout || String(e)); }
+}
+
 process.stdout.write(bad ? `\nมีไฟล์ที่ไม่ผ่าน ${bad} ไฟล์\n` : '\nผ่านทั้งหมด\n');
 process.exit(bad ? 1 : 0);

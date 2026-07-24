@@ -53,12 +53,14 @@ const TINTS = ['#f4a949', '#6ee3b4', '#f2647e', '#7ab4ff', '#c79bff', '#ffd66b',
 const tint = (uid) => TINTS[Math.abs([...String(uid)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7)) % TINTS.length];
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
 
+/* size = null แปลว่าให้ CSS เป็นคนกำหนดขนาด ใช้ตอนต้องเติมเต็มช่องพอดี */
 export function face(uid, name, url, size = 30) {
-  const style = `width:${size}px;height:${size}px`;
+  const style = size ? `width:${size}px;height:${size}px` : '';
   if (url) {
     return `<span class="avatar" style="${style}"><img src="${esc(url)}" alt="" ` +
            `onerror="this.parentNode.classList.add('broken');this.remove()"></span>`;
   }
   const letter = esc((name || '?').trim().slice(0, 1).toUpperCase());
-  return `<span class="avatar letter" style="${style};background:${tint(uid)};font-size:${Math.round(size * 0.46)}px">${letter}</span>`;
+  const type = size ? `;font-size:${Math.round(size * 0.46)}px` : '';
+  return `<span class="avatar letter" style="${style};background:${tint(uid)}${type}">${letter}</span>`;
 }

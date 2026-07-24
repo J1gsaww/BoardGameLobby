@@ -8,6 +8,7 @@ import './games/index.js';      // ต้องมาหลัง games.js เ�
 import { t, apply, setLang, onLangChange, lang, LANGS, messageOf } from './i18n.js';
 import * as Music from './music.js';
 import * as Mix from './mixer.js';
+import { startAmbience, stopAmbience } from './ambience.js';
 import * as Avatar from './avatar.js';
 
 const $ = (id) => document.getElementById(id);
@@ -247,32 +248,99 @@ function paintGames(room) {
 }
 
 /* ตัวเลือกของเกมที่เลือกไว้ — เกมประกาศมาเป็นข้อมูล หน้านี้แค่วาดตาม */
+/* หน้าตั้งค่าถูกเรียกวาดทุกครั้งที่ห้องอัปเดต ซึ่งเกิดทุก 5 วินาทีจากสัญญาณชีพ
+   ถ้าเขียนทับทั้งก้อนทุกครั้ง ตำแหน่งเลื่อนในรายการการ์ดจะเด้งกลับขึ้นบนสุด
+   จึงข้ามการวาดเมื่อไม่มีอะไรเปลี่ยน และจำตำแหน่งเลื่อนไว้เวลาต้องวาดจริง */
 function paintGameSettings(room, game, count) {
   const host = $('gameSettings');
+  const sig = JSON.stringify([game?.id, room.doc.gameSettings || {}, room.isHost]);
+  if (host.dataset.sig === sig) return;
+
+  const keep = host.querySelector('.card-picker-list')?.scrollTop || 0;
+  host.dataset.sig = sig;
   host.innerHTML = '';
   if (!game || !game.settings.length) return;
 
   game.settings.forEach(setting => {
-    const current = room.doc.gameSettings?.[setting.key] ?? setting.default;
-
     const row = document.createElement('div');
     row.className = 'field';
     row.innerHTML = `<span class="field-label">${esc(t(Games.settingKey(game.id, setting.key)))}</span>`;
 
-    const seg = document.createElement('div');
-    seg.className = 'segmented';
-    setting.options.forEach(value => {
-      const b = document.createElement('button');
-      b.className = 'seg' + (value === current ? ' on' : '');
-      b.textContent = t(Games.optionKey(game.id, setting.key, value));
-      b.disabled = !room.isHost;
-      b.onclick = () => Room.setGameSetting(setting.key, value);
-      seg.appendChild(b);
-    });
+    row.appendChild(setting.type === 'cards'
+      ? cardPicker(room, game, setting)
+      : segmentedSetting(room, game, setting));
 
-    row.appendChild(seg);
     host.appendChild(row);
   });
+
+  const list = host.querySelector('.card-picker-list');
+  if (list && keep) list.scrollTop = keep;
+}
+
+function segmentedSetting(room, game, setting) {
+  const current = room.doc.gameSettings?.[setting.key] ?? setting.default;
+  const seg = document.createElement('div');
+  seg.className = 'segmented';
+  setting.options.forEach(value => {
+    const b = document.createElement('button');
+    b.className = 'seg' + (value === current ? ' on' : '');
+    b.textContent = t(Games.optionKey(game.id, setting.key, value));
+    b.disabled = !room.isHost;
+    b.onclick = () => Room.setGameSetting(setting.key, value);
+    seg.appendChild(b);
+  });
+  return seg;
+}
+
+/* ── ตัวเลือกการ์ดพิเศษ ───────────────────────────
+   แสดงแค่ชื่อกับวงเล็บบอกระดับและจำนวนใบ คำอธิบายเต็มโผล่ตอนเอาเมาส์ชี้
+   ถ้าโชว์คำอธิบายทุกใบพร้อมกัน รายการจะยาวจนเลือกไม่ไหว */
+function cardPicker(room, game, setting) {
+  const chosen = room.doc.gameSettings?.[setting.key] || setting.default || [];
+  const list = setting.catalogue || [];
+  const total = list.filter(c => chosen.includes(c.id)).reduce((n, c) => n + c.count, 0);
+
+  const wrap = document.createElement('div');
+  wrap.className = 'card-picker';
+
+  const head = document.createElement('div');
+  head.className = 'card-picker-head';
+  head.innerHTML = `<span class="card-picker-count">${esc(t('cards.added', { n: total }))}</span>`;
+
+  if (room.isHost) {
+    const all = document.createElement('button');
+    all.className = 'btn btn-slim';
+    all.textContent = t('cards.addAll');
+    all.onclick = () => Room.setGameSetting(setting.key, list.map(c => c.id));
+    const none = document.createElement('button');
+    none.className = 'btn btn-slim';
+    none.textContent = t('cards.clear');
+    none.onclick = () => Room.setGameSetting(setting.key, []);
+    head.append(all, none);
+  }
+  wrap.appendChild(head);
+
+  const grid = document.createElement('div');
+  grid.className = 'card-picker-list';
+
+  list.forEach(card => {
+    const info = card[lang] || card.th;
+    const on = chosen.includes(card.id);
+
+    const b = document.createElement('button');
+    b.className = 'card-pick' + (on ? ' on' : '') + ' rar-' + card.rarity;
+    b.dataset.tip = info.desc;
+    b.disabled = !room.isHost;
+    b.innerHTML =
+      `<span class="card-pick-name">${esc(info.name)}</span>` +
+      `<span class="card-pick-meta">(${esc(Games.rarityLabel(card.rarity))} \u00d7${card.count})</span>`;
+    b.onclick = () => Room.setGameSetting(setting.key,
+      on ? chosen.filter(x => x !== card.id) : [...chosen, card.id]);
+    grid.appendChild(b);
+  });
+
+  wrap.appendChild(grid);
+  return wrap;
 }
 
 /* ── วาดหน้าห้อง ──────────────────────────────────── */
@@ -288,6 +356,7 @@ function paintRoom() {
     $('view-play').style.backgroundImage = game?.table ? `url("${game.table}")` : '';
     $('playCode').textContent = room.code;
     Music.setTrack(game?.music || Music.defaultTrack());
+    startAmbience(game?.ambience);
     $('btnBack').hidden = !room.isHost;
     $('btnBack').textContent = t('play.leaveGame');
 
@@ -300,11 +369,16 @@ function paintRoom() {
   }
 
   Music.setTrack(Music.defaultTrack());
+  stopAmbience();
   if (!onOverlay()) show('view-lobby');
   paintMembers(room);
   $('avatarWarn').hidden = !room.avatarError;
   $('avatarWarn').textContent = room.avatarError ? t('err.avatarUpload', { why: room.avatarError }) : '';
   paintGames(room);
+
+  // โหมดทดสอบ เห็นเฉพาะเจ้าของห้อง แต่ป้ายเตือนขึ้นให้ทุกคนเห็น
+  $('devRow').hidden = !room.isHost;
+  $('devMode').checked = !!room.doc.devMode;
 
   const mine = room.mine;
   const spectator = mine?.role === 'spectator';
@@ -327,7 +401,9 @@ function paintRoom() {
   else if (!players.every(m => m.ready))
     note = t('lobby.waitReady', { n: players.filter(m => !m.ready).length });
 
+  if (room.doc.devMode) note = t('lobby.devOn') + (note ? ' \u00b7 ' + note : '');
   $('lobbyNote').textContent = note;
+  $('lobbyNote').classList.toggle('warn', !!room.doc.devMode);
 }
 
 Room.watch((room) => {
@@ -729,6 +805,7 @@ $('btnRulesBack').onclick = () => {
 };
 $('btnSettingBack').onclick = () => { show(cameFrom === 'view-setting' ? 'view-home' : cameFrom); if (lastRoom) paintRoom(); };
 
+$('devMode').addEventListener('change', e => Room.setDevMode(e.target.checked));
 $('btnReady').onclick = () => Room.setReady(!Room.room.mine?.ready);
 $('btnStart').onclick = () => Room.start();
 $('btnBack').onclick  = () => Room.backToLobby();
@@ -736,6 +813,7 @@ $('btnLeave').onclick = async () => {
   await Room.leaveRoom();
   lastRoom = null;
   Music.setTrack(Music.defaultTrack());
+  stopAmbience();
   show('view-home');
   err(null);
 };

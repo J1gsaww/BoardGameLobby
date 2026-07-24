@@ -1,23 +1,159 @@
 /* index.js — Wreckers
    Wreckers คือคนที่ล่อเรือให้ชนโขดหินแล้วเก็บของจากซาก เป็นอาชีพจริงในประวัติศาสตร์
-   ยังไม่เปิดให้เล่น รอกติกา */
+   ตอนนี้เป็นโครงเปล่า เลือกและกดเริ่มได้แล้ว แต่ยังรอกติกาจริง */
 
 import { register } from '../../games.js';
+import { init, onAction, tick } from './game.js';
+import { render } from './ui.js';
+import { EXTRA_CARDS } from './cards.js';
+import { TURN_OPTIONS } from './board.js';
 
 register({
   id: 'wreckers',
   category: 'board',
-  comingSoon: true,
   cover: 'assets/game/wreckers/cover.png',
+  table: 'assets/game/wreckers/table.png',
+  music: 'assets/music/wreckers.mp3',
+
+  /* เสียงบรรยากาศวนต่อเนื่อง แยกหลอดจากเพลง
+     นกนางนวลตั้งดังกว่าคลื่นเกือบเท่าตัว ไม่งั้นจะจมหายไปในเสียงคลื่น */
+  ambience: [
+    { src: 'assets/SFX/Ocean.mp3',  gain: 0.55 },
+    { src: 'assets/SFX/Seagul.mp3', gain: 1.0 }
+  ],
+  minPlayers: 4,
+  maxPlayers: 10,
+  spectators: true,
+  allowSpectatorChat: true,
+
+  settings: [
+    { key: 'turnSeconds', default: 60, options: TURN_OPTIONS },
+    { key: 'extraCards', type: 'cards', default: [], catalogue: EXTRA_CARDS }
+  ],
+  init, onAction, tick, render,
 
   i18n: {
     th: {
       'game.wreckers.name': 'Wreckers',
-      'game.wreckers.desc': 'โจรสลัดแย่งสมบัติกันบนเรือที่กำลังจะจม ไว้ใจใครไม่ได้สักคน กำลังพัฒนา'
+      'game.wreckers.desc': '4–10 คน · โจรสลัดแย่งสมบัติกันบนเรือที่กำลังจะจม ไว้ใจใครไม่ได้สักคน',
+      'game.wreckers.extraCards': 'การ์ดพิเศษ (ยิ่งใส่เยอะ เกมยิ่งนาน)',
+      'wreck.board': 'กระดาน',
+      'game.wreckers.turnSeconds': 'เวลาต่อตา',
+      'game.wreckers.turnSeconds.30': '30 วิ',
+      'game.wreckers.turnSeconds.45': '45 วิ',
+      'game.wreckers.turnSeconds.60': '60 วิ',
+      'game.wreckers.turnSeconds.90': '90 วิ',
+      'game.wreckers.turnSeconds.120': '120 วิ',
+      'wreck.rolling': 'กำลังทอยหาคนเริ่ม',
+      'wreck.devRoll': 'ทดสอบลูกเต๋า',
+      'wreck.devRolled': 'ทอยทดสอบ ไม่มีผลกับเกม',
+      'wreck.starts': '{name} เริ่มก่อน',
+      'wreck.yourTurn': 'ตาคุณ',
+      'wreck.waitFor': 'รอ {name}',
+      'wreck.left': 'เหลือ {n} วิ',
+      'wreck.offline': '{name} หลุดอยู่ รออีกสักครู่',
+      'wreck.act.toBoat': 'ลงเรือเล็ก',
+      'wreck.act.toBoatL': 'ลงเรือเล็กซ้าย',
+      'wreck.act.toBoatR': 'ลงเรือเล็กขวา',
+      'wreck.act.forceEvent': 'บังคับให้เปิดการ์ด',
+      'wreck.act.kickOff': 'ไล่ลงจากเรือ',
+      'wreck.act.activate': 'Activate',
+      'wreck.act.peek': 'Peek',
+      'wreck.boatTaken': 'เรือเล็กลำนี้มีคนอยู่แล้ว',
+      'wreck.pickMore': 'เลือกได้อีก 1 ใบ หรือกด Peek เลยก็ได้',
+      'wreck.forcing': 'กำลังบังคับ {name} — เลือกการ์ด 2 ใบ',
+      'wreck.cancel': 'ยกเลิก',
+      'wreck.shiftHere': 'ย้ายกล่องนี้',
+      'wreck.actions': 'สิ่งที่ทำได้',
+      'wreck.eventDeck': 'การ์ดเหตุการณ์ในกอง',
+      'wreck.voteDeck': 'ไพ่โหวตในกอง',
+      'wreck.noRoleAction': 'ตำแหน่งนี้ไม่มี Action พิเศษ',
+      'wreck.notWired': 'ปุ่มยังไม่ต่อกติกา ใส่ไว้ดูผังก่อน',
+      'wreck.act.force': 'บังคับคนอื่นเปิด',
+      'wreck.act.attack': 'สั่งโหวตโจมตี',
+      'wreck.act.kick': 'ไล่ลงจากเรือ',
+      'wreck.act.mutiny': 'สั่งโหวตก่อกบฏ',
+      'wreck.act.shiftCargo': 'ย้ายกล่องบนเรือ',
+      'wreck.act.islandVote': 'สั่งโหวตย้ายกล่องบนเกาะ',
+      'wreck.yourHand': 'ไพ่ของคุณ',
+      'wreck.players': 'ผู้เล่น',
+      'wreck.events': 'การ์ดเหตุการณ์',
+      'wreck.event': 'EVENT',
+      'wreck.vote': 'VOTE',
+      'wreck.noCards': 'ยังไม่มีไพ่',
+      'wreck.role.captain': 'กัปตัน',
+      'wreck.role.mate': 'ต้นหน',
+      'wreck.role.cabin': 'ลูกเรือ',
+      'wreck.role.governor': 'ประธานเกาะ',
+      'wreck.role.people': 'ชาวเกาะ',
+      'wreck.role.rowboat': 'เรือเล็ก',
+      'wreck.tapToMove': 'แตะวงว่างเพื่อย้ายตัวเอง',
+      'wreck.watchingOnly': 'กำลังนั่งดู ขยับไม่ได้',
+      'wreck.british': 'British',
+      'wreck.france': 'France',
+      'wreck.merchant': 'เรือสินค้า',
+      'wreck.back': 'กลับไปที่ห้อง'
     },
     en: {
       'game.wreckers.name': 'Wreckers',
-      'game.wreckers.desc': 'Pirates tearing into the same haul on a sinking ship, and nobody can be trusted. In development'
+      'game.wreckers.desc': '4–10 players · pirates tearing into the same haul on a sinking ship, and nobody can be trusted',
+      'game.wreckers.extraCards': 'Extra cards (the more you add, the longer the game)',
+      'wreck.board': 'Board',
+      'game.wreckers.turnSeconds': 'Turn timer',
+      'game.wreckers.turnSeconds.30': '30s',
+      'game.wreckers.turnSeconds.45': '45s',
+      'game.wreckers.turnSeconds.60': '60s',
+      'game.wreckers.turnSeconds.90': '90s',
+      'game.wreckers.turnSeconds.120': '120s',
+      'wreck.rolling': 'Rolling for first turn',
+      'wreck.devRoll': 'Test roll',
+      'wreck.devRolled': 'Test roll \u2014 no effect on the game',
+      'wreck.starts': '{name} goes first',
+      'wreck.yourTurn': 'Your turn',
+      'wreck.waitFor': 'Waiting for {name}',
+      'wreck.left': '{n}s left',
+      'wreck.offline': '{name} is offline \u2014 holding the turn',
+      'wreck.act.toBoat': 'Board the rowboat',
+      'wreck.act.toBoatL': 'Left rowboat',
+      'wreck.act.toBoatR': 'Right rowboat',
+      'wreck.act.forceEvent': 'Force them to flip',
+      'wreck.act.kickOff': 'Throw off the ship',
+      'wreck.act.activate': 'Activate',
+      'wreck.act.peek': 'Peek',
+      'wreck.boatTaken': 'That rowboat is taken',
+      'wreck.pickMore': 'Pick one more, or just Peek',
+      'wreck.forcing': 'Forcing {name} \u2014 pick two cards',
+      'wreck.cancel': 'Cancel',
+      'wreck.shiftHere': 'Shift this box',
+      'wreck.actions': 'Actions',
+      'wreck.eventDeck': 'events left in deck',
+      'wreck.voteDeck': 'vote cards in pile',
+      'wreck.noRoleAction': 'No special action from this spot',
+      'wreck.notWired': 'Buttons are layout only — rules not wired yet',
+      'wreck.act.force': 'Force someone to flip',
+      'wreck.act.attack': 'Call an attack vote',
+      'wreck.act.kick': 'Throw someone off',
+      'wreck.act.mutiny': 'Call a mutiny vote',
+      'wreck.act.shiftCargo': 'Shift cargo on the ship',
+      'wreck.act.islandVote': 'Call an island cargo vote',
+      'wreck.yourHand': 'Your hand',
+      'wreck.players': 'Players',
+      'wreck.events': 'Event cards',
+      'wreck.event': 'EVENT',
+      'wreck.vote': 'VOTE',
+      'wreck.noCards': 'No cards yet',
+      'wreck.role.captain': 'Captain',
+      'wreck.role.mate': 'First Mate',
+      'wreck.role.cabin': 'Crew',
+      'wreck.role.governor': 'President',
+      'wreck.role.people': 'Islander',
+      'wreck.role.rowboat': 'Rowboat',
+      'wreck.tapToMove': 'Tap an empty circle to move',
+      'wreck.watchingOnly': 'Watching — you cannot move',
+      'wreck.british': 'British',
+      'wreck.france': 'France',
+      'wreck.merchant': 'Merchant',
+      'wreck.back': 'Back to the room'
     }
   }
 });
