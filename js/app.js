@@ -220,6 +220,8 @@ function paintRoom() {
     } : null
   });
   $('outCount').textContent = `${room.members.length}/${window.MAX_IN_ROOM}`;
+  $('avatarWarn').hidden = !room.avatarError;
+  $('avatarWarn').textContent = room.avatarError ? t('err.avatarUpload', { why: room.avatarError }) : '';
   paintGames(room);
 
   const mine = room.mine;
@@ -441,20 +443,124 @@ function paintAvatar() {
 }
 
 $('btnAvatarPick').onclick = () => $('avatarFile').click();
-$('btnAvatarClear').onclick = () => { Avatar.clear(); paintAvatar(); };
+$('btnAvatarClear').onclick = () => { Avatar.clear(); paintAvatar(); Room.pushAvatar(); };
+
+/* ── หน้าต่างจัดรูปให้พอดีกรอบ ─────────────────────
+   รูปที่ไม่ใช่จัตุรัสจะโดนครอบตรงกลางเสมอถ้าไม่ให้เลือก
+   ซึ่งมักตัดหัวคนทิ้ง เลยให้เลื่อนและซูมเองก่อนยืนยัน
+
+   แนวคิด: กรอบเป็นจัตุรัสขนาดคงที่ · รูปวางทับแบบ "คลุมเต็มกรอบ" เสมอ
+   เลื่อนได้แต่ห้ามให้เห็นขอบว่าง จึงหนีบตำแหน่งไว้ทุกครั้งที่ขยับ */
+let crop = null;
+
+function cropLayout() {
+  if (!crop) return;
+  const scale = crop.base * crop.zoom;
+  const w = crop.bitmap.width * scale;
+  const h = crop.bitmap.height * scale;
+
+  crop.ox = Math.min(0, Math.max(crop.view - w, crop.ox));
+  crop.oy = Math.min(0, Math.max(crop.view - h, crop.oy));
+
+  const img = $('cropImg');
+  img.style.width = w + 'px';
+  img.style.height = h + 'px';
+  img.style.left = crop.ox + 'px';
+  img.style.top = crop.oy + 'px';
+}
+
+function openCrop(bitmap, objectUrl) {
+  $('cropModal').hidden = false;
+  const view = $('cropView').clientWidth || 260;
+  const base = view / Math.min(bitmap.width, bitmap.height);   // ซูม 1 = ด้านสั้นพอดีกรอบ
+
+  crop = { bitmap, objectUrl, view, base, zoom: 1, ox: 0, oy: 0 };
+  crop.ox = (view - bitmap.width * base) / 2;
+  crop.oy = (view - bitmap.height * base) / 2;
+
+  $('cropImg').src = objectUrl;
+  $('cropZoom').value = 100;
+  cropLayout();
+}
+
+function closeCrop() {
+  if (crop) { crop.bitmap.close?.(); URL.revokeObjectURL(crop.objectUrl); }
+  crop = null;
+  $('cropModal').hidden = true;
+  $('cropImg').removeAttribute('src');
+}
+
+/* ลากเลื่อน — ใช้ pointer event ทีเดียวได้ทั้งเมาส์และนิ้ว */
+{
+  const view = $('cropView');
+  let dragging = false, lastX = 0, lastY = 0;
+
+  view.addEventListener('pointerdown', e => {
+    if (!crop) return;
+    dragging = true; lastX = e.clientX; lastY = e.clientY;
+    view.setPointerCapture(e.pointerId);
+  });
+  view.addEventListener('pointermove', e => {
+    if (!dragging || !crop) return;
+    crop.ox += e.clientX - lastX;
+    crop.oy += e.clientY - lastY;
+    lastX = e.clientX; lastY = e.clientY;
+    cropLayout();
+  });
+  ['pointerup', 'pointercancel'].forEach(ev =>
+    view.addEventListener(ev, e => { dragging = false; view.releasePointerCapture?.(e.pointerId); }));
+
+  view.addEventListener('wheel', e => {
+    if (!crop) return;
+    e.preventDefault();
+    const next = Math.min(3.2, Math.max(1, crop.zoom * (e.deltaY < 0 ? 1.12 : 0.89)));
+    zoomAround(next);
+    $('cropZoom').value = Math.round(next * 100);
+  }, { passive: false });
+}
+
+/* ซูมโดยยึดจุดกึ่งกลางกรอบไว้ ไม่งั้นรูปจะไหลออกนอกกรอบตอนซูม */
+function zoomAround(next) {
+  const mid = crop.view / 2;
+  const k = next / crop.zoom;
+  crop.ox = mid - (mid - crop.ox) * k;
+  crop.oy = mid - (mid - crop.oy) * k;
+  crop.zoom = next;
+  cropLayout();
+}
+
+$('cropZoom').addEventListener('input', e => { if (crop) zoomAround(Number(e.target.value) / 100); });
+$('cropCancel').onclick = closeCrop;
+
+$('cropOk').onclick = async () => {
+  if (!crop) return;
+  const note = $('avatarNote');
+  try {
+    const scale = crop.base * crop.zoom;
+    const side = crop.view / scale;
+    const url = await Avatar.cropToDataUrl(crop.bitmap, -crop.ox / scale, -crop.oy / scale, side);
+    Avatar.save(url);
+    closeCrop();
+    paintAvatar();
+    Room.pushAvatar();
+    note.textContent = t('set.avatarNote');
+  } catch (err) {
+    console.error('ครอบรูปไม่สำเร็จ', err);
+    closeCrop();
+    note.textContent = t('set.avatarTooBig');
+  }
+};
+
 $('avatarFile').addEventListener('change', async (e) => {
   const file = e.target.files && e.target.files[0];
   e.target.value = '';
   if (!file) return;
-  const note = $('avatarNote');
   try {
-    const url = await Avatar.fromFile(file);
-    Avatar.save(url);
-    paintAvatar();
-    note.textContent = t('set.avatarNote');
+    const bitmap = await Avatar.openImage(file);
+    openCrop(bitmap, URL.createObjectURL(file));
   } catch (err) {
-    console.error('ย่อรูปไม่สำเร็จ', err);
-    note.textContent = t(err.message === 'notAnImage' ? 'set.avatarNotImage' : 'set.avatarTooBig');
+    console.error('เปิดรูปไม่สำเร็จ', err);
+    $('avatarNote').textContent = t(err.message === 'notAnImage' ? 'set.avatarNotImage' : 'set.avatarTooBig');
   }
 });
 

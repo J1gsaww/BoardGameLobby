@@ -45,6 +45,7 @@ export const room = {
   secrets: {},       // ของทุกคน — มีครบเฉพาะตอนเราเป็นเจ้าของห้อง
   chat: [],          // ข้อความล่าสุดในห้อง
   avatars: {},       // รูปประจำตัวของทุกคนในห้อง
+  avatarError: null, // อัปรูปไม่สำเร็จ เก็บรหัสไว้บอกผู้ใช้
   kicked: false,     // โดนเจ้าของห้องเตะออก
   get isHost() { return !!room.doc && room.doc.hostUid === me.uid; },
   get mine()   { return room.members.find(m => m.uid === me.uid) || null; }
@@ -214,11 +215,7 @@ function attach(code) {
     emit();
   }, err => console.error('[avatars]', err)));
 
-  // อัปรูปของตัวเองครั้งเดียวตอนเข้าห้อง ไม่แตะอีกจนกว่าจะออก
-  const mine = Avatar.load();
-  if (mine) fb.setDoc(faceRef(me.uid, code), { img: mine, at: Date.now() })
-              .catch(e => console.warn('[avatar] อัปไม่สำเร็จ', e.code || e));
-  else fb.deleteDoc(faceRef(me.uid, code)).catch(() => {});
+  pushAvatar(code);
 
   unsubs.push(fb.onSnapshot(fb.query(chatOf(code), fb.orderBy('at')), s => {
     room.chat = s.docs.map(d => ({ id: d.id, ...d.data() })).slice(-CHAT_KEEP);
@@ -239,6 +236,23 @@ function attach(code) {
   window.addEventListener('beforeunload', bail);
 }
 
+/* อัปรูปของตัวเองขึ้นห้อง — เรียกตอนเข้าห้อง และตอนเปลี่ยนรูประหว่างอยู่ในห้อง
+   ถ้าไม่เรียกซ้ำตอนเปลี่ยนรูป คนที่ตั้งรูปหลังเข้าห้องแล้วจะไม่มีใครเห็นเลยจนกว่าจะออกแล้วเข้าใหม่ */
+export function pushAvatar(code = room.code) {
+  if (!code) return;
+  const mine = Avatar.load();
+  room.avatarError = null;
+
+  if (!mine) { fb.deleteDoc(faceRef(me.uid, code)).catch(() => {}); return; }
+
+  fb.setDoc(faceRef(me.uid, code), { img: mine, at: Date.now() })
+    .catch(e => {
+      room.avatarError = e.code || String(e);
+      console.warn('[avatar] อัปไม่สำเร็จ', room.avatarError);
+      emit();
+    });
+}
+
 function detach() {
   window.removeEventListener('beforeunload', bail);
   clearInterval(beat); beat = null;
@@ -246,6 +260,7 @@ function detach() {
   stopHostDuties();
   room.code = null; room.doc = null; room.members = [];
   room.secret = null; room.secrets = {}; room.chat = []; room.avatars = {};
+  room.avatarError = null;
 }
 
 function bail() {

@@ -16,19 +16,21 @@ export const load = () => { try { return localStorage.getItem(KEY) || ''; } catc
 export const save = (url) => { try { url ? localStorage.setItem(KEY, url) : localStorage.removeItem(KEY); } catch {} };
 export const clear = () => save('');
 
-/* อ่านไฟล์ที่ผู้ใช้เลือก → ครอบเป็นสี่เหลี่ยมจัตุรัสตรงกลาง → ย่อ → บีบ */
-export async function fromFile(file) {
+/* เปิดไฟล์ที่ผู้ใช้เลือก คืนภาพดิบไว้ให้หน้าจอเอาไปให้ครอบเอง */
+export async function openImage(file) {
   if (!file || !file.type.startsWith('image/')) throw new Error('notAnImage');
+  return await createImageBitmap(file);
+}
 
-  const bmp = await createImageBitmap(file);
-  const side = Math.min(bmp.width, bmp.height);
+/* ครอบตามกรอบที่ผู้ใช้เลื่อนเอง แล้วย่อกับบีบให้เล็กพอ
+   sx, sy, side อยู่ในหน่วยพิกเซลของภาพต้นฉบับ */
+export async function cropToDataUrl(bitmap, sx, sy, side) {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = SIZE;
 
   const g = canvas.getContext('2d');
   g.imageSmoothingQuality = 'high';
-  g.drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, SIZE, SIZE);
-  bmp.close?.();
+  g.drawImage(bitmap, sx, sy, side, side, 0, 0, SIZE, SIZE);
 
   // ไล่บีบลงเรื่อย ๆ จนกว่าจะเล็กพอ ถ้ายังไม่พอค่อยย่อขนาดลงอีกขั้น
   for (const [type, q] of [['image/webp', .75], ['image/webp', .55], ['image/webp', .38], ['image/jpeg', .5]]) {

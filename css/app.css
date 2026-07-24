@@ -543,3 +543,34 @@ button{ cursor:pointer; border:0; background:none; }
 .chat-list li{ display:flex; align-items:flex-start; gap:7px; flex-wrap:wrap; }
 .chat-list li .avatar{ margin-top:1px; }
 .chat-list .chat-text{ flex:1 1 100%; padding-left:27px; }
+
+/* ── หน้าต่างจัดรูป ──────────────────────────────── */
+.modal{
+  position:fixed; inset:0; z-index:70;
+  display:grid; place-items:center; padding:20px;
+  background:rgba(8,6,20,.72); backdrop-filter:blur(3px);
+}
+.modal-card{
+  width:min(340px, 100%);
+  background:var(--bg-raised, var(--raised));
+  border:1px solid var(--line); border-radius:20px; padding:20px;
+}
+.modal-card h3{ font-family:var(--display); font-size:18px; margin:0 0 14px; }
+.modal-actions{ display:flex; gap:10px; margin-top:16px; }
+.modal-actions .btn{ flex:1; }
+
+.crop-view{
+  position:relative; width:100%; aspect-ratio:1; overflow:hidden;
+  border-radius:14px; background:var(--sunk); border:1px solid var(--line);
+  touch-action:none; cursor:grab; user-select:none;
+}
+.crop-view:active{ cursor:grabbing; }
+.crop-view img{ position:absolute; max-width:none; pointer-events:none; }
+
+/* วงกลมบอกขอบเขตที่จะถูกใช้จริง ส่วนนอกวงหรี่ลง */
+.crop-ring{
+  position:absolute; inset:0; pointer-events:none;
+  box-shadow:0 0 0 999px rgba(8,6,20,.5) inset;
+  border-radius:50%;
+}
+#cropZoom{ width:100%; margin:14px 0 4px; }
