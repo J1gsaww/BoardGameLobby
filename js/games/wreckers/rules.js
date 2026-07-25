@@ -196,9 +196,19 @@ export function maroon(st, uid, hands = {}, rng = Math.random) {
 
   const pos = st.pos || {};
   const onIsland = placeOf(pos[uid]) === 'island';
-  const alone = onIsland && occupants(pos, 'island').length === 1;
+  const line = onIsland ? occupants(pos, 'island') : [];
 
-  if (alone) {
+  /* ถอยไปต่อท้ายแถวไม่ได้แล้ว = เสียไพ่โหวตถาวรแทน
+
+     เกิดได้สองแบบ และผลเหมือนกันเพราะเหตุผลเดียวกัน
+       อยู่บนเกาะคนเดียว     — ไม่มีแถวให้ถอย
+       อยู่ท้ายแถวอยู่แล้ว   — ถอยไปก็อยู่ที่เดิม โทษจะกลายเป็นศูนย์
+
+     ถ้าไม่คิดกรณีท้ายแถว การยิงคนท้ายแถวจะไม่มีผลอะไรเลย
+     ซึ่งทำให้ตำแหน่งท้ายสุดกลายเป็นที่ปลอดภัยที่สุดบนกระดาน */
+  const last = onIsland && line[line.length - 1] === uid;
+
+  if (onIsland && last) {
     const cap = Math.max(0, (st.maxVote?.[uid] ?? 0) - 1);
     const hand = [...(hands[uid] || [])];
     if (hand.length > cap) hand.splice(Math.floor(rng() * hand.length), 1);
@@ -251,10 +261,18 @@ export const VOTE_ROW = { attack: 'attack', mutiny: 'mutiny', islandVote: 'brawl
 
 export function voters(st, kind, place) {
   const line = occupants(st.pos, place)
-    .filter(uid => !isVoteBanned(st, uid));          /* โดนสั่งห้ามโหวตอยู่ ไม่นับเป็นผู้ร่วม */
+    .filter(uid => !isVoteBanned(st, uid))           /* โดนสั่งห้ามโหวตอยู่ ไม่นับเป็นผู้ร่วม */
+    /* เพดานไพ่เหลือศูนย์ = ไม่มีไพ่ให้ส่งอีกแล้ว ไม่นับเป็นผู้ร่วมโหวตตั้งแต่ต้น
+       ถ้ายังนับอยู่ การโหวตจะค้างรอคนที่ส่งอะไรไม่ได้ตลอดกาล */
+    .filter(uid => (st.maxVote?.[uid] ?? 0) > 0);
   if (kind !== 'mutiny') return line;
   return line.filter(uid => roleAt(st.pos, uid) !== 'captain');
 }
+
+/* ร่วมโหวตครั้งนี้ได้ไหม — หน้าจอใช้ตัดสินว่าจะไฮไลท์มือไพ่และให้กดไพ่ได้หรือเปล่า
+   ใช้รายชื่อชุดเดียวกับฝั่งเซิร์ฟเวอร์ จะได้ไม่มีทางที่หน้าจอชวนให้กดสิ่งที่กดไม่ได้ */
+export const canVoteNow = (st, uid) =>
+  !!st.vote && st.vote.voters.includes(uid) && !st.vote.done.includes(uid);
 
 /* เรือที่ยิงได้จริง — ต้องมีกล่องให้ชิงด้วย ยิงลำที่ว่างเปล่าไปก็ไม่ได้อะไร
    ยิงลำตัวเองไม่ได้อยู่แล้ว */

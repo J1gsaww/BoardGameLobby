@@ -16,7 +16,7 @@ import { face as avatarFace } from '../../avatar.js';
 import { mountSea, stopSea } from './sea.js';
 import { cardById as voteById, voteCard, iconSrc } from './vote.js';
 import { dieSvg, rollPose, HERO, ROLL_MS } from './die.js';
-import { actionsFor, occupants, placeOf, BOAT_IDS } from './rules.js';
+import { actionsFor, occupants, placeOf, BOAT_IDS, canVoteNow } from './rules.js';
 import { targetsOf } from './effects.js';
 import { BASE_CARDS, cardArt, cardArtAlt, CARD_BACK, CARD_BACK_ALT } from './events.js';
 import { paintScene, stopScene, setPlanView, setPlanWire, VOTE_BACK,
@@ -465,7 +465,13 @@ function paintHand(el, st, ctx) {
   const me = ctx.me.uid;
   const mine = ctx.secret?.vote || [];
   const held = st.held?.[me] ?? 0;
-  const asking = !!st.vote && st.vote.voters.includes(me) && !st.vote.done.includes(me);
+  /* ใช้ฟังก์ชันเดียวกับฝั่งกติกา จะได้ไม่มีทางที่หน้าจอชวนให้กดสิ่งที่กติกาไม่รับ */
+  const asking = canVoteNow(st, me);
+
+  /* เพดานไพ่เหลือศูนย์ = หมดสิทธิ์ร่วมโหวตถาวร ต้องบอกเหตุผล
+     ไม่งั้นจะดูเหมือนหน้าจอค้างหรือลืมไฮไลท์ให้ */
+  const spent = (st.maxVote?.[me] ?? 0) === 0;
+  const sittingOut = !!st.vote && spent && occupants(st.pos, placeOf(st.pos?.[me])).includes(me);
 
   const html =
     mine.map(id => (asking
@@ -473,7 +479,9 @@ function paintHand(el, st, ctx) {
       : voteCard(voteById(id), lang))).join('') +
     Array.from({ length: held }, () =>
       `<div class="wr-card wr-held"><span class="wr-card-face">${esc(t('wreck.event'))}</span></div>`).join('') +
-    (mine.length + held ? '' : `<p class="wr-empty">${esc(t('wreck.noCards'))}</p>`);
+    (mine.length + held ? '' : `<p class="wr-empty">${esc(t('wreck.noCards'))}</p>`) +
+    (spent ? `<p class="wr-spent">${esc(t('wreck.voteSpent'))}</p>` : '') +
+    (sittingOut ? `<p class="wr-empty">${esc(t('wreck.sittingOut'))}</p>` : '');
 
   const box = el.querySelector('.wr-hand-cards');
   box.classList.toggle('asking', asking);

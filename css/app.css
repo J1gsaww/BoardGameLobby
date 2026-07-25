@@ -1220,6 +1220,7 @@ button{ cursor:pointer; border:0; background:none; }
   /* เว้นบนเยอะขึ้นเพราะแถบคะแนนลอยอยู่บนสุดของกระดาน ถ้าไม่เว้นจะทับกันอ่านไม่ออก */
   padding:64px 20px 20px;
   background:rgba(0,0,0,.30);
+  transition:background .3s;
   /* ตัวฉากไม่รับคลิก ปล่อยให้ทะลุไปถึงเรือบนกระดานได้
      ลูกของฉัน (ปุ่ม แผงยืนยัน) ค่อยรับคลิกเอง ไม่งั้นกัปตันคลิกเรือไม่ได้ */
   pointer-events:none;
@@ -1570,3 +1571,17 @@ button{ cursor:pointer; border:0; background:none; }
   text-shadow:0 2px 5px rgba(0,0,0,.9);
 }
 .wr-mini-dev{ border-color:var(--rose); color:var(--rose); }
+
+
+/* ช่วงเลือกเป้าของการ์ด — จอมืดกว่าปกติให้รู้ว่ากำลังอยู่ในช่วงพิเศษ
+   ฉากไม่รับคลิกอยู่แล้ว หมากบนกระดานจึงยังกดได้ตามปกติ */
+.wr-scene.picking{ background:rgba(0,0,0,.46); }
+.wr-scene.picking .wr-scene-note{ font-size:15px; }
+
+/* คนที่ไพ่โหวตหมดถาวร — บอกเหตุผลไว้ในกล่องมือไพ่ ไม่งั้นดูเหมือนหน้าจอลืมไฮไลท์ */
+.wr-spent{
+  margin:6px 0 0; padding:6px 8px; border-radius:8px;
+  font-size:11px; line-height:1.5; text-align:center;
+  color:var(--rose); background:rgba(242,100,126,.12);
+  border:1px dashed var(--rose);
+}

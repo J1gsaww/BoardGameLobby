@@ -276,7 +276,9 @@ function activate(ctx, uid, { slot }) {
   const needs = needsOf(id);
 
   return {
-    state: needs ? { ...said, pending: { card: id, by: uid, needs } } : passTurn(said),
+    state: needs
+      ? { ...said, pending: { card: id, by: uid, needs, at: (st.logSeq || 0) + 1 } }
+      : passTurn(said),
     secrets: { _deck: next, ...cleared }
   };
 }
@@ -411,6 +413,13 @@ function callVote(ctx, uid, kind) {
   const st = ctx.state;
   const place = placeOf(st.pos[uid]);
   const opened = startVote(st, { kind, place, caller: uid });
+
+  /* ไม่มีใครส่งไพ่ได้เลยสักคน (ทุกคนเพดานเหลือศูนย์หรือโดนห้ามโหวต)
+     ต้องเปิดหม้อทันที ไม่งั้นเกมจะค้างรอคนที่ไม่มีวันส่ง
+     หม้อจะมีแต่ใบจากกองกลาง ซึ่งยังตัดสินผลได้ตามปกติ */
+  if (!opened.vote.voters.length) {
+    return reveal(ctx, opened, handsOf(ctx), {});
+  }
 
   return {
     state: pushLog({ ...opened, deadline: turnDeadline(st) },

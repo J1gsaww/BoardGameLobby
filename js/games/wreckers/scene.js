@@ -88,6 +88,9 @@ function sceneKey(st) {
   if (st.lastPeek && !dismissed.has('peek:' + st.lastPeek.at)) return `peek:${st.lastPeek.at}`;
   if (st.shout && !dismissed.has('shout:' + st.shout.at)) return `shout:${st.shout.at}`;
   if (st.cardUp && !dismissed.has('card:' + st.cardUp.at)) return `card:${st.cardUp.at}`;
+  /* ช่วงรอให้คนเปิดเลือกเป้า — ค้างไว้จนกว่าจะเลือกเสร็จ ไม่มีนับถอยหลัง
+     ทุกคนต้องรู้ว่ากำลังอยู่ในช่วงนี้ ไม่ใช่แค่คนที่ต้องเลือก */
+  if (st.pending) return `pick:${st.pending.at}`;
   if (st.aim) return `ep:${st.aim.by}:${st.aim.place}`;
   if (st.lastVote && !dismissed.has(st.lastVote.at))
     return `ep:${st.lastVote.caller}:${st.lastVote.place}`;
@@ -155,6 +158,7 @@ export function paintScene(el, st, ctx) {
      ของเดิมเช็กแค่ว่ามี st.aim ซึ่งเกิดขึ้นตั้งแต่ตอนเปิดผล ผลเลยถูกดันไปอยู่ล่างสุดของกระดาน */
   box.classList.toggle('clear',
     phase === 'aim' && !!st.aim && st.aim.by === ctx.me.uid && !st.aim.target);
+  box.classList.toggle('picking', key.startsWith('pick:'));
   title.classList.toggle('up', ms > T.intro);
   body.hidden = ms < T.intro;
 
@@ -176,6 +180,7 @@ function step(body, st, ctx) {
   if (key.startsWith('peek:')) return peekNote(body, st);
   if (key.startsWith('shout:')) return shoutNote(body, st);
   if (key.startsWith('card:')) return cardNote(body, st);
+  if (key.startsWith('pick:')) return pickNote(body, st, ctx);
   if (st.vote) { goto('collect'); return collect(body, st); }
 
   /* เข้ามาตอนกัปตันกำลังเลือกอยู่แล้ว ก็ข้ามการเล่าย้อนหลังไปเลย */
@@ -293,7 +298,30 @@ function cardNote(body, st) {
   return false;
 }
 
+/* ช่วงเลือกเป้า — จอมืดลงให้รู้ว่าอยู่ในช่วงพิเศษ แต่ยังคลิกกระดานทะลุได้
+   ฉากไม่รับคลิกอยู่แล้ว (pointer-events:none) เงาจึงไม่ขวางการเลือก */
+function pickNote(body, st, ctx) {
+  const mine = st.pending.by === ctx.me.uid;
+  const want = 'pick:' + (mine ? 'me' : 'them');
+  if (aimView === want) return false;
+  aimView = want;
+
+  body.innerHTML = `<p class="wr-scene-note">${esc(mine
+    ? t('wreck.scene.pickTargetMe')
+    : t('wreck.scene.pickTargetThem', { name: st.names?.[st.pending.by] || '?' }))}</p>`;
+  return false;
+}
+
 function titleOf(st, ph, me) {
+  if (st.pending && key.startsWith('pick:')) {
+    const c = cardById(st.pending.card);
+    return {
+      who: c ? (c[lang] || c.th).name : st.pending.card,
+      big: st.pending.by === me
+        ? t('wreck.scene.pickTargetBig')
+        : (st.names?.[st.pending.by] || '?')
+    };
+  }
   if (st.cardUp && key.startsWith('card:')) {
     return { who: t('wreck.scene.cardUp'), big: st.names?.[st.cardUp.by] || '?' };
   }

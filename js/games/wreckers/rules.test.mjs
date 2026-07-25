@@ -13,7 +13,7 @@ import {
   actionsFor, boatsOpen, canShift, maroon, pileOf, redeal, shuffle,
   startVote, voters, voteReady, tallyRow, attackPasses, mutinyPasses, brawlSplit,
   moveBox, countBoxes, score, winningSide, winners, dutchCount, dealNations, dutchAllowed,
-  attackTargets, takeSides, keepSides, canAttack,
+  attackTargets, takeSides, keepSides, canAttack, canVoteNow,
   holdCard, dropHeld, giveCard, addSkip, owesSkip, burnSkip, advance,
   addVoteBan, isVoteBanned, burnVoteBans, voteWeight, setVoteWeight, clearVoteWeights,
   addMark, markCount, marksIn, clearMark, swapSpots, shuffleQueue,
@@ -1063,4 +1063,60 @@ group('การ์ด · ปืนพก');
   ok('ใช้เสร็จแล้วผ่านตา', hit.state.turn, 'b');
   ok('การ์ดถูกทิ้งลงกองแล้ว', up.secrets._deck.discard, ['pistol']);
   ok('ช่องที่เปิดไปได้ใบใหม่มาเติม', !!up.secrets._deck.slots[0], true);
+}
+
+group('ชั้น 2 · Maroon ตอนอยู่ท้ายแถวบนเกาะ');
+{
+  /* ถอยไปต่อท้ายไม่ได้แล้ว = เสียไพ่โหวตถาวรแทน
+     ถ้าไม่มีกฎนี้ ตำแหน่งท้ายสุดจะกลายเป็นที่ปลอดภัยที่สุด เพราะยิงไปก็ไม่มีผลอะไร */
+  const st = board({ a: 'island:G', b: 'island:2', c: 'island:3', d: 'shipL:C' });
+  const hands = { c: ['v01', 'v02', 'v03'] };
+
+  const back = maroon(st, 'c', hands, zero);
+  ok('ท้ายแถวโดนยิง = เสียไพ่ถาวร', back.kind, 'loseCard');
+  ok('เพดานไพ่ลดลงหนึ่งใบ', back.state.maxVote.c, 2);
+  ok('มือถูกตัดให้เท่าเพดาน', back.hands.c.length, 2);
+  ok('ตำแหน่งไม่ขยับ', back.state.pos.c, 'island:3');
+
+  const mid = maroon(st, 'b', { b: ['v01', 'v02', 'v03'] }, zero);
+  ok('กลางแถวยังถอยไปท้ายแถวตามเดิม', mid.kind, 'backOfQueue');
+  ok('เพดานไพ่ไม่ลด', mid.state.maxVote.b, 3);
+  ok('ไปอยู่ท้ายแถวจริง', occupants(mid.state.pos, 'island').at(-1), 'b');
+
+  const head = maroon(st, 'a', { a: ['v01', 'v02', 'v03'] }, zero);
+  ok('หัวแถวก็ถอยไปท้ายแถว', head.kind, 'backOfQueue');
+
+  const solo = board({ a: 'island:G' });
+  ok('อยู่คนเดียวยังเสียไพ่ถาวรเหมือนเดิม',
+     maroon(solo, 'a', { a: ['v01'] }, zero).kind, 'loseCard');
+
+  const ship = board({ a: 'shipL:C', b: 'island:G' });
+  ok('อยู่บนเรือยังเด้งลงเกาะเหมือนเดิม', maroon(ship, 'a', {}, zero).kind, 'toIsland');
+
+  const shield = addShield(st, 'c');
+  ok('โล่ยังกันกรณีท้ายแถวได้', maroon(shield, 'c', hands, zero).kind, 'shielded');
+}
+
+group('ชั้น 3 · ไพ่โหวตหมดถาวรแล้วไม่ร่วมโหวต');
+{
+  const st = { ...filled(), maxVote: { ...filled().maxVote, c: 0 },
+               votes: { ...filled().votes, c: 0 } };
+
+  ok('คนที่เพดานเหลือศูนย์ไม่ถูกนับเป็นผู้ร่วมโหวต',
+     voters(st, 'attack', 'shipL'), ['a', 'b']);
+  ok('คนอื่นบนเรือยังโหวตได้ตามปกติ', voters(st, 'attack', 'shipL').includes('b'), true);
+
+  const open = startVote(st, { kind: 'attack', place: 'shipL', caller: 'a' });
+  ok('เปิดโหวตแล้วไม่มีชื่อเขาในรายชื่อ', open.vote.voters.includes('c'), false);
+  ok('หน้าจอถามว่าเขาร่วมได้ไหม = ไม่ได้', canVoteNow(open, 'c'), false);
+  ok('คนอื่นยังร่วมได้', canVoteNow(open, 'b'), true);
+  ok('ส่งไพ่แล้วก็ร่วมซ้ำไม่ได้',
+     canVoteNow({ ...open, vote: { ...open.vote, done: ['b'] } }, 'b'), false);
+}
+{
+  /* ทุกคนในสถานที่หมดสิทธิ์หมด — ต้องเปิดหม้อทันที ไม่ค้างรอคนที่ไม่มีวันส่ง */
+  const st = { ...filled(),
+               maxVote: Object.fromEntries(P.map(u => [u, 0])),
+               votes: Object.fromEntries(P.map(u => [u, 0])) };
+  ok('ไม่เหลือผู้ร่วมโหวตเลยสักคน', voters(st, 'attack', 'shipL'), []);
 }
