@@ -7,22 +7,32 @@
 import { readFileSync } from 'node:fs';
 import { globSync } from 'node:fs';
 
-let bad = 0;
-for (const f of globSync('js/**/*.js')) {
+/* รวบคลาสที่ "ถูกสร้าง" จากทั้งโปรเจกต์ก่อน แล้วค่อยไล่ตรวจทีละไฟล์
+   เพราะโมดูลหนึ่งสร้างโครงแล้วอีกโมดูลมาวาดข้างในเป็นเรื่องปกติ
+   เช่น ui.js สร้าง .wr-scene แล้ว scene.js เป็นคนวาดข้างใน
+   ถ้าตรวจแยกไฟล์จะฟ้องผิดทุกครั้งที่แยกโมดูล */
+const files = globSync('js/**/*.js');
+const built = new Set();
+const add = (txt) => String(txt).split(/\s+/).forEach(c => c && built.add(c));
+
+for (const f of files) {
   const src = readFileSync(f, 'utf8');
-  // นับทั้งที่เขียนเป็น class="..." และที่ตั้งผ่าน className หรือ classList
-  const built = new Set();
-  const add = (txt) => String(txt).split(/\s+/).forEach(c => c && built.add(c));
   for (const m of src.matchAll(/class="([^"$]*)"/g)) add(m[1]);
   for (const m of src.matchAll(/className\s*=\s*['"`]([^'"`$]*)/g)) add(m[1]);
   for (const m of src.matchAll(/classList\.(?:add|toggle)\(\s*['"`]([\w-]+)/g)) add(m[1]);
+}
+/* โครงหน้าเว็บก็นับด้วย บางกล่องเขียนไว้ใน HTML ตรง ๆ ไม่ได้สร้างจาก JS */
+for (const m of readFileSync('index.html', 'utf8').matchAll(/class="([^"$]*)"/g)) add(m[1]);
 
+let bad = 0;
+for (const f of files) {
+  const src = readFileSync(f, 'utf8');
   const looked = new Set();
   for (const m of src.matchAll(/querySelector(?:All)?\(\s*[`'"]\.([\w-]+)/g)) looked.add(m[1]);
 
   for (const cls of looked) {
     if (!built.has(cls)) {
-      console.log(`  ${f} → มองหา .${cls} แต่ไฟล์นี้ไม่ได้สร้างไว้`);
+      console.log(`  ${f} → มองหา .${cls} แต่ไม่มีที่ไหนสร้างไว้เลย`);
       bad++;
     }
   }

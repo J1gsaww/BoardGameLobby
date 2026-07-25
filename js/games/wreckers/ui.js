@@ -16,8 +16,9 @@ import { face as avatarFace } from '../../avatar.js';
 import { mountSea, stopSea } from './sea.js';
 import { cardById as voteById, voteCard } from './vote.js';
 import { dieSvg, rollPose, HERO, ROLL_MS } from './die.js';
-import { actionsFor, occupants, placeOf, SHIP_IDS } from './rules.js';
+import { actionsFor, occupants, placeOf } from './rules.js';
 import { BASE_CARDS, cardArt, CARD_BACK } from './events.js';
+import { paintScene, stopScene } from './scene.js';
 import { EXTRA_CARDS } from './cards.js';
 import { lang } from '../../i18n.js';
 import {
@@ -114,6 +115,7 @@ function shell(el, ctx) {
 
       <ul class="wr-log" hidden></ul>
 
+      <div class="wr-scene" hidden></div>
       <div class="wr-devpop" hidden></div>
       <div class="wr-reveal" hidden></div>
       <div class="wr-legend"></div>
@@ -189,7 +191,7 @@ const paint = (el) => { if (live) render(el, live); };
 
 export function render(el, ctx) {
   const st = ctx.state;
-  if (!st || !st.phase) { el.innerHTML = ''; stopSea(); closeMenu(); return; }
+  if (!st || !st.phase) { el.innerHTML = ''; stopSea(); stopScene(); closeMenu(); return; }
 
   live = ctx;
   shell(el, ctx);
@@ -226,6 +228,15 @@ export function render(el, ctx) {
     }
   });
 
+  /* ช่วงกัปตันเล็งเป้า — เรือที่ยิงได้เรืองแสง ชี้แล้วโตขึ้นและเป็นสีแดง คลิกคือเลือก
+     ทำบนกระดานจริงไม่ใช่ในฉาก เพราะต้องเห็นว่ากล่องอยู่ลำไหนก่อนตัดสินใจ */
+  const aimMine = st.aim && st.aim.by === ctx.me.uid && !st.aim.target;
+  el.querySelectorAll('[data-piece]').forEach(node => {
+    const hot = aimMine && st.aim.options.includes(node.dataset.piece);
+    node.classList.toggle('aim-hot', !!hot);
+    node.onclick = hot ? () => { plan = { act: 'aimAt', target: node.dataset.piece }; paint(el); } : null;
+  });
+
   el.querySelectorAll('[data-piece]').forEach(node => {
     const p = PIECES.find(x => x.id === node.dataset.piece);
     const box = node.querySelector('.wr-cargo');
@@ -235,6 +246,7 @@ export function render(el, ctx) {
 
   paintNation(el, ctx);
   paintReveal(el, st, ctx);
+  paintScene(el, st, ctx);
   paintHand(el, st, ctx);
   paintRoster(el, st, ctx);
   paintActions(el, st, ctx);
@@ -735,15 +747,16 @@ function paintActions(el, st, ctx) {
    จึงเปิดแผงเล็ก ๆ ให้เลือกก่อน แล้วค่อยส่งทีเดียว ไม่ยิงคำขอครึ่ง ๆ กลาง ๆ ขึ้นไป */
 function startAction(el, st, ctx, act) {
   if (act === 'attack') {
-    const mine = placeOf(st.pos[ctx.me.uid]);
-    plan = { act, target: 'merchant', side: 'B', from: 'B', other: SHIP_IDS.find(x => x !== mine) };
+    /* สั่งยิงไม่ต้องเลือกอะไรล่วงหน้าแล้ว เลือกเป้าทีหลังตอนรู้ผลว่ายิงติด */
+    plan = { act };
   } else if (act === 'shiftCargo') {
     plan = { act, from: 'B' };
   } else if (act === 'kick') {
     plan = { act, uid: null };
   } else {
-    ctx.send(act, {});
-    return;
+    /* ที่เหลือไม่มีตัวเลือกอะไร แต่ยังต้องยืนยันเหมือนกันทุกอัน
+       จะได้ไม่มี Action ไหนที่กดพลาดแล้วเกิดขึ้นทันที */
+    plan = { act };
   }
   paint(el);
 }
@@ -763,16 +776,9 @@ function paintPlan(el, st, ctx) {
        data-set="${field}" data-val="${esc(value)}">${esc(label)}</button>`;
 
   let rows = '';
-  if (plan.act === 'attack') {
+  if (plan.act === 'aimAt') {
     rows += `<div class="wr-plan-row"><span>${esc(t('wreck.plan.target'))}</span>
-      ${pick('target', 'merchant', t('wreck.merchant'))}
-      ${pick('target', plan.other, t('wreck.plan.otherShip'))}</div>`;
-    if (plan.target !== 'merchant') {
-      rows += `<div class="wr-plan-row"><span>${esc(t('wreck.plan.take'))}</span>
-        ${pick('from', 'B', t('wreck.british'))}${pick('from', 'F', t('wreck.france'))}</div>`;
-    }
-    rows += `<div class="wr-plan-row"><span>${esc(t('wreck.plan.store'))}</span>
-      ${pick('side', 'B', t('wreck.british'))}${pick('side', 'F', t('wreck.france'))}</div>`;
+      <span class="wr-chip on">${esc(t('wreck.place.' + plan.target))}</span></div>`;
   } else if (plan.act === 'shiftCargo') {
     rows += `<div class="wr-plan-row"><span>${esc(t('wreck.plan.move'))}</span>
       ${pick('from', 'B', t('wreck.plan.bToF'))}${pick('from', 'F', t('wreck.plan.fToB'))}</div>`;

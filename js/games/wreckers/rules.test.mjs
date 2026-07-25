@@ -605,7 +605,7 @@ group('ต่อสาย · โหวตโจมตีเต็มรอบ');
 {
   const hands = { a: ['v03', 'v01', 'v02'], b: ['v07', 'v05', 'v06'], c: ['v25', 'v08', 'v09'] };
   let ctx = ctxOf(filled(), hands);
-  const called = await onAction(ctx, { uid: 'a', type: 'attack', payload: { target: 'merchant', side: 'F' } });
+  const called = await onAction(ctx, { uid: 'a', type: 'attack', payload: {} });
   ok('เปิดโหวตแล้วยังไม่ผ่านตา', called.state.turn, 'a');
   ok('ผู้ร่วมโหวตคือทุกคนบนเรือ', called.state.vote.voters, ['a', 'b', 'c']);
 
@@ -627,8 +627,7 @@ group('ต่อสาย · ผลของการโหวต');
 {
   /* บังคับให้หม้อออกมาผ่านแน่ ๆ — ปืนใหญ่หนึ่ง ไฟหนึ่ง ไม่มีน้ำ */
   const hands = { a: ['v03'], b: ['v07'], c: ['v25'] };
-  const st = startVote(filled(), { kind: 'attack', place: 'shipL', caller: 'a', target: 'merchant', side: 'F' });
-  st.vote.from = 'B';
+  const st = startVote(filled(), { kind: 'attack', place: 'shipL', caller: 'a' });
   st.vote.done = ['a', 'b'];
   const ctx = ctxOf({ ...st, votes: { ...st.votes, a: 0, b: 0 } },
                     { a: [], b: [], c: ['v25'] }, {}, { a: 'v03', b: 'v07' });
@@ -637,22 +636,31 @@ group('ต่อสาย · ผลของการโหวต');
   ok('เปิดหม้อแล้วโหวตถูกปิด', done.state.vote, null);
   ok('ผลถูกเก็บไว้ให้หน้าจอโชว์', done.state.lastVote.kind, 'attack');
   ok('หม้อมีไพ่ที่ส่งบวกใบจากกองกลาง', done.state.lastVote.pot.length, 4);
-  ok('เปิดผลแล้วผ่านตาไปคนถัดไป', done.state.turn, 'b');
+  /* ใบจากกองกลางเป็นตัวสุ่ม ผลจึงออกได้ทั้งสองทาง เช็กให้ครบทั้งคู่ */
+  if (attackPasses(done.state.lastVote.counts)) {
+    ok('ยิงติดแล้วยังไม่ผ่านตา รอกัปตันเลือกเป้า', done.state.turn, 'a');
+    ok('เปิดช่วงเลือกเป้าให้กัปตัน', done.state.aim.by, 'a');
+    ok('เลือกได้เฉพาะเรือสินค้ากับเรืออีกลำ', done.state.aim.options, ['merchant', 'shipR']);
+    ok('ยังไม่ย้ายกล่องจนกว่าจะเลือกครบ', done.state.cargo.merchant, 4);
+    ok('ระหว่างรอเลือก กัปตันทำได้แค่เล็งเป้า', actionsFor(done.state, 'a'), ['aimAt']);
+  } else {
+    ok('ยิงไม่ติด ผ่านตาไปเลย', done.state.turn, 'b');
+    ok('ไม่มีช่วงเลือกเป้า', done.state.aim, undefined);
+  }
   ok('ทุกคนได้มือใหม่ครบตามเพดาน', Object.values(done.state.votes), [3, 3, 3, 3, 3, 3]);
   ok('สับใหม่แล้วกองเหลือเท่าเดิม', done.state.voteDeck, DECK.length - 18);
 }
 {
   /* หม้อไม่มีปืนใหญ่เลย โจมตีต้องไม่สำเร็จ กล่องต้องอยู่ที่เดิม */
-  const st = startVote(filled(), { kind: 'attack', place: 'shipL', caller: 'a', target: 'merchant', side: 'F' });
-  st.vote.from = 'B';
+  const st = startVote(filled(), { kind: 'attack', place: 'shipL', caller: 'a' });
   st.vote.done = ['a', 'b'];
   const ctx = ctxOf(st, { a: [], b: [], c: ['v01'] }, {}, { a: 'v01', b: 'v05' });
   const done = await onAction(ctx, { uid: 'c', type: 'voteCard', payload: { card: 'v01' } });
   const n = done.state.lastVote.counts;
   if (!attackPasses(n)) {
-    ok('โจมตีไม่สำเร็จ กล่องอยู่ที่เดิม', done.state.cargo.merchant, 4);
+    ok('โจมตีไม่สำเร็จ กล่องอยู่ที่เดิมและผ่านตาไป', [done.state.cargo.merchant, done.state.aim], [4, undefined]);
   } else {
-    ok('โจมตีสำเร็จ กล่องย้ายขึ้นเรือ', done.state.cargo.shipL.F, 1);
+    ok('โจมตีสำเร็จ เปิดช่วงให้เลือกเป้า', done.state.aim.by, 'a');
   }
   ok('ไม่ว่าผลออกทางไหน จำนวนกล่องรวมต้องเท่าเดิม', countBoxes(done.state.cargo), TOTAL_BOXES);
 }
@@ -669,6 +677,47 @@ group('ต่อสาย · ผลของการโหวต');
   } else {
     ok('กบฏล้มเหลว กัปตันอยู่ที่เดิม', done.state.pos.a, 'shipL:C');
   }
+}
+
+group('ต่อสาย · กัปตันเลือกเป้าหลังยิงติด');
+{
+  const base = { ...filled(), aim: { by: 'a', place: 'shipL', options: ['merchant', 'shipR'], target: null } };
+
+  ok('คนอื่นเลือกแทนไม่ได้',
+     await onAction(ctxOf(base), { uid: 'b', type: 'aimAt', payload: { target: 'merchant' } }), null);
+  ok('ยิงลำตัวเองไม่ได้',
+     await onAction(ctxOf(base), { uid: 'a', type: 'aimAt', payload: { target: 'shipL' } }), null);
+
+  const aimed = await onAction(ctxOf(base), { uid: 'a', type: 'aimAt', payload: { target: 'merchant' } });
+  ok('เลือกเป้าแล้วยังไม่ผ่านตา รอเลือกฝั่งต่อ', aimed.state.turn, 'a');
+  ok('จำเป้าไว้', aimed.state.aim.target, 'merchant');
+  ok('ขั้นต่อไปคือเลือกฝั่ง', actionsFor(aimed.state, 'a'), ['storeAt']);
+
+  const stored = await onAction(ctxOf(aimed.state), { uid: 'a', type: 'storeAt', payload: { side: 'F' } });
+  ok('กล่องย้ายจากเรือสินค้าขึ้นเรือฝั่งที่เลือก',
+     [stored.state.cargo.merchant, stored.state.cargo.shipL.F], [3, 1]);
+  ok('จำนวนกล่องรวมไม่เปลี่ยน', countBoxes(stored.state.cargo), TOTAL_BOXES);
+  ok('เลือกครบแล้วจบตา', [stored.state.turn, stored.state.aim], ['b', null]);
+}
+{
+  /* ยิงเรืออีกลำ ต้นทางหยิบจากฝั่งที่มีมากกว่าเอง ไม่ต้องให้เลือกซ้อนอีกชั้น */
+  const base = {
+    ...filled(),
+    cargo: { shipL: { B: 0, F: 0 }, shipR: { B: 1, F: 2 }, island: { B: 1, F: 1 }, merchant: 3 },
+    aim: { by: 'a', place: 'shipL', options: ['merchant', 'shipR'], target: 'shipR' }
+  };
+  const r = await onAction(ctxOf(base), { uid: 'a', type: 'storeAt', payload: { side: 'B' } });
+  ok('หยิบจากฝั่งที่มีมากกว่า', r.state.cargo.shipR.F, 1);
+  ok('ฝั่งที่มีน้อยกว่าไม่ถูกแตะ', r.state.cargo.shipR.B, 1);
+  ok('ไปลงฝั่งที่กัปตันเลือก', r.state.cargo.shipL.B, 1);
+}
+{
+  /* กัปตันหายไประหว่างเลือก นาฬิกาต้องเลือกให้แล้วไปต่อ */
+  const st = { ...filled(), deadline: Date.now() - 1000,
+               aim: { by: 'a', place: 'shipL', options: ['merchant', 'shipR'], target: null } };
+  const r = await tick({ ...ctxOf(st), members });
+  ok('หมดเวลาแล้วเลือกให้เอง เกมไม่ค้าง', [r.state.aim, r.state.turn], [null, 'b']);
+  ok('กล่องถูกย้ายจริง', countBoxes(r.state.cargo), TOTAL_BOXES);
 }
 
 group('ต่อสาย · นาฬิกา');

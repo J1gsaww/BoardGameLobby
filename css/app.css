@@ -1190,3 +1190,132 @@ button{ cursor:pointer; border:0; background:none; }
 }
 .wr-devpop-item:hover{ border-color:var(--rose); }
 .wr-devpop-id{ font-family:var(--mono); font-size:10px; color:var(--muted); }
+
+/* ════ ฉากกลางจอตอนโหวต ════════════════════════════════
+   ทับกระดานด้วยดำจาง ๆ ไม่ทึบ เพราะยังอยากให้เห็นว่ากระดานอยู่ข้างหลัง */
+.wr-scene{
+  position:absolute; inset:0; z-index:45;
+  display:grid; align-content:center; justify-items:center; gap:14px;
+  padding:20px; background:rgba(0,0,0,.15); backdrop-filter:blur(1px);
+}
+/* ตอนกัปตันต้องคลิกเรือ ฉากต้องไม่บัง */
+.wr-scene.clear{ background:none; backdrop-filter:none; pointer-events:none; align-content:end; }
+.wr-scene.clear .wr-scene-title{ display:none; }
+.wr-scene.clear .wr-scene-body{ pointer-events:auto; }
+
+/* ── ชื่อการโหวต ─────────────────────────────────────── */
+.wr-scene-title{
+  position:relative; display:grid; justify-items:center; gap:4px;
+  transition:transform .46s cubic-bezier(.2,.8,.3,1), gap .46s;
+  transform-origin:top center;
+}
+.wr-scene-title.up{ transform:scale(.5) translateY(-30%); gap:0; }
+
+.wr-scene-who{
+  font-family:var(--mono); font-size:13px; letter-spacing:.2em; text-transform:uppercase;
+  color:var(--lamp); opacity:0; animation:wr-pop .34s .62s forwards;
+}
+.wr-scene-big{
+  font-family:var(--display); font-size:52px; font-weight:700; line-height:1;
+  color:#fdf6e6; text-shadow:0 4px 22px rgba(0,0,0,.9);
+  opacity:0; transform:scale(1.35);
+  animation:wr-boom .34s .62s cubic-bezier(.2,1.4,.4,1) forwards;
+}
+@keyframes wr-pop{ to{ opacity:1; } }
+@keyframes wr-boom{ to{ opacity:1; transform:none; } }
+
+/* เส้นสองเส้นวิ่งจากซ้ายกับขวามาบรรจบกลางจอ */
+.wr-scene-lines{ position:absolute; inset:auto 0 -6px; height:2px; }
+.wr-scene-lines i{
+  position:absolute; top:0; width:0; height:2px;
+  background:linear-gradient(90deg, transparent, var(--lamp));
+  animation:wr-line .62s cubic-bezier(.3,.9,.3,1) forwards;
+}
+.wr-scene-lines i:first-child{ left:-46vw; }
+.wr-scene-lines i:last-child{ right:-46vw; transform:scaleX(-1); }
+@keyframes wr-line{ from{ width:0; } to{ width:46vw; } }
+
+.wr-scene-note{ margin:0; font-size:13.5px; color:var(--ink); text-shadow:0 2px 8px rgba(0,0,0,.9); }
+.wr-scene-body{ display:grid; justify-items:center; gap:12px; }
+
+/* ── ไพ่โหวตคว่ำกลางจอ ───────────────────────────────── */
+.wr-vb-row{ display:flex; gap:10px; justify-content:center; align-items:flex-end; }
+.wr-vb{
+  position:relative; width:62px; display:grid; justify-items:center; gap:4px;
+  animation:wr-vb-in .34s cubic-bezier(.2,1.3,.4,1) both;
+  transition:transform .6s cubic-bezier(.4,0,.2,1), opacity .42s;
+}
+.wr-vb img{ width:100%; border-radius:7px; display:block;
+  box-shadow:0 6px 16px rgba(0,0,0,.6); }
+.wr-vb-name{ font-size:10.5px; color:var(--ink); text-shadow:0 1px 4px rgba(0,0,0,.9); }
+.wr-vb.from-deck{ animation:wr-vb-deck .46s cubic-bezier(.2,1.2,.4,1) both; }
+@keyframes wr-vb-in{ from{ opacity:0; transform:translateY(16px) scale(.8); } }
+@keyframes wr-vb-deck{ from{ opacity:0; transform:translateX(120px) rotate(14deg); } }
+
+/* ดุ๊กดิ๊กเป็นระยะระหว่างรอ ไม่ให้จอนิ่งจนดูค้าง */
+.wr-vb-row.wiggle .wr-vb{ animation:wr-vb-in .34s both, wr-wig 2.6s 1s infinite; }
+.wr-vb-row.wiggle .wr-vb:nth-child(2){ animation-delay:0s, 1.15s; }
+.wr-vb-row.wiggle .wr-vb:nth-child(3){ animation-delay:0s, 1.3s; }
+.wr-vb-row.wiggle .wr-vb:nth-child(4){ animation-delay:0s, 1.45s; }
+@keyframes wr-wig{
+  0%,88%,100%{ transform:none; }
+  91%{ transform:rotate(-4deg) translateY(-4px); }
+  95%{ transform:rotate(3deg) translateY(-2px); }
+}
+
+/* ทุกใบวิ่งมาซ้อนกันเป็นกองเดียว แล้วย่อหาย */
+.wr-vb-row.merge .wr-vb{
+  transform:translateX(calc((var(--n) / 2 - var(--i) - .5) * -72px)) rotate(calc(var(--i) * 2deg - 4deg));
+}
+.wr-vb-row.merge .wr-vb-name{ opacity:0; }
+.wr-vb-row.gone{ transform:scale(.1); opacity:0; transition:transform .42s, opacity .42s; }
+
+/* ── นับสัญลักษณ์ ────────────────────────────────────── */
+.wr-tallies{ display:grid; gap:8px; min-width:min(340px, 80vw); }
+.wr-tally{
+  display:grid; grid-template-columns:74px 1fr 28px; align-items:center; gap:10px;
+  padding:7px 11px; border-radius:11px;
+  background:rgba(12,9,26,.78); border:1px solid var(--line);
+  opacity:.3; transition:opacity .2s, border-color .2s;
+}
+.wr-tally.on{ opacity:1; border-color:var(--lamp); }
+.wr-tally-name{ font-family:var(--mono); font-size:11px; color:var(--muted); }
+.wr-tally-pips{ display:flex; gap:5px; flex-wrap:wrap; }
+.wr-pip{ width:24px; height:24px; object-fit:contain; opacity:0; transform:scale(.5); }
+.wr-pip.in{ animation:wr-pip-in .22s cubic-bezier(.2,1.5,.4,1) forwards; }
+@keyframes wr-pip-in{ to{ opacity:1; transform:none; } }
+.wr-tally-n{ font-family:var(--display); font-size:17px; font-weight:700; text-align:right; }
+
+.wr-scene-verdict{
+  margin:2px 0 0; font-family:var(--display); font-size:30px; font-weight:700;
+  text-shadow:0 3px 16px rgba(0,0,0,.9);
+  animation:wr-boom .4s cubic-bezier(.2,1.4,.4,1) both;
+}
+.wr-scene-verdict.win{ color:var(--mint); }
+.wr-scene-verdict.fail{ color:var(--rose); }
+
+.wr-scene-btns{ display:flex; gap:12px; }
+.wr-scene-btn{
+  padding:12px 26px; border-radius:13px;
+  font-family:var(--display); font-size:17px; font-weight:700;
+  background:rgba(12,9,26,.9); border:2px solid currentColor;
+}
+.wr-scene-btn:hover{ background:currentColor; }
+.wr-scene-btn.n-B:hover, .wr-scene-btn.n-F:hover{ color:#241704; }
+
+/* ── เรือที่ยิงได้ตอนกัปตันเล็ง ──────────────────────── */
+[data-piece].aim-hot{ cursor:pointer; z-index:20; }
+[data-piece].aim-hot .wr-art{
+  filter:drop-shadow(0 0 10px var(--lamp)) drop-shadow(0 0 26px rgba(244,169,73,.75));
+  transition:filter .18s, transform .18s;
+}
+[data-piece].aim-hot:hover .wr-art{
+  filter:drop-shadow(0 0 12px var(--rose)) drop-shadow(0 0 32px rgba(242,100,126,.85))
+         saturate(1.5) hue-rotate(-18deg);
+  transform:scale(1.06);
+}
+
+@media (prefers-reduced-motion:reduce){
+  .wr-scene *, .wr-vb, .wr-pip{ animation:none !important; transition:none !important; }
+  .wr-pip{ opacity:1; transform:none; }
+}

@@ -22,7 +22,7 @@ import {
   actionsFor, boatsOpen, maroon, pileOf, shuffle, redeal, advance, burnVoteBans, clearVoteWeights,
   buildEventDeck, refillSlots, emptyDeck,
   startVote, voteReady, tallyRow, attackPasses, mutinyPasses, brawlSplit,
-  moveBox, score, winningSide, winners, dealNations, pushLog
+  moveBox, score, winningSide, winners, dealNations, pushLog, attackTargets
 } from './rules.js';
 
 /* เวลาค้างหน้าไพ่ประเทศก่อนเริ่มทอยลูกเต๋า */
@@ -162,7 +162,8 @@ export function passTurn(st, now = Date.now()) {
     deadline: turnDeadline(state, now),
     graced: false,
     vote: null,
-    peek: null            /* แอบดูค้างอยู่แล้วหมดเวลา ก็ทิ้งไปพร้อมตา */
+    peek: null,           /* แอบดูค้างอยู่แล้วหมดเวลา ก็ทิ้งไปพร้อมตา */
+    aim: null
   });
 }
 
@@ -190,6 +191,8 @@ export async function onAction(ctx, action) {
     case 'kick':       return kick(ctx, uid, payload.uid);
     case 'shiftCargo': return shiftCargo(ctx, uid, payload.from);
     case 'attack':     return callVote(ctx, uid, 'attack', payload);
+    case 'aimAt':      return aimAt(ctx, uid, payload);
+    case 'storeAt':    return storeAt(ctx, uid, payload);
     case 'mutiny':     return callVote(ctx, uid, 'mutiny', payload);
     case 'islandVote': return callVote(ctx, uid, 'islandVote', payload);
 
@@ -348,21 +351,10 @@ function shiftCargo(ctx, uid, from) {
 
 /* ── สั่งโหวต ──────────────────────────────────────────────
    สั่งแล้วเกมค้างรอทุกคนในสถานที่นั้นส่งไพ่ ไม่ผ่านตาไปจนกว่าจะเปิดผล */
-function callVote(ctx, uid, kind, payload) {
+function callVote(ctx, uid, kind) {
   const st = ctx.state;
   const place = placeOf(st.pos[uid]);
-
-  if (kind === 'attack') {
-    const others = ['merchant', ...SHIP_IDS.filter(s => s !== place)];
-    if (!others.includes(payload.target)) return null;
-  }
-
-  const opened = startVote(st, {
-    kind, place, caller: uid,
-    target: payload.target || null,
-    side: payload.side === 'F' ? 'F' : 'B'
-  });
-  opened.vote.from = payload.from === 'F' ? 'F' : 'B';
+  const opened = startVote(st, { kind, place, caller: uid });
 
   return {
     state: pushLog({ ...opened, deadline: turnDeadline(st) },
@@ -427,22 +419,61 @@ export function reveal(ctx, st, hands, picks, rng = Math.random) {
     votes: countHands(fresh.hands),
     voteDeck: fresh.pile.length,
     /* เก็บผลไว้ให้หน้าจอโชว์ต่อ เพราะ passTurn จะล้าง vote ทิ้ง */
-    lastVote: { kind: v.kind, place: v.place, caller: v.caller, target: v.target,
-                pot, counts, at: (next.logSeq || 0) }
+    lastVote: { kind: v.kind, place: v.place, caller: v.caller,
+                pot, counts, won: passed(v.kind, counts), at: (next.logSeq || 0) }
   };
 
-  return { state: passTurn(next), secrets: secretsFrom(ctx, fresh.hands) };
+  /* ยิงติดแล้วยังไม่ผ่านตา ค้างไว้ให้กัปตันเลือกเป้ากับฝั่งก่อน
+     ต้องตั้งเส้นตายใหม่ด้วย ไม่งั้นกัปตันหายไปแล้วทั้งวงค้างรอตลอดกาล */
+  const closed = next.aim
+    ? { ...next, vote: null, deadline: turnDeadline(next) || Date.now() + OFFLINE_WAIT }
+    : passTurn(next);
+
+  return { state: closed, secrets: secretsFrom(ctx, fresh.hands) };
 }
+
+/* โหวตผ่านแล้วยังไม่ย้ายกล่องทันที — เปิดช่วงให้กัปตันเลือกเป้าและฝั่งก่อน
+   ลำดับนี้สำคัญ กัปตันจะได้ไม่ต้องเดิมพันตั้งแต่ยังไม่รู้ว่าจะยิงติดหรือเปล่า */
+/* ผลผ่านหรือไม่ผ่าน คิดที่เดียวแล้วส่งให้หน้าจอใช้ ไม่ให้หน้าจอคิดเองซ้ำ */
+const passed = (kind, n) =>
+  kind === 'attack' ? attackPasses(n)
+  : kind === 'mutiny' ? mutinyPasses(n)
+  : (n.B || 0) !== (n.R || 0);
 
 export function resolveAttack(st, n) {
   const v = st.vote;
   if (!attackPasses(n)) return pushLog(st, 'wreck.log.attackFail', {});
 
-  const cargo = moveBox(st.cargo, v.target, v.from || 'B', v.place, v.side || 'B');
-  if (!cargo) return pushLog(st, 'wreck.log.attackNoRoom', {});
+  return pushLog({
+    ...st,
+    aim: { by: v.caller, place: v.place, options: attackTargets(v.place), target: null }
+  }, 'wreck.log.attackWin', {});
+}
 
-  return pushLog({ ...st, cargo }, 'wreck.log.attackWin',
-                 { target: v.target, side: v.side || 'B' });
+/* กัปตันเลือกลำที่จะยิง */
+function aimAt(ctx, uid, { target }) {
+  const st = ctx.state;
+  if (!st.aim?.options.includes(target)) return null;
+  return { state: { ...st, aim: { ...st.aim, target } } };
+}
+
+/* แล้วเลือกว่าจะเก็บกล่องไว้ฝั่งประเทศไหน — ถึงตรงนี้ค่อยย้ายกล่องจริงและจบตา
+   ต้นทางไม่ให้เลือก หยิบจากฝั่งที่มีมากกว่าเอง จะได้ไม่ต้องตัดสินใจซ้อนอีกชั้น */
+function storeAt(ctx, uid, { side }) {
+  const st = ctx.state;
+  const aim = st.aim;
+  if (!aim?.target) return null;
+
+  const keep = side === 'F' ? 'F' : 'B';
+  const box = st.cargo[aim.target];
+  const from = aim.target === 'merchant' ? null : ((box?.F || 0) > (box?.B || 0) ? 'F' : 'B');
+
+  const cargo = moveBox(st.cargo, aim.target, from, aim.place, keep);
+  const next = cargo
+    ? pushLog({ ...st, cargo }, 'wreck.log.attackTook', { target: aim.target, side: keep })
+    : pushLog(st, 'wreck.log.attackNoRoom', {});
+
+  return { state: passTurn({ ...next, aim: null }) };
 }
 
 export function resolveMutiny(st, n, hands) {
@@ -522,6 +553,19 @@ export async function tick(ctx) {
     /* กลับมาแล้วก่อนหมดเพดาน ยกเลิกให้ เล่นต่อได้ตามสบาย */
     if (!st.turnSeconds && !offline(st.turn)) return { state: { ...st, deadline: null, graced: false } };
     return null;
+  }
+
+  /* กัปตันค้างไม่เลือกเป้า — เลือกให้เองแล้วไปต่อ ไม่งั้นทั้งวงรอคนเดียว */
+  if (st.aim) {
+    const aim = st.aim;
+    const target = aim.target || aim.options[0];
+    const box = st.cargo[target];
+    const from = target === 'merchant' ? null : ((box?.F || 0) > (box?.B || 0) ? 'F' : 'B');
+    const cargo = moveBox(st.cargo, target, from, aim.place, 'B');
+    const done = cargo
+      ? pushLog({ ...st, cargo }, 'wreck.log.attackTook', { target, side: 'B' })
+      : pushLog(st, 'wreck.log.attackNoRoom', {});
+    return { state: passTurn({ ...done, aim: null }) };
   }
 
   if (st.turnSeconds && offline(st.turn) && !st.graced) {

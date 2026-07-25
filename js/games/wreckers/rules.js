@@ -126,6 +126,10 @@ export function actionsFor(st, uid) {
      กติกาคือแอบดูสองใบ ดูใบแรกแล้วยังเหลือสิทธิ์ดูใบที่สอง */
   if (st.peek?.uid === uid) return ['peek'];
 
+  /* โหวตยิงผ่านแล้ว เหลือให้กัปตันเลือกเป้ากับฝั่งที่จะเก็บกล่อง
+     เลือกทีหลังเพราะจะได้ไม่ต้องตัดสินใจตั้งแต่ยังไม่รู้ว่าจะยิงติดไหม */
+  if (st.aim?.by === uid) return [st.aim.target ? 'storeAt' : 'aimAt'];
+
   const place = placeOf(spot);
   const role = roleOf(spot);
   const out = [];
@@ -243,12 +247,15 @@ export function voters(st, kind, place) {
   return line.filter(uid => roleAt(st.pos, uid) !== 'captain');
 }
 
-export function startVote(st, { kind, place, caller, target = null, side = null }) {
+/* เรือที่ยิงได้จากเรือลำนี้ — เรือสินค้ากับเรืออีกลำเท่านั้น ยิงลำตัวเองไม่ได้ */
+export const attackTargets = (place) => ['merchant', ...SHIP_IDS.filter(s => s !== place)];
+
+export function startVote(st, { kind, place, caller }) {
   const list = voters(st, kind, place);
   return {
     ...st,
     vote: {
-      kind, place, caller, target, side,
+      kind, place, caller,
       voters: list,
       done: [],                       // ใครส่งไพ่แล้วบ้าง เห็นได้ทุกคน แต่ไม่เห็นว่าส่งใบไหน
       extra: 1,                       // ไพ่จากกองกลางที่จะเติมเข้าหม้อ ปกติหนึ่งใบเสมอ
