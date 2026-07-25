@@ -1193,10 +1193,13 @@ button{ cursor:pointer; border:0; background:none; }
 
 /* ════ ฉากกลางจอตอนโหวต ════════════════════════════════
    ทับกระดานด้วยดำจาง ๆ ไม่ทึบ เพราะยังอยากให้เห็นว่ากระดานอยู่ข้างหลัง */
+/* ประกาศเกาะอยู่กลางบนของกระดาน ไม่ใช่กลางจอ
+   วางไว้บนสุดเพราะกลางกระดานคือที่ที่เรือกับเกาะอยู่ ถ้าทับตรงนั้นจะบังของสำคัญ
+   และการประกาศที่อยู่บนสุดอ่านแล้วเป็นธรรมชาติกว่า เหมือนป้ายประกาศจริง */
 .wr-scene{
   position:absolute; inset:0; z-index:45;
-  display:grid; align-content:center; justify-items:center; gap:14px;
-  padding:20px; background:rgba(0,0,0,.15); backdrop-filter:blur(1px);
+  display:grid; align-content:start; justify-items:center; gap:18px;
+  padding:26px 20px 20px; background:rgba(0,0,0,.15); backdrop-filter:blur(1px);
 }
 /* ตอนกัปตันต้องคลิกเรือ ฉากต้องไม่บัง */
 .wr-scene.clear{ background:none; backdrop-filter:none; pointer-events:none; align-content:end; }
@@ -1205,18 +1208,23 @@ button{ cursor:pointer; border:0; background:none; }
 
 /* ── ชื่อการโหวต ─────────────────────────────────────── */
 .wr-scene-title{
-  position:relative; display:grid; justify-items:center; gap:4px;
-  transition:transform .46s cubic-bezier(.2,.8,.3,1), gap .46s;
+  position:relative; display:grid; justify-items:center; gap:3px;
+  padding:12px 46px; border-radius:14px;
+  background:linear-gradient(90deg, transparent, rgba(8,6,20,.82) 12%,
+             rgba(8,6,20,.9) 50%, rgba(8,6,20,.82) 88%, transparent);
+  transition:transform .46s cubic-bezier(.2,.8,.3,1), gap .46s, padding .46s;
   transform-origin:top center;
 }
-.wr-scene-title.up{ transform:scale(.5) translateY(-30%); gap:0; }
+/* ย่อลงอยู่กับที่ ไม่ต้องเลื่อนขึ้นแล้วเพราะอยู่บนสุดตั้งแต่แรก */
+.wr-scene-title.up{ transform:scale(.62); gap:0; padding:8px 40px; }
 
 .wr-scene-who{
   font-family:var(--mono); font-size:13px; letter-spacing:.2em; text-transform:uppercase;
   color:var(--lamp); opacity:0; animation:wr-pop .34s .62s forwards;
 }
 .wr-scene-big{
-  font-family:var(--display); font-size:52px; font-weight:700; line-height:1;
+  font-family:var(--display); font-size:46px; font-weight:700; line-height:1.05;
+  letter-spacing:.01em;
   color:#fdf6e6; text-shadow:0 4px 22px rgba(0,0,0,.9);
   opacity:0; transform:scale(1.35);
   animation:wr-boom .34s .62s cubic-bezier(.2,1.4,.4,1) forwards;
@@ -1225,7 +1233,7 @@ button{ cursor:pointer; border:0; background:none; }
 @keyframes wr-boom{ to{ opacity:1; transform:none; } }
 
 /* เส้นสองเส้นวิ่งจากซ้ายกับขวามาบรรจบกลางจอ */
-.wr-scene-lines{ position:absolute; inset:auto 0 -6px; height:2px; }
+.wr-scene-lines{ position:absolute; inset:auto 0 8px; height:2px; }
 .wr-scene-lines i{
   position:absolute; top:0; width:0; height:2px;
   background:linear-gradient(90deg, transparent, var(--lamp));
@@ -1319,3 +1327,7 @@ button{ cursor:pointer; border:0; background:none; }
   .wr-scene *, .wr-vb, .wr-pip{ animation:none !important; transition:none !important; }
   .wr-pip{ opacity:1; transform:none; }
 }
+
+/* เนื้อหาของฉากไล่ลงมาจากแถบประกาศ ไม่ลอยกลางจอ */
+.wr-scene-body{ margin-top:2px; }
+.wr-scene.clear .wr-scene-body{ margin-bottom:18px; }
