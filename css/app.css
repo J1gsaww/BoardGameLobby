@@ -1533,3 +1533,40 @@ button{ cursor:pointer; border:0; background:none; }
   font-family:var(--mono); font-size:8.5px; letter-spacing:.08em; color:var(--muted);
 }
 .vote-card.blank{ position:relative; }
+
+/* ── เลือกเป้าของการ์ด ────────────────────────────────────
+   ทุกคนที่เลือกได้เรืองส้ม ชี้แล้วเป็นแดง ให้รู้ว่ากำลังเล็งใครอยู่ */
+.wr-slot.pick-target .wr-pawn{
+  box-shadow:0 0 0 3px var(--lamp), 0 0 18px rgba(244,169,73,.75);
+  border-radius:50%; cursor:pointer;
+  transition:box-shadow .15s, transform .15s;
+}
+.wr-slot.pick-target:hover .wr-pawn{
+  box-shadow:0 0 0 4px var(--rose), 0 0 26px rgba(242,100,126,.95);
+  transform:scale(1.12);
+}
+.wr-row.pick-target{
+  cursor:pointer; border-color:var(--lamp);
+  box-shadow:0 0 0 1px var(--lamp) inset;
+}
+.wr-row.pick-target:hover{
+  border-color:var(--rose);
+  box-shadow:0 0 0 1px var(--rose) inset, 0 0 14px rgba(242,100,126,.4);
+}
+
+/* การ์ดที่เพิ่งถูกเปิด โชว์กลางจอให้ทุกคนเห็นพร้อมกัน */
+.wr-cardup{ display:grid; justify-items:center; gap:8px; max-width:min(300px, 80vw); }
+.wr-cardup-img{
+  width:150px; aspect-ratio:3/4; object-fit:cover; border-radius:12px;
+  border:2px solid var(--lamp); box-shadow:0 12px 30px rgba(0,0,0,.75);
+  animation:wr-boom .45s cubic-bezier(.2,1.4,.4,1) both;
+}
+.wr-cardup-name{
+  font-family:var(--display); font-size:22px; font-weight:700; color:#fdf6e6;
+  text-shadow:0 2px 6px rgba(0,0,0,.85);
+}
+.wr-cardup-desc{
+  font-size:12.5px; line-height:1.55; color:#fdf6e6; text-align:center;
+  text-shadow:0 2px 5px rgba(0,0,0,.9);
+}
+.wr-mini-dev{ border-color:var(--rose); color:var(--rose); }

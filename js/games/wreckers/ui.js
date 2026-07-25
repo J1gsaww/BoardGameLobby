@@ -17,6 +17,7 @@ import { mountSea, stopSea } from './sea.js';
 import { cardById as voteById, voteCard, iconSrc } from './vote.js';
 import { dieSvg, rollPose, HERO, ROLL_MS } from './die.js';
 import { actionsFor, occupants, placeOf, BOAT_IDS } from './rules.js';
+import { targetsOf } from './effects.js';
 import { BASE_CARDS, cardArt, cardArtAlt, CARD_BACK, CARD_BACK_ALT } from './events.js';
 import { paintScene, stopScene, setPlanView, setPlanWire, VOTE_BACK,
          sceneAtAim, sceneHolding } from './scene.js';
@@ -99,6 +100,7 @@ function shell(el, ctx) {
                  <div class="wr-event-acts">
                    <button class="wr-mini" data-ev="activate">${esc(t('wreck.act.activate'))}</button>
                    <button class="wr-mini" data-ev="peek">${esc(t('wreck.act.peek'))}</button>
+                 <button class="wr-mini wr-mini-dev" data-ev="pick" hidden>\u26a0 ${esc(t('wreck.dev.pick'))}</button>
                  </div>
                </div>`).join('')}
           </div>
@@ -143,7 +145,17 @@ function shell(el, ctx) {
     const b = e.target.closest('[data-spot]');
     if (!b) { if (!plan) closeMenu(); paint(el); return; }
 
-    if (b.dataset.who) {                                  // มีคนยืนอยู่ เปิดเมนู
+    if (b.dataset.who) {
+      /* กำลังเลือกเป้าของการ์ดอยู่ = คลิกใครก็คือเลือกคนนั้น ไม่ใช่เปิดเมนูปกติ */
+      const now = live?.state;
+      const meUid = live?.me?.uid;
+      if (now?.pending?.by === meUid
+          && targetsOf(now, meUid, now.pending.card).includes(b.dataset.who)) {
+        plan = { act: 'useCard', target: b.dataset.who, via: 'menu' };
+        openMenu(el, b, { kind: 'aim' });
+        paint(el);
+        return;
+      }
       openMenu(el, b, { kind: 'pawn', uid: b.dataset.who, spot: b.dataset.spot });
       return;
     }
@@ -181,6 +193,7 @@ function shell(el, ctx) {
       /* ปุ่มอยู่ในช่องของมันเอง จึงอ่านเลขช่องจากตรงนั้นตรง ๆ
          แม่นกว่าอ้อมผ่านรายการที่เลือกไว้ และไม่มีทางส่งผิดใบ */
       const i = Number(mini.closest('.wr-event-slot').dataset.event) - 1;
+      if (mini.dataset.ev === 'pick') { devOpen = true; devFind = ''; picks = [String(i + 1)]; paint(el); return; }
       ctx.send(mini.dataset.ev, { slot: i });
       picks = []; forcing = null; paint(el);
       return;
@@ -303,6 +316,11 @@ export function render(el, ctx) {
   /* ทุกอย่างที่เป็น "ภาพบนกระดาน" ต้องอ่านจาก view ไม่ใช่ st
      ที่ผ่านมาแก้ครบทุกที่ยกเว้นวงวางหมาก ซึ่งเป็นที่ที่เห็นการเปลี่ยนแปลงชัดที่สุด
      กัปตันโดนปลดแล้วย้ายที่ทันทีตั้งแต่ก่อนฉากเริ่มเล่า */
+  /* เป้าที่การ์ดใบที่ค้างอยู่เลือกได้ ใช้รายชื่อชุดเดียวกับฝั่งเซิร์ฟเวอร์
+     หน้าจอกับกติกาจึงตัดสินตรงกันเสมอ ไม่มีทางไฮไลท์คนที่กดแล้วโดนปฏิเสธ */
+  const cardTargets = (st.pending?.by === ctx.me.uid)
+    ? targetsOf(st, ctx.me.uid, st.pending.card) : [];
+
   const who = Object.fromEntries(Object.entries(view.pos || {}).map(([uid, spot]) => [spot, uid]));
   const mine = view.pos?.[ctx.me.uid] || null;
   const canMove = (st.seats || []).includes(ctx.me.uid);
@@ -327,6 +345,8 @@ export function render(el, ctx) {
     /* วงไฟรอบคนที่ถึงตา เห็นเหมือนกันทุกเครื่อง
        ของเดิมดูได้จากรายชื่อฝั่งขวาอย่างเดียว ซึ่งไกลจากจุดที่สายตาจับอยู่ */
     b.classList.toggle('turn', !!uid && uid === view.turn && view.phase === 'play');
+    /* การ์ดกำลังรอให้เราเลือกเป้า — ทุกคนที่เลือกได้จะเรืองส้ม ชี้แล้วเป็นแดง */
+    b.classList.toggle('pick-target', !!uid && cardTargets.includes(uid));
 
     // เขียนทับเฉพาะตอนคนในช่องเปลี่ยนจริง ไม่งั้นรูปประจำตัวจะโหลดใหม่ทุกรอบ
     if (uid) b.dataset.who = uid; else b.removeAttribute('data-who');
@@ -538,6 +558,9 @@ function paintEvents(el, st, ctx) {
     slot.querySelector('[data-ev="activate"]').disabled = !(on && mine && filled && !mid);
     /* ดูใบที่เคยเปิดไปแล้วซ้ำได้ ห้ามเฉพาะใบที่เพิ่งดูไปในการแอบดูรอบนี้ */
     slot.querySelector('[data-ev="peek"]').disabled = !(on && mine && filled && !usedByPeek);
+    /* ปุ่มเลือกการ์ดเองสำหรับเทส โผล่เฉพาะตอนเปิด ?dev=cards และเป็นเจ้าของห้อง */
+    const pick = slot.querySelector('[data-ev="pick"]');
+    if (pick) { pick.hidden = !(DEV_CARDS && ctx.isHost); pick.disabled = !on; }
     slot.classList.toggle('used', !!usedByPeek);
   });
 
@@ -988,6 +1011,9 @@ export function planBody(st, ctx) {
           <span class="wr-chip on">${esc(st.names?.[plan.uid] || '?')}</span></div>`
       : `<div class="wr-plan-row"><span>${esc(t('wreck.plan.who'))}</span>
           ${here.map(u => pick('uid', u, st.names?.[u] || '?')).join('')}</div>`;
+  } else if (plan.act === 'useCard') {
+    rows = `<div class="wr-plan-row"><span>${esc(t('wreck.plan.who'))}</span>
+      <span class="wr-chip on">${esc(st.names?.[plan.target] || '?')}</span></div>`;
   } else if (plan.act === 'toBoat') {
     rows = `<div class="wr-plan-row"><span>${esc(t('wreck.act.toBoat'))}</span>
       <span class="wr-chip on">${esc(t('wreck.place.' + plan.boat))}</span></div>`;
@@ -1086,10 +1112,16 @@ function paintLog(el, st) {
 
 /* ── รายชื่อผู้เล่นพร้อมบทบาท ─────────────────────────────── */
 function paintRoster(el, st, ctx) {
+  const live_ = live?.state || st;
+  const hot = (live_.pending?.by === ctx.me.uid)
+    ? targetsOf(live_, ctx.me.uid, live_.pending.card) : [];
+
   const html = (st.seats || []).map(uid => {
     const role = roleOf(st.pos?.[uid]);
     const turn = st.turn === uid;
-    return `<li class="wr-row${turn ? ' turn' : ''}">
+    const pick = hot.includes(uid);
+    return `<li class="wr-row${turn ? ' turn' : ''}${pick ? ' pick-target' : ''}"
+      ${pick ? `data-pick="${esc(uid)}"` : ''}>
       ${avatarFace(uid, st.names?.[uid] || '', (ctx.avatars || {})[uid], 26)}
       <span class="wr-row-name">${esc(st.names?.[uid] || '?')}${uid === ctx.me.uid ? ' \u00b7' : ''}</span>
       ${role ? `<span class="wr-tag wr-tag-${role}">${esc(t('wreck.role.' + role))}</span>` : ''}
@@ -1097,7 +1129,18 @@ function paintRoster(el, st, ctx) {
   }).join('');
 
   const box = el.querySelector('.wr-list');
-  if (box.dataset.sig !== html) { box.dataset.sig = html; box.innerHTML = html; }
+  if (box.dataset.sig !== html) {
+    box.dataset.sig = html;
+    box.innerHTML = html;
+    /* คลิกชื่อในรายชื่อก็เลือกเป้าได้ ต้องมีปุ่มยืนยันเหมือนกดบนกระดาน */
+    box.querySelectorAll('[data-pick]').forEach(li => {
+      li.onclick = () => {
+        plan = { act: 'useCard', target: li.dataset.pick, via: 'menu' };
+        openMenu(el, li, { kind: 'aim' });
+        paint(el);
+      };
+    });
+  }
 }
 
 /* ── กล่องสมบัติ ───────────────────────────────────────────── */

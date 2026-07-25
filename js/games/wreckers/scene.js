@@ -16,6 +16,12 @@
 import { t } from '../../i18n.js';
 import { VOTE_ART, ICON_EXT } from './vote.js';
 import { takeSides, keepSides, SHIP_CARGO_CAP } from './rules.js';
+import { BASE_CARDS, cardArt } from './events.js';
+import { EXTRA_CARDS } from './cards.js';
+import { lang } from '../../i18n.js';
+
+const ALL_CARDS = [...BASE_CARDS, ...EXTRA_CARDS];
+const cardById = (id) => ALL_CARDS.find(c => c.id === id) || null;
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -81,6 +87,7 @@ function sceneKey(st) {
   /* ประกาศการแอบดูเป็นฉากสั้น ๆ ของตัวเอง ไม่ปนกับฉากโหวต */
   if (st.lastPeek && !dismissed.has('peek:' + st.lastPeek.at)) return `peek:${st.lastPeek.at}`;
   if (st.shout && !dismissed.has('shout:' + st.shout.at)) return `shout:${st.shout.at}`;
+  if (st.cardUp && !dismissed.has('card:' + st.cardUp.at)) return `card:${st.cardUp.at}`;
   if (st.aim) return `ep:${st.aim.by}:${st.aim.place}`;
   if (st.lastVote && !dismissed.has(st.lastVote.at))
     return `ep:${st.lastVote.caller}:${st.lastVote.place}`;
@@ -168,6 +175,7 @@ export function paintScene(el, st, ctx) {
 function step(body, st, ctx) {
   if (key.startsWith('peek:')) return peekNote(body, st);
   if (key.startsWith('shout:')) return shoutNote(body, st);
+  if (key.startsWith('card:')) return cardNote(body, st);
   if (st.vote) { goto('collect'); return collect(body, st); }
 
   /* เข้ามาตอนกัปตันกำลังเลือกอยู่แล้ว ก็ข้ามการเล่าย้อนหลังไปเลย */
@@ -244,7 +252,12 @@ function peekNote(body, st) {
 function shoutNote(body, st) {
   if (goto('collect')) {
     const sh = st.shout;
-    const msg = sh.kind === 'shift'
+    const msg = sh.kind === 'shot'
+      ? t('wreck.scene.shot', {
+          name: st.names?.[sh.by] || '?',
+          who: st.names?.[sh.who] || '?'
+        })
+      : sh.kind === 'shift'
       ? t('wreck.scene.shifted', {
           name: st.names?.[sh.by] || '?',
           from: t('wreck.' + (sh.from === 'B' ? 'british' : 'france')),
@@ -262,7 +275,28 @@ function shoutNote(body, st) {
   return false;
 }
 
+/* การ์ดที่เพิ่งถูกเปิด — โชว์ภาพกับชื่อให้ทุกคนเห็นพร้อมกัน */
+function cardNote(body, st) {
+  if (goto('collect')) {
+    const c = cardById(st.cardUp.id);
+    const info = c ? (c[lang] || c.th) : null;
+    body.innerHTML = `<div class="wr-cardup">
+        <img class="wr-cardup-img" src="${esc(cardArt(st.cardUp.id))}" alt=""
+          draggable="false" onerror="this.remove()">
+        <span class="wr-cardup-name">${esc(info?.name || st.cardUp.id)}</span>
+        <span class="wr-cardup-desc">${esc(info?.desc || '')}</span>
+      </div>`;
+  }
+  if (now() - stageAt < T.linger + 900) return true;
+  dismissed.add('card:' + st.cardUp.at);
+  closing = true;
+  return false;
+}
+
 function titleOf(st, ph, me) {
+  if (st.cardUp && key.startsWith('card:')) {
+    return { who: t('wreck.scene.cardUp'), big: st.names?.[st.cardUp.by] || '?' };
+  }
   if (st.shout && key.startsWith('shout:')) {
     return {
       who: t(st.shout.kind === 'shift' ? 'wreck.act.shiftCargo' : 'wreck.role.captain'),

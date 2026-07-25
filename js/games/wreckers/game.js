@@ -15,6 +15,7 @@ import {
 } from './board.js';
 import { deal } from './vote.js';
 import { BASE_CARDS, ENDER, ENDER_ZONE } from './events.js';
+import { effectOf, needsOf, targetsOf } from './effects.js';
 import { EXTRA_CARDS } from './cards.js';
 import {
   SHIP_IDS, BOAT_IDS, BOAT_LINK, VOTE_ROW,
@@ -191,6 +192,7 @@ export async function onAction(ctx, action) {
     case 'toBoat':     return toBoat(ctx, uid, payload.boat);
     case 'kick':       return kick(ctx, uid, payload.uid);
     case 'shiftCargo': return shiftCargo(ctx, uid, payload.from);
+    case 'useCard':    return useCard(ctx, uid, payload);
     case 'attack':     return callVote(ctx, uid, 'attack', payload);
     case 'aimAt':      return aimAt(ctx, uid, payload);
     case 'takeFrom':   return takeFrom(ctx, uid, payload);
@@ -265,9 +267,41 @@ function activate(ctx, uid, { slot }) {
     cleared[u] = { ...sec, peek: { ...sec.peek, seen: sec.peek.seen.filter(x => x.slot !== i) } };
   }
 
+  /* ประกาศชื่อการ์ดให้ทุกคนเห็นทันทีที่เปิด */
+  const said = pushLog({ ...shown, cardUp: { id, by: uid, at: (st.logSeq || 0) + 1 } },
+                       'wreck.log.activate', { name: st.names?.[uid] });
+
+  /* การ์ดที่ต้องถามก่อน จะยังไม่ผ่านตา เกมค้างรอคนเปิดเลือกเป้าก่อน
+     จังหวะเดียวกับการโหวต ผลจึงไม่โผล่ก่อนที่ฉากจะเล่าถึง */
+  const needs = needsOf(id);
+
   return {
-    state: passTurn(pushLog(shown, 'wreck.log.activate', { name: st.names?.[uid] })),
+    state: needs ? { ...said, pending: { card: id, by: uid, needs } } : passTurn(said),
     secrets: { _deck: next, ...cleared }
+  };
+}
+
+/* ── ใช้ผลของการ์ดที่ค้างรออยู่ ────────────────────────────
+   ตรวจเป้าด้วยรายชื่อชุดเดียวกับที่หน้าจอใช้ไฮไลท์
+   จะได้ไม่มีทางที่สองที่ตัดสินไม่ตรงกัน */
+function useCard(ctx, uid, { target }) {
+  const st = ctx.state;
+  const p = st.pending;
+  if (p?.by !== uid) return null;
+  if (!targetsOf(st, uid, p.card).includes(target)) return null;
+
+  const e = effectOf(p.card);
+  const hands = handsOf(ctx);
+  const out = e.run(st, uid, target, hands);
+
+  const next = pushLog({ ...out.state, pending: null,
+                         shout: { ...out.shout, at: (out.state.logSeq || 0) + 1 } },
+                       'wreck.log.card.' + p.card,
+                       { name: st.names?.[uid], who: st.names?.[target] });
+
+  return {
+    state: passTurn(next),
+    secrets: out.hands === hands ? undefined : secretsFrom(ctx, out.hands)
   };
 }
 

@@ -519,8 +519,11 @@ group('ต่อสาย · สำรับเหตุการณ์ เป�
   const out = init({ members, settings: { turnSeconds: 60, extraCards: [] } });
   const play = { ...out.state, phase: 'play', turn: 'a', pos: filled().pos, seats: [...P],
                  names: filled().names, out: [] };
-  const ctx = { ...ctxOf(play), secrets: out.secrets, hostUid: 'a' };
-  const deck = out.secrets._deck;
+  /* บังคับให้ช่องนี้เป็นใบที่ไม่ต้องเลือกเป้า ผลจึงเกิดทันทีและผ่านตาไปเลย
+     ถ้าปล่อยให้เป็นใบที่สุ่มมา บางรอบจะได้ใบที่ต้องเลือกเป้า แล้วเทสจะไม่คงที่ */
+  const deck = { ...out.secrets._deck,
+                 slots: out.secrets._deck.slots.map((c, i) => (i === 1 ? 'blackspot' : c)) };
+  const ctx = { ...ctxOf(play), secrets: { ...out.secrets, _deck: deck }, hostUid: 'a' };
 
   const opened = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 1 } });
   ok('เปิดแล้วทุกคนเห็นว่าเป็นใบอะไร', opened.state.lastEvent.id, deck.slots[1]);
@@ -1024,3 +1027,40 @@ group('บันทึกเหตุการณ์');
 
 console.log(`\n${'─'.repeat(46)}\nผ่าน ${pass} · ไม่ผ่าน ${fail}\n`);
 process.exit(fail ? 1 : 0);
+
+/* ═══════════════════════════════════════════════════════════
+   การ์ดเหตุการณ์ — ปืนพก
+   ═══════════════════════════════════════════════════════════ */
+
+group('การ์ด · ปืนพก');
+{
+  const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+  const deck = { ...out.secrets._deck, slots: ['pistol', ...out.secrets._deck.slots.slice(1)] };
+  const base = { ...out.state, phase: 'play', turn: 'a', pos: filled().pos,
+                 seats: [...P], names: filled().names, out: [] };
+  const ctx = { ...ctxOf(base), secrets: { ...out.secrets, _deck: deck }, hostUid: 'a' };
+
+  const up = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+  ok('เปิดแล้วประกาศชื่อการ์ดให้ทุกคนเห็น', up.state.cardUp.id, 'pistol');
+  ok('การ์ดที่ต้องเลือกเป้ายังไม่ผ่านตา', up.state.turn, 'a');
+  ok('ค้างรอให้คนเปิดเลือกเป้า', up.state.pending.needs, 'player');
+  ok('ระหว่างค้าง ทำได้อย่างเดียวคือใช้การ์ด', actionsFor(up.state, 'a'), ['useCard']);
+
+  const ctx2 = { ...ctxOf(up.state), secrets: { ...out.secrets, _deck: deck }, hostUid: 'a' };
+  ok('ยิงตัวเองไม่ได้',
+     await onAction(ctx2, { uid: 'a', type: 'useCard', payload: { target: 'a' } }), null);
+  ok('คนอื่นสั่งแทนไม่ได้',
+     await onAction(ctx2, { uid: 'b', type: 'useCard', payload: { target: 'c' } }), null);
+  ok('ยิงคนที่ไม่ได้อยู่บนกระดานไม่ได้',
+     await onAction(ctx2, { uid: 'a', type: 'useCard', payload: { target: 'zz' } }), null);
+
+  const hit = await onAction(ctx2, { uid: 'a', type: 'useCard', payload: { target: 'f' } });
+  ok('เป้าโดน Maroon ลงเกาะ', hit.state.pos.f.startsWith('island'), true);
+  ok('ยิงข้ามเรือได้ ไม่ต้องอยู่ลำเดียวกัน', placeOf(base.pos.f), 'shipR');
+  ok('ประกาศบอกว่าใครยิงใคร', [hit.state.shout.kind, hit.state.shout.by, hit.state.shout.who],
+     ['shot', 'a', 'f']);
+  ok('ใช้เสร็จแล้วล้างสถานะค้าง', hit.state.pending, null);
+  ok('ใช้เสร็จแล้วผ่านตา', hit.state.turn, 'b');
+  ok('การ์ดถูกทิ้งลงกองแล้ว', up.secrets._deck.discard, ['pistol']);
+  ok('ช่องที่เปิดไปได้ใบใหม่มาเติม', !!up.secrets._deck.slots[0], true);
+}
