@@ -1592,7 +1592,7 @@ button{ cursor:pointer; border:0; background:none; }
 /* ── การ์ดย่อไปเกาะมุมบนขวาตอนเข้าช่วงเลือกเป้า ─────────────
    ทำหน้าที่เป็นป้ายว่าการ์ดใบนี้กำลังทำงานอยู่ ไม่กินกลางจอ
    ย้ายด้วย transition ของกล่องเดิม ไม่ได้สร้าง DOM ใหม่ แอนิเมชันจึงไหลต่อ */
-.wr-scene-body{ transition:transform .55s cubic-bezier(.3,.8,.3,1); }
+.wr-scene-body{ transition:transform .6s cubic-bezier(.25,.9,.3,1); }
 .wr-scene-body.parked{
   position:absolute; top:10px; right:12px; margin:0;
   transform-origin:top right;
@@ -1609,7 +1609,7 @@ button{ cursor:pointer; border:0; background:none; }
 /* ข้อความบอกว่าใครกำลังเลือก — วางระหว่างเกาะกับเรือสินค้า
    มีแต่เงา ไม่มีแถบรอง ตามที่ตกลงกันว่าไม่ต้องมีพื้นมืดแล้ว */
 .wr-scene-line{
-  position:absolute; left:0; right:0; top:66%; margin:0;
+  position:absolute; left:0; right:0; top:73%; margin:0;
   text-align:center; pointer-events:none;
   font-family:var(--display); font-size:17px; font-weight:700; color:#fdf6e6;
   text-shadow:0 2px 5px rgba(0,0,0,.9), 0 5px 18px rgba(0,0,0,.7);

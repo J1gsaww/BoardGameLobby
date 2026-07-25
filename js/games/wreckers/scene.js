@@ -311,9 +311,33 @@ function cardNote(body, st, ctx) {
   const ms = now() - stageAt;
   const parked = ms > CARD_READ;
 
-  /* ย่อไปมุมแล้วเอาพื้นมืดออก — เปลี่ยนด้วยคลาส ไม่ได้สร้าง DOM ใหม่
-     แอนิเมชันจึงไหลต่อเนื่องแทนที่จะเริ่มนับหนึ่งใหม่ */
-  body.classList.toggle('parked', parked);
+  /* ย่อไปมุม — ต้องเล่นเป็นการเคลื่อนที่จริง ไม่ใช่กระโดด
+
+     ปัญหาคือการเปลี่ยนจากอยู่ในแถวปกติไปเป็นวางลอยมุมจอ
+     เป็นการเปลี่ยน position กับ top/right ซึ่งเบราว์เซอร์ทำให้ทันทีเสมอ
+     transition ไม่จับ ตาจึงเห็นเป็นการวาร์ป
+
+     วิธีแก้: วัดตำแหน่งก่อนย้าย ย้าย แล้ววัดอีกที
+     จากนั้นสั่งให้มันกระโดดกลับไปจุดเดิมด้วย transform โดยไม่มี transition
+     พอเฟรมถัดไปค่อยถอด transform ออกพร้อม transition มันจะไหลจากที่เดิมไปที่ใหม่ */
+  if (parked && !body.classList.contains('parked')) {
+    const a = body.getBoundingClientRect();
+    body.classList.add('parked');
+    const b = body.getBoundingClientRect();
+
+    const dx = a.left - b.left;
+    const dy = a.top - b.top;
+    const sc = b.width ? a.width / b.width : 1;
+
+    body.style.transition = 'none';
+    body.style.transform = `translate(${dx}px, ${dy}px) scale(${sc})`;
+    body.style.transformOrigin = 'top left';
+
+    requestAnimationFrame(() => {
+      body.style.transition = '';
+      body.style.transform = '';
+    });
+  }
 
   /* ข้อความอยู่นอกกล่องการ์ด ไม่งั้นพอการ์ดย่อไปมุม ข้อความจะตามไปด้วย
      ตำแหน่งของมันอิงกับเวทีทั้งผืน จึงค้างอยู่ระหว่างเกาะกับเรือสินค้าได้ */

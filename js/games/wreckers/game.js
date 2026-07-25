@@ -302,7 +302,9 @@ function useCard(ctx, uid, { target }) {
   const hands = handsOf(ctx);
   const out = e.run(st, uid, target, hands);
 
-  const next = pushLog({ ...out.state, pending: null,
+  /* ล้าง cardUp ด้วย ไม่งั้นพอฉากประกาศผลจบ ฉากเปิดการ์ดจะเด้งกลับมาเล่าซ้ำ
+     เพราะมันยังอยู่ในสถานะและยังไม่เคยถูกปิด */
+  const next = pushLog({ ...out.state, pending: null, cardUp: null,
                          shout: { ...out.shout, at: (out.state.logSeq || 0) + 1 } },
                        'wreck.log.card.' + p.card,
                        { name: st.names?.[uid], who: st.names?.[target] });
@@ -655,7 +657,7 @@ export async function tick(ctx) {
   /* คนเปิดการ์ดค้างไม่เลือกเป้า — ทิ้งผลการ์ดแล้วผ่านตาไป */
   if (st.pending) {
     if (!due) return null;
-    return { state: passTurn(pushLog({ ...st, pending: null },
+    return { state: passTurn(pushLog({ ...st, pending: null, cardUp: null },
                                      'wreck.log.cardLost',
                                      { name: st.names?.[st.pending.by] })) };
   }

@@ -50,7 +50,7 @@
   }
   console.info('[env] ใช้โปรเจกต์', env, '·', PROJECTS[env].projectId);
 
-  window.BUILD = '2026-07-26.26';
+  window.BUILD = '2026-07-26.27';
   window.APP_ENV = env;
   window.FIREBASE_CONFIG = PROJECTS[env];
   window.MAX_IN_ROOM = 15;
