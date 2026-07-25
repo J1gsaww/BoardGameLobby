@@ -663,8 +663,9 @@ button{ cursor:pointer; border:0; background:none; }
 }
 /* กล่องบนเรือสินค้ายังไม่มีเจ้าของ ใส่ขอบขาวเรืองไว้ให้เห็นชัด */
 .wr-box-n{ filter:drop-shadow(0 0 4px rgba(255,255,255,.85)) drop-shadow(0 2px 5px rgba(0,0,0,.6)); }
-.wr-b{ color:#7ab4ff; border-color:#3c5f8f; }
-.wr-f{ color:#f2647e; border-color:#8f3c50; }
+/* British แดง · France น้ำเงิน — แถบคะแนนบนกระดาน */
+.wr-b{ color:#ff8f9c; border-color:#8f3c50; }
+.wr-f{ color:#7ab4ff; border-color:#3c5f8f; }
 .wr-n{ color:var(--muted); }
 .wr-legend .btn{ margin-left:auto; }
 
@@ -1310,10 +1311,10 @@ button{ cursor:pointer; border:0; background:none; }
 /* ทุกใบวิ่งเข้าหากึ่งกลางแถว = ลบระยะห่างจากกึ่งกลางของตัวเองออกให้หมด
    ใบกว้าง 62 + ช่องไฟ 10 = ระยะระหว่างใบ 72
    ของเดิมคำนวณกลับด้าน เลยยิ่งดันออกจากกันแทนที่จะซ้อนกัน */
-.wr-vb-row{ --step:72px; }
+/* ทุกใบเลื่อนไปตามระยะของตัวเองที่วัดมาแล้ว จึงไปซ้อนกันที่จุดเดียวพอดี
+   เอียงเล็กน้อยให้เห็นว่าเป็นกองไพ่ ไม่ใช่ใบเดียว */
 .wr-vb-row.merge .wr-vb{
-  transform:translateX(calc((((var(--n) - 1) / 2) - var(--i)) * var(--step)))
-            rotate(calc(var(--i) * 3deg - 4deg));
+  transform:translateX(var(--dx, 0)) rotate(calc(var(--dx, 0px) * 0.02));
 }
 .wr-vb-row.merge .wr-vb-name{ opacity:0; }
 .wr-vb-row.gone{ transform:scale(.1); opacity:0; transition:transform .42s, opacity .42s; }
@@ -1499,8 +1500,13 @@ button{ cursor:pointer; border:0; background:none; }
 /* ธงบอกฝั่งประเทศบนเรือและบนเกาะ */
 .wr-flag{
   position:absolute; transform:translate(-50%,-50%);
-  height:auto; pointer-events:none; opacity:.92;
-  filter:drop-shadow(0 2px 5px rgba(0,0,0,.75));
+  height:auto; pointer-events:none;
+  /* ขอบขาวรอบธงให้เด่นออกมาจากพื้นเรือกับพื้นเกาะที่สีใกล้กัน
+     ใช้เงาซ้อนสี่ทิศแทน outline เพราะ outline จับกับกรอบสี่เหลี่ยม ไม่ใช่รูปทรงของธง */
+  filter:
+    drop-shadow(0 0 2px rgba(255,255,255,.95))
+    drop-shadow(0 0 5px rgba(255,255,255,.7))
+    drop-shadow(0 3px 7px rgba(0,0,0,.8));
 }
 
 

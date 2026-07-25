@@ -18,7 +18,7 @@ import { cardById as voteById, voteCard, iconSrc } from './vote.js';
 import { dieSvg, rollPose, HERO, ROLL_MS } from './die.js';
 import { actionsFor, occupants, placeOf, BOAT_IDS } from './rules.js';
 import { BASE_CARDS, cardArt, cardArtAlt, CARD_BACK, CARD_BACK_ALT } from './events.js';
-import { paintScene, stopScene, setPlanView, setPlanWire, VOTE_BACK } from './scene.js';
+import { paintScene, stopScene, setPlanView, setPlanWire, VOTE_BACK, sceneAtAim } from './scene.js';
 import { EXTRA_CARDS } from './cards.js';
 import { lang } from '../../i18n.js';
 import {
@@ -232,6 +232,7 @@ let assetTotal = 0;
 
 function assetList() {
   const board = ['Carrack', 'Island', 'Cargo_ship', 'Rowboat', 'Cargo'].map(n => `${ART}${n}.png`);
+  /* ธงบนกระดานใช้ไฟล์เดียวกับไอคอนโหวต จึงถูกนับอยู่ในชุดไอคอนแล้ว */
   const icons = ['C', 'F', 'W', 'B', 'R', 'A', 'D'].map(iconSrc).filter(Boolean);
   return [...board, ...icons, VOTE_BACK, CARD_BACK];
 }
@@ -242,10 +243,14 @@ function preload(el) {
   assetTotal = urls.length;
   assetDone = 0;
 
+  /* ดาวน์โหลดเสร็จยังไม่พอ ต้องถอดรหัสภาพเสร็จด้วยถึงจะวาดได้ทันทีโดยไม่กระตุก
+     decode() รอจนถึงจุดนั้นจริง ๆ ส่วน onload บอกแค่ว่าไฟล์มาถึงแล้ว
+     นี่คือเหตุผลที่แถบโหลดเต็มแล้วภาพยังทยอยโผล่ */
   const one = (u) => new Promise(res => {
     const im = new Image();
-    const tick = () => { assetDone++; paint(el); res(); };
-    im.onload = tick; im.onerror = tick;
+    const done = () => { assetDone++; paint(el); res(); };
+    im.onerror = done;
+    im.onload = () => (im.decode ? im.decode().then(done, done) : done());
     im.src = u;
   });
 
@@ -315,7 +320,9 @@ export function render(el, ctx) {
 
   /* ช่วงกัปตันเล็งเป้า — เรือที่ยิงได้เรืองแสง ชี้แล้วโตขึ้นและเป็นสีแดง คลิกคือเลือก
      ทำบนกระดานจริงไม่ใช่ในฉาก เพราะต้องเห็นว่ากล่องอยู่ลำไหนก่อนตัดสินใจ */
-  const aimMine = st.aim && st.aim.by === ctx.me.uid && !st.aim.target;
+  /* ไฮไลท์เรือได้ก็ต่อเมื่อฉากเล่าถึงช่วงเลือกแล้วจริง ๆ
+     ไม่ใช่ทันทีที่สถานะมี aim ซึ่งเกิดพร้อมกับตอนผลเพิ่งเริ่มขึ้น */
+  const aimMine = st.aim && st.aim.by === ctx.me.uid && !st.aim.target && sceneAtAim();
   /* กล่องที่กำลังจะย้าย เรืองเหลืองไว้ให้เห็นว่าเลือกใบไหนอยู่ */
   el.querySelectorAll('[data-cargo]').forEach(b => {
     b.classList.toggle('picked', plan?.act === 'shiftCargo' && plan.box === b.dataset.cargo);
@@ -798,8 +805,10 @@ function pawnMenu(st, ctx) {
 }
 
 function cargoMenu() {
+  /* ส่ง id ของกล่องไปกับปุ่มด้วย ไม่งั้นตอนกดจะไม่รู้ว่าหมายถึงกล่องไหน
+     แล้วคำสั่งที่ส่งขึ้นไปจะไม่มีทิศ ทำให้ถูกปฏิเสธเงียบ ๆ */
   return `<div class="wr-menu-head">${esc(t('wreck.act.shiftCargo'))}</div>` +
-         btnRow('shiftCargo', t('wreck.shiftHere'), true);
+         btnRow('shiftCargo', t('wreck.shiftHere'), true, menu.cargo);
 }
 
 const btnRow = (act, label, on, arg = '', tip = '') =>
@@ -812,6 +821,10 @@ function runMenu(el, ctx, act, arg) {
   if (act === 'force') { closeMenu(); forcing = arg; picks = []; paint(el); return; }
   if (act === 'move') plan = { act: 'toBoat', boat: String(arg).split(':')[0], via: 'menu' };
   else if (act === 'kick') plan = { act: 'kick', uid: arg, via: 'menu' };
+  else if (act === 'shiftCargo' && arg) {
+    const [, side] = String(arg).split(':');
+    plan = { act: 'shiftCargo', from: side === 'f' ? 'F' : 'B', box: arg, via: 'menu' };
+  }
   else plan = { act, via: 'menu' };
   paint(el);
 }

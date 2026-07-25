@@ -179,6 +179,8 @@ function step(body, st, ctx) {
   if (phase === 'tally') {
     if (tally(body, st.lastVote)) return true;
 
+    /* ผลต้องขึ้นให้ครบก่อน ถึงจะเปิดให้กัปตันเลือกเรือ
+       ถ้าปล่อยพร้อมกัน กัปตันจะรู้ผลก่อนคนอื่นและคลิกได้ทั้งที่ผลยังไม่ขึ้น */
     if (st.aim) goto('aim');
     else {
       /* ยิงไม่ติด — ค้างผลไว้ให้อ่านแล้วปิดฉากเอง
@@ -259,7 +261,8 @@ function titleOf(st, ph) {
   const role = aiming ? 'captain'
     : v?.kind === 'mutiny' ? 'mate'
     : v?.kind === 'islandVote' ? 'governor' : 'captain';
-  const line = aiming ? 'wreck.scene.aim'
+  const line = (aiming && ph === 'aim' && st.aim && !st.aim.target) ? 'wreck.scene.pickShipBig'
+    : aiming ? 'wreck.scene.aim'
     : v?.kind === 'mutiny' ? 'wreck.scene.mutiny'
     : v?.kind === 'islandVote' ? 'wreck.scene.brawl' : 'wreck.scene.shoot';
   return { who: `${t('wreck.role.' + role)} \u00b7 ${st.names?.[who] || '?'}`, big: t(line) };
@@ -294,15 +297,19 @@ const nameOf = (uid) => namesRef[uid] || '?';
 /* วัดระยะห่างจริงระหว่างใบแล้วบอกให้ CSS ใช้รวมกอง
    ต้องวัดใหม่ทุกครั้งที่จำนวนใบเปลี่ยน ไม่งั้นพอเติมใบจากกองเข้ามา
    ค่าที่ใช้จะเป็นของตอนที่ยังไม่มีใบนั้น กองเลยไปกระจุกผิดที่ ไม่ตรงกลางแถว */
+/* คำนวณระยะที่แต่ละใบต้องเลื่อนเพื่อไปกองซ้อนกันกลางแถวพอดี
+   ใช้ offsetLeft ไม่ใช่ getBoundingClientRect เพราะอันหลังรวมผลของ transform ด้วย
+   ตอนวัดไพ่ยังเล่นแอนิเมชันเข้าอยู่ ค่าที่ได้เลยเพี้ยน กองจึงเบี้ยวไปเบี้ยวมา
+
+   คิดทีละใบจากตำแหน่งจริงของตัวเอง ไม่ใช่คูณระยะห่างเฉลี่ย
+   ต่อให้ใบกว้างไม่เท่ากันหรือช่องไฟไม่สม่ำเสมอ ทุกใบก็ยังไปซ้อนกันที่จุดเดียว */
 function measure(row) {
-  const n = row.children.length;
-  if (n < 2) return;
-  const a = row.children[0].getBoundingClientRect();
-  const b = row.children[1].getBoundingClientRect();
-  row.style.setProperty('--step', (Math.round(b.left - a.left) || 72) + 'px');
-  [...row.children].forEach((c, i) => {
-    c.style.setProperty('--i', i);
-    c.style.setProperty('--n', n);
+  const kids = [...row.children];
+  if (kids.length < 2) return;
+  const mid = row.offsetWidth / 2;
+  kids.forEach(c => {
+    const own = c.offsetLeft + c.offsetWidth / 2;
+    c.style.setProperty('--dx', Math.round(mid - own) + 'px');
   });
 }
 
@@ -497,5 +504,8 @@ function wireSides(body, action) {
 }
 
 /* ยังต้องมีให้ ui.js เรียกได้ แม้ตอนนี้จะไม่ได้ใช้แผนในฉากแล้ว */
+/* ฉากเล่าถึงช่วงให้กัปตันเลือกเรือแล้วหรือยัง — กระดานถามก่อนเปิดไฮไลท์ */
+export const sceneAtAim = () => phase === 'aim';
+
 export const setPlanView = () => {};
 export const setPlanWire = () => {};
