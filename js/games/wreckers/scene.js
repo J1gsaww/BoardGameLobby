@@ -1,23 +1,14 @@
-/* scene.js — ฉากกลางจอตอนโหวต
+/* scene.js — ฉากกลางบนกระดานตอนโหวต
    ─────────────────────────────────────────────────────────────
-   แยกออกมาจาก ui.js เพราะเป็นคนละเรื่องกัน — ui.js วาดสถานะปัจจุบัน
-   ส่วนไฟล์นี้เล่า "ลำดับเวลา" ซึ่งต้องมีนาฬิกาของตัวเองและจำได้ว่าเล่าถึงไหนแล้ว
+   บทเรียนจากรุ่นก่อน: ห้ามเขียน innerHTML ใหม่ทุกเฟรมเด็ดขาด
+   ทุกครั้งที่เขียนทับ แอนิเมชัน CSS จะเริ่มนับหนึ่งใหม่ (กลายเป็นลูปไม่หยุด)
+   และ <img> จะเริ่มโหลดใหม่ตั้งแต่ต้น จึงไม่มีวันโหลดเสร็จ ภาพเลยไม่เคยขึ้น
 
-   ลำดับที่เล่า
-     1  เส้นสองเส้นวิ่งจากซ้ายกับขวามาบรรจบกลางจอ แล้วชื่อการโหวตโผล่มา
-     2  ชื่อย่อลงแล้วเลื่อนขึ้น เปิดที่ว่างให้ของข้างล่าง
-     3  ไพ่คว่ำโผล่ทีละใบตามคนที่ส่งไพ่แล้ว พร้อมชื่อคนส่ง และรายชื่อคนที่ยังไม่ส่ง
-     4  ครบทุกคนแล้วเติมใบจากกองกลางอีกหนึ่ง
-     5  ไพ่ทั้งหมดวิ่งมาซ้อนกันเป็นกองเดียว แล้วย่อหายไป
-     6  ผลนับขึ้นทีละสัญลักษณ์ — ปืนใหญ่ให้ครบ แล้วไฟ แล้วน้ำ
-     7  สรุปว่ายิงติดหรือไม่ติด แล้วฉากปิด
-
-   หลักการเดียวที่ยึด: **สถานะเป็นคนบอกว่าอยู่ช่วงไหน เวลาเป็นคนบอกว่าเล่าถึงไหน**
-   ถ้าใครเข้ามากลางคันหรือรีเฟรช จะเห็นช่วงที่ถูกต้องเสมอ แค่ไม่ได้ดูตั้งแต่ต้น
+   รุ่นนี้จึง **สร้าง DOM ครั้งเดียวต่อหนึ่งช่วง** แล้วหลังจากนั้นแตะเฉพาะ
+   คลาสกับข้อความ ของที่มีอยู่แล้วไม่ถูกสร้างใหม่อีกเลย
    ───────────────────────────────────────────────────────────── */
 
 import { t } from '../../i18n.js';
-import { occupants } from './rules.js';
 import { VOTE_ART } from './vote.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c =>
@@ -25,105 +16,90 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c =>
 
 export const VOTE_BACK = `${VOTE_ART}back.png`;
 
-/* จังหวะของแต่ละช่วง หน่วยเป็นมิลลิวินาที รวมกันแล้วราวหกวินาทีครึ่ง */
 const T = {
-  lines: 620,      // เส้นวิ่งมาบรรจบ
-  pop: 340,        // ชื่อโผล่
-  hold: 480,       // ค้างให้อ่าน
-  shrink: 460,     // ย่อแล้วเลื่อนขึ้น
-  deckCard: 460,   // ใบจากกองกลางไหลเข้า
-  merge: 620,      // ไพ่วิ่งมาซ้อนกัน
-  vanish: 420,     // กองย่อหายไป
-  tick: 190,       // ระยะห่างของสัญลักษณ์แต่ละตัวตอนนับ
-  verdict: 900,    // ค้างที่คำตัดสิน
-  done: 1100       // ค้างก่อนปิดฉาก
+  lines: 620, pop: 340, hold: 520, deckCard: 520,
+  merge: 640, vanish: 440, tick: 200, verdict: 300
 };
 
-/* สัญลักษณ์ในแถวโจมตี เรียงตามลำดับที่จะนับขึ้นมา */
 const ATTACK_ORDER = [
   { ch: 'C', file: 'cannon', key: 'wreck.sym.C' },
   { ch: 'F', file: 'torch',  key: 'wreck.sym.F' },
   { ch: 'W', file: 'water',  key: 'wreck.sym.W' }
 ];
 
-/* ── สถานะของตัวเล่าเรื่อง ────────────────────────────────
-   จำไว้ว่ากำลังเล่าฉากไหนอยู่ และเริ่มเล่าตอนกี่โมง
-   ฉากเปลี่ยนเมื่อไหร่ก็เริ่มนับเวลาใหม่ */
-let scene = null;      // { key, at, raf }
-let host = null;       // element ที่ฉากอยู่
+let key = '';
+let at = 0;
+let raf = 0;
+let stage = '';
+let seen = new Set();
+let planView = null;
+let onPlanWire = null;
+let sendFn = null;
+
+export const setPlanView = (html) => { planView = html || null; };
+export const setPlanWire = (fn) => { onPlanWire = fn; };
 
 const now = () => performance.now();
-const since = () => (scene ? now() - scene.at : 0);
 
-/* กุญแจของฉาก — เปลี่ยนเมื่อไหร่แปลว่าเป็นฉากใหม่ ต้องเริ่มเล่าใหม่ */
-function sceneKey(st, me) {
+function sceneKey(st) {
   if (st.vote) return `call:${st.vote.kind}:${st.vote.caller}:${st.vote.place}`;
-  if (st.aim) return `aim:${st.aim.by}:${st.aim.target || ''}`;
+  if (st.aim) return `aim:${st.aim.by}`;
   if (st.lastVote) return `show:${st.lastVote.at}`;
   return '';
 }
 
 export function stopScene() {
-  if (scene?.raf) cancelAnimationFrame(scene.raf);
-  scene = null;
+  if (raf) cancelAnimationFrame(raf);
+  raf = 0; key = ''; stage = ''; seen = new Set();
 }
-
-/* ── วาด ───────────────────────────────────────────────────
-   เรียกทุกครั้งที่สถานะเปลี่ยน และเรียกตัวเองซ้ำด้วย rAF ระหว่างที่ยังเล่าไม่จบ */
-/* แผนที่รอยืนยันซึ่งเกิดจากการคลิกเรือ — ui.js เป็นคนถือ ส่งเข้ามาให้วาด */
-let planView = null;
-export const setPlanView = (html) => { planView = html || null; };
 
 export function paintScene(el, st, ctx) {
   const box = el.querySelector('.wr-scene');
   if (!box) return;
-  host = el;
+  sendFn = ctx.send;
 
-  const me = ctx.me.uid;
-  const key = sceneKey(st, me);
-
-  if (!key) {
-    box.hidden = true;
-    if (box.dataset.sig) { box.dataset.sig = ''; box.innerHTML = ''; }
-    stopScene();
+  const want = sceneKey(st);
+  if (!want) {
+    if (key) { box.hidden = true; box.innerHTML = ''; stopScene(); }
     return;
   }
 
-  if (!scene || scene.key !== key) {
-    stopScene();
-    scene = { key, at: now(), raf: 0 };
+  /* ฉากใหม่ — สร้างหัวครั้งเดียว ต่อจากนี้ไม่แตะ innerHTML ของหัวอีกเลย
+     หัวจึงเล่นแอนิเมชันรอบเดียวแล้วค้าง ไม่วนซ้ำ */
+  if (key !== want) {
+    if (raf) cancelAnimationFrame(raf);
+    key = want; at = now(); stage = ''; seen = new Set();
+    box.hidden = false;
+    box.innerHTML = `
+      <div class="wr-scene-title">
+        <span class="wr-scene-lines"><i></i><i></i></span>
+        <span class="wr-scene-who"></span>
+        <strong class="wr-scene-big"></strong>
+      </div>
+      <div class="wr-scene-body" hidden></div>`;
+    const head = titleOf(st);
+    box.querySelector('.wr-scene-who').textContent = head.who;
+    box.querySelector('.wr-scene-big').textContent = head.big;
   }
 
-  /* กัปตันต้องคลิกเรือบนกระดาน ฉากจึงต้องไม่บังกระดานของเขา */
-  const aiming = st.aim && st.aim.by === me && !st.aim.target;
-  box.classList.toggle('clear', !!aiming);
+  const ms = now() - at;
+  const title = box.querySelector('.wr-scene-title');
+  const body = box.querySelector('.wr-scene-body');
 
-  const html = render(st, ctx);
-  box.hidden = false;
-  if (box.dataset.sig !== html) {
-    box.dataset.sig = html;
-    box.innerHTML = html;
-    wire(box, ctx);
-    if (onPlanWire) onPlanWire(box);
+  box.classList.toggle('clear', !!(st.aim && st.aim.by === ctx.me.uid && !st.aim.target));
+  title.classList.toggle('up', ms > T.lines + T.pop + T.hold);
+  body.hidden = ms < T.lines + T.pop + T.hold;
+
+  if (!body.hidden) {
+    if (st.vote) collect(body, st);
+    else if (st.aim) aim(body, st, ctx);
+    else reveal(body, st, ms);
   }
 
-  /* ยังเล่าไม่จบก็ขอเฟรมถัดไป จบแล้วก็หยุด ไม่กินซีพียูทิ้งไว้ */
-  if (!finished(st, ctx)) {
-    scene.raf = requestAnimationFrame(() => paintScene(el, st, ctx));
-  }
+  raf = requestAnimationFrame(() => paintScene(el, st, ctx));
 }
 
-const finished = (st, ctx) =>
-  !st.vote && !st.aim && since() > total(st);
-
-function total(st) {
-  const n = (st.lastVote?.pot || []).length;
-  return T.deckCard + T.merge + T.vanish + n * T.tick + T.verdict + T.done + 2000;
-}
-
-/* ── ชิ้นส่วน ───────────────────────────────────────────── */
-
-function titleOf(st, ctx) {
+function titleOf(st) {
   const v = st.vote || st.lastVote;
   const who = st.aim ? st.aim.by : v?.caller;
   const role = st.aim ? 'captain'
@@ -132,56 +108,38 @@ function titleOf(st, ctx) {
   const line = st.aim ? 'wreck.scene.aim'
     : v?.kind === 'mutiny' ? 'wreck.scene.mutiny'
     : v?.kind === 'islandVote' ? 'wreck.scene.brawl' : 'wreck.scene.shoot';
-  return {
-    who: `${t('wreck.role.' + role)} \u00b7 ${st.names?.[who] || '?'}`,
-    big: t(line)
-  };
+  return { who: `${t('wreck.role.' + role)} \u00b7 ${st.names?.[who] || '?'}`, big: t(line) };
 }
 
-function render(st, ctx) {
-  const ms = since();
-  const { who, big } = titleOf(st, ctx);
+/* ไพ่ที่วางแล้วอยู่ต่อไปเรื่อย ๆ ใบใหม่แค่ append เข้าไป ไม่วาดใหม่ทั้งแถว */
+function collect(body, st) {
+  if (stage !== 'collect') {
+    stage = 'collect';
+    body.innerHTML = `<div class="wr-vb-row wiggle"></div><p class="wr-scene-note"></p>`;
+  }
+  const row = body.querySelector('.wr-vb-row');
 
-  /* ชื่อย่อขึ้นไปข้างบนหลังจากค้างให้อ่านแล้ว */
-  const up = ms > T.lines + T.pop + T.hold;
-  const head = `<div class="wr-scene-title${up ? ' up' : ''}">
-      <span class="wr-scene-lines"><i></i><i></i></span>
-      <span class="wr-scene-who">${esc(who)}</span>
-      <strong class="wr-scene-big">${esc(big)}</strong>
-    </div>`;
+  for (const uid of st.vote.done) {
+    if (seen.has(uid)) continue;
+    seen.add(uid);
+    const card = document.createElement('span');
+    card.className = 'wr-vb';
+    card.innerHTML = `<img src="${esc(VOTE_BACK)}" alt="" draggable="false">
+      <span class="wr-vb-name">${esc(st.names?.[uid] || '?')}</span>`;
+    row.appendChild(card);
+  }
 
-  if (ms < T.lines + T.pop + T.hold) return head;
-
-  return head + `<div class="wr-scene-body">${
-      st.vote ? collect(st, ctx)
-    : st.aim ? aim(st, ctx)
-    : reveal(st, ctx)
-  }</div>`;
-}
-
-/* ช่วงรอไพ่ — ไพ่คว่ำโผล่ทีละใบตามคนที่ส่งแล้ว */
-function collect(st, ctx) {
-  const v = st.vote;
-  const left = v.voters.filter(u => !v.done.includes(u));
-  const cards = v.done.map((uid, i) => `
-    <span class="wr-vb" style="animation-delay:${i * 60}ms">
-      <img src="${esc(VOTE_BACK)}" alt="" draggable="false">
-      <span class="wr-vb-name">${esc(st.names?.[uid] || '?')}</span>
-    </span>`).join('');
-
-  const wait = left.length
+  const left = st.vote.voters.filter(u => !st.vote.done.includes(u));
+  const note = body.querySelector('.wr-scene-note');
+  const text = left.length
     ? t('wreck.scene.waiting', { who: left.map(u => st.names?.[u] || '?').join(', ') })
     : t('wreck.scene.allIn');
-
-  return `<div class="wr-vb-row wiggle">${cards}</div>
-    <p class="wr-scene-note">${esc(wait)}</p>`;
+  if (note.textContent !== text) note.textContent = text;
 }
 
-/* ช่วงเปิดผล — เติมใบกองกลาง ซ้อนกัน ย่อหาย แล้วนับสัญลักษณ์ */
-function reveal(st, ctx) {
+function reveal(body, st, ms) {
   const v = st.lastVote;
-  if (!v) return '';
-  const ms = since();
+  if (!v) return;
   const pot = v.pot || [];
 
   const tMerge = T.deckCard;
@@ -189,73 +147,93 @@ function reveal(st, ctx) {
   const tCount = tVanish + T.vanish;
 
   if (ms < tCount) {
-    const merged = ms > tMerge;
-    const gone = ms > tVanish;
-    const cards = pot.map((_, i) => `
-      <span class="wr-vb${i === pot.length - 1 ? ' from-deck' : ''}"
-        style="--i:${i}; --n:${pot.length}">
-        <img src="${esc(VOTE_BACK)}" alt="" draggable="false">
-      </span>`).join('');
-    return `<div class="wr-vb-row${merged ? ' merge' : ''}${gone ? ' gone' : ''}">${cards}</div>
-      <p class="wr-scene-note">${esc(t('wreck.scene.shuffling'))}</p>`;
+    if (stage !== 'pot') {
+      stage = 'pot';
+      body.innerHTML = `<div class="wr-vb-row"></div>`;
+      const row = body.querySelector('.wr-vb-row');
+      pot.forEach((_, i) => {
+        const c = document.createElement('span');
+        c.className = 'wr-vb' + (i === pot.length - 1 ? ' from-deck' : '');
+        c.style.setProperty('--i', i);
+        c.style.setProperty('--n', pot.length);
+        c.innerHTML = `<img src="${esc(VOTE_BACK)}" alt="" draggable="false">`;
+        row.appendChild(c);
+      });
+    }
+    const row = body.querySelector('.wr-vb-row');
+    row.classList.toggle('merge', ms > tMerge);
+    row.classList.toggle('gone', ms > tVanish);
+    return;
   }
 
-  /* นับทีละสัญลักษณ์ — ปืนใหญ่ให้ครบก่อน แล้วไฟ แล้วน้ำ */
-  const rows = [];
-  let shown = 0;
+  if (stage !== 'tally') {
+    stage = 'tally';
+    body.innerHTML = `<div class="wr-tallies"></div>`;
+    const wrap = body.querySelector('.wr-tallies');
+    for (const sym of ATTACK_ORDER) {
+      const n = v.counts?.[sym.ch] || 0;
+      if (!n) continue;
+      const row = document.createElement('div');
+      row.className = 'wr-tally';
+      row.dataset.ch = sym.ch;
+      row.innerHTML = `<span class="wr-tally-pips">${
+          Array.from({ length: n }, () =>
+            `<img class="wr-pip" src="${esc(VOTE_ART)}${sym.file}.png" alt="" draggable="false">`
+          ).join('')}</span>
+        <span class="wr-tally-n">0</span>`;
+      wrap.appendChild(row);
+    }
+  }
+
   const step = Math.floor((ms - tCount) / T.tick);
+  let before = 0, total = 0;
 
   for (const sym of ATTACK_ORDER) {
-    const total = v.counts?.[sym.ch] || 0;
-    const vis = Math.max(0, Math.min(total, step - shown));
-    shown += total;
-    if (!total) continue;
-    rows.push(`<div class="wr-tally${vis ? ' on' : ''}">
-      <span class="wr-tally-name">${esc(t(sym.key))}</span>
-      <span class="wr-tally-pips">${
-        Array.from({ length: total }, (_, i) =>
-          `<img class="wr-pip${i < vis ? ' in' : ''}" src="${esc(VOTE_ART)}${sym.file}.png"
-             alt="" draggable="false" style="animation-delay:${i * 40}ms">`).join('')
-      }</span>
-      <span class="wr-tally-n">${vis}</span>
-    </div>`);
+    const n = v.counts?.[sym.ch] || 0;
+    total += n;
+    if (!n) continue;
+    const row = body.querySelector(`.wr-tally[data-ch="${sym.ch}"]`);
+    if (!row) continue;
+    const vis = Math.max(0, Math.min(n, step - before));
+    before += n;
+    row.classList.toggle('on', vis > 0);
+    const num = row.querySelector('.wr-tally-n');
+    if (num.textContent !== String(vis)) num.textContent = String(vis);
+    row.querySelectorAll('.wr-pip').forEach((p, i) => p.classList.toggle('in', i < vis));
   }
 
-  const all = ATTACK_ORDER.reduce((n, s) => n + (v.counts?.[s.ch] || 0), 0);
-  const verdictAt = tCount + all * T.tick + 260;
-  const done = ms > verdictAt;
-  const win = v.won === true;
-
-  const verdict = !done ? '' : `<p class="wr-scene-verdict ${win ? 'win' : 'fail'}">${
-    esc(t(win ? 'wreck.scene.hit' : 'wreck.scene.miss'))}</p>`;
-
-  return `<div class="wr-tallies">${rows.join('')}</div>${verdict}`;
+  /* คำตัดสินเติมครั้งเดียวแล้วค้างอยู่ตรงนั้น */
+  if (ms > tCount + total * T.tick + T.verdict && !body.querySelector('.wr-scene-verdict')) {
+    const p = document.createElement('p');
+    p.className = 'wr-scene-verdict ' + (v.won ? 'win' : 'fail');
+    p.textContent = t(v.won ? 'wreck.scene.hit' : 'wreck.scene.miss');
+    body.appendChild(p);
+  }
 }
 
-/* ช่วงกัปตันเลือก — คนอื่นเห็นแค่ว่ากำลังรอ */
-function aim(st, ctx) {
+function aim(body, st, ctx) {
   const mine = st.aim.by === ctx.me.uid;
-  if (!mine) {
-    return `<p class="wr-scene-note">${esc(t('wreck.scene.waitAim', {
+  const want = mine ? (st.aim.target ? 'side' : (planView ? 'plan' : 'pick')) : 'wait';
+  const sig = 'aim:' + want + (want === 'plan' ? ':' + planView.length : '');
+  if (stage === sig) return;
+  stage = sig;
+
+  if (want === 'wait') {
+    body.innerHTML = `<p class="wr-scene-note">${esc(t('wreck.scene.waitAim', {
       name: st.names?.[st.aim.by] || '?' }))}</p>`;
+  } else if (want === 'pick') {
+    body.innerHTML = `<p class="wr-scene-note">${esc(t('wreck.scene.pickShip'))}</p>`;
+  } else if (want === 'plan') {
+    body.innerHTML = `<div class="wr-scene-plan">${planView}</div>`;
+    if (onPlanWire) onPlanWire(body);
+  } else {
+    body.innerHTML = `<p class="wr-scene-note">${esc(t('wreck.scene.pickSide'))}</p>
+      <div class="wr-scene-btns">
+        <button class="wr-scene-btn n-B" data-side="B">${esc(t('wreck.british'))}</button>
+        <button class="wr-scene-btn n-F" data-side="F">${esc(t('wreck.france'))}</button>
+      </div>`;
+    body.querySelectorAll('[data-side]').forEach(b => {
+      b.onclick = () => sendFn?.('storeAt', { side: b.dataset.side });
+    });
   }
-  if (!st.aim.target) {
-    return planView
-      ? `<div class="wr-scene-plan">${planView}</div>`
-      : `<p class="wr-scene-note">${esc(t('wreck.scene.pickShip'))}</p>`;
-  }
-  return `<p class="wr-scene-note">${esc(t('wreck.scene.pickSide'))}</p>
-    <div class="wr-scene-btns">
-      <button class="wr-scene-btn n-B" data-side="B">${esc(t('wreck.british'))}</button>
-      <button class="wr-scene-btn n-F" data-side="F">${esc(t('wreck.france'))}</button>
-    </div>`;
-}
-
-let onPlanWire = null;
-export const setPlanWire = (fn) => { onPlanWire = fn; };
-
-function wire(box, ctx) {
-  box.querySelectorAll('[data-side]').forEach(b => {
-    b.onclick = () => ctx.send('storeAt', { side: b.dataset.side });
-  });
 }

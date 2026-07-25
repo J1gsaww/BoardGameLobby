@@ -235,8 +235,14 @@ export function render(el, ctx) {
   el.querySelectorAll('[data-piece]').forEach(node => {
     const hot = aimMine && st.aim.options.includes(node.dataset.piece);
     node.classList.toggle('aim-hot', !!hot);
+    /* ใช้ onclick ทับตัวเดิมทุกครั้ง จะได้ไม่ผูกซ้อนกันหลายชั้นตอนวาดใหม่
+       และตั้งเป็น null เมื่อไม่ใช่ช่วงเล็ง จะได้ไม่ค้างไว้กดได้ตอนอื่น */
     node.onclick = hot
-      ? () => { plan = { act: 'aimAt', target: node.dataset.piece, from: 'scene' }; paint(el); }
+      ? (e) => {
+          e.stopPropagation();
+          plan = { act: 'aimAt', target: node.dataset.piece, from: 'scene' };
+          paint(el);
+        }
       : null;
   });
 
@@ -839,7 +845,7 @@ function paintPlan(el, st, ctx) {
   const box = el.querySelector('.wr-plan');
   if (!box) return;
 
-  if (!plan || plan.from) {
+  if (!plan) {
     box.hidden = true;
     if (box.dataset.sig) { box.dataset.sig = ''; box.innerHTML = ''; }
     return;

@@ -1200,11 +1200,13 @@ button{ cursor:pointer; border:0; background:none; }
   position:absolute; inset:0; z-index:45;
   display:grid; align-content:start; justify-items:center; gap:18px;
   padding:26px 20px 20px;
-  /* ไม่ทับพื้นหลังแล้ว — ของทุกชิ้นในฉากมีเงาของตัวเองพอให้อ่านออกบนกระดาน
-     ทับทั้งกระดานทำให้มองไม่เห็นว่าเรือกับกล่องอยู่ตรงไหน ซึ่งเป็นข้อมูลที่ต้องใช้ตัดสินใจ */
+  background:rgba(0,0,0,.15);
+  /* ตัวฉากไม่รับคลิก ปล่อยให้ทะลุไปถึงเรือบนกระดานได้
+     ลูกของฉัน (ปุ่ม แผงยืนยัน) ค่อยรับคลิกเอง ไม่งั้นกัปตันคลิกเรือไม่ได้ */
   pointer-events:none;
 }
 .wr-scene > *{ pointer-events:auto; }
+.wr-scene .wr-scene-title{ pointer-events:none; }
 /* ตอนกัปตันต้องคลิกเรือ ฉากต้องไม่บัง */
 .wr-scene.clear{ align-content:end; }
 .wr-scene.clear .wr-scene-title{ display:none; }
@@ -1213,23 +1215,24 @@ button{ cursor:pointer; border:0; background:none; }
 /* ── ชื่อการโหวต ─────────────────────────────────────── */
 .wr-scene-title{
   position:relative; display:grid; justify-items:center; gap:3px;
-  padding:12px 46px; border-radius:14px;
-  background:linear-gradient(90deg, transparent, rgba(8,6,20,.82) 12%,
-             rgba(8,6,20,.9) 50%, rgba(8,6,20,.82) 88%, transparent);
-  transition:transform .46s cubic-bezier(.2,.8,.3,1), gap .46s, padding .46s;
+  padding:10px 30px;
+  transition:transform .46s cubic-bezier(.2,.8,.3,1), gap .46s;
   transform-origin:top center;
 }
-/* ย่อลงอยู่กับที่ ไม่ต้องเลื่อนขึ้นแล้วเพราะอยู่บนสุดตั้งแต่แรก */
-.wr-scene-title.up{ transform:scale(.62); gap:0; padding:8px 40px; }
+/* ย่อลงอยู่กับที่ ไม่ต้องเลื่อนขึ้นเพราะอยู่บนสุดตั้งแต่แรก */
+.wr-scene-title.up{ transform:scale(.62); gap:0; }
 
 .wr-scene-who{
   font-family:var(--mono); font-size:13px; letter-spacing:.2em; text-transform:uppercase;
-  color:var(--lamp); opacity:0; animation:wr-pop .34s .62s forwards;
+  color:var(--lamp); text-shadow:0 2px 5px rgba(0,0,0,.7);
+  opacity:0; animation:wr-pop .34s .62s forwards;
 }
 .wr-scene-big{
   font-family:var(--display); font-size:46px; font-weight:700; line-height:1.05;
   letter-spacing:.01em;
-  color:#fdf6e6; text-shadow:0 4px 22px rgba(0,0,0,.9);
+  color:#fdf6e6;
+  /* เงาเบา ๆ พอให้ตัวอักษรลอยเหนือทะเล ไม่ใช่แถบทึบ */
+  text-shadow:0 2px 5px rgba(0,0,0,.55), 0 6px 20px rgba(0,0,0,.35);
   opacity:0; transform:scale(1.35);
   animation:wr-boom .34s .62s cubic-bezier(.2,1.4,.4,1) forwards;
 }
@@ -1248,9 +1251,8 @@ button{ cursor:pointer; border:0; background:none; }
 @keyframes wr-line{ from{ width:0; } to{ width:46vw; } }
 
 .wr-scene-note{
-  margin:0; font-size:13.5px; color:#fdf6e6; font-weight:600;
-  padding:5px 12px; border-radius:999px;
-  background:rgba(8,6,20,.82); text-shadow:0 1px 4px rgba(0,0,0,.9);
+  margin:0; font-size:14px; color:#fdf6e6; font-weight:600;
+  text-shadow:0 2px 5px rgba(0,0,0,.7), 0 4px 14px rgba(0,0,0,.4);
 }
 .wr-scene-body{ display:grid; justify-items:center; gap:12px; }
 
@@ -1264,8 +1266,8 @@ button{ cursor:pointer; border:0; background:none; }
 .wr-vb img{ width:100%; border-radius:7px; display:block;
   box-shadow:0 8px 22px rgba(0,0,0,.75); }
 .wr-vb-name{
-  font-size:10.5px; color:#fdf6e6; padding:2px 7px; border-radius:999px;
-  background:rgba(8,6,20,.85); text-shadow:0 1px 3px rgba(0,0,0,.9);
+  font-size:11px; font-weight:600; color:#fdf6e6;
+  text-shadow:0 2px 5px rgba(0,0,0,.8);
 }
 .wr-vb.from-deck{ animation:wr-vb-deck .46s cubic-bezier(.2,1.2,.4,1) both; }
 @keyframes wr-vb-in{ from{ opacity:0; transform:translateY(16px) scale(.8); } }
@@ -1291,26 +1293,26 @@ button{ cursor:pointer; border:0; background:none; }
 
 /* ── นับสัญลักษณ์ ────────────────────────────────────── */
 .wr-tallies{
-  display:grid; gap:8px; min-width:min(340px, 80vw);
-  filter:drop-shadow(0 8px 20px rgba(0,0,0,.7));
+  display:grid; gap:10px; justify-items:center;
+  filter:drop-shadow(0 6px 14px rgba(0,0,0,.6));
 }
 .wr-tally{
-  display:grid; grid-template-columns:74px 1fr 28px; align-items:center; gap:10px;
-  padding:7px 11px; border-radius:11px;
-  background:rgba(12,9,26,.78); border:1px solid var(--line);
-  opacity:.3; transition:opacity .2s, border-color .2s;
+  display:flex; align-items:center; justify-content:center; gap:10px;
+  opacity:0; transition:opacity .2s;
 }
-.wr-tally.on{ opacity:1; border-color:var(--lamp); }
-.wr-tally-name{ font-family:var(--mono); font-size:11px; color:var(--muted); }
-.wr-tally-pips{ display:flex; gap:5px; flex-wrap:wrap; }
-.wr-pip{ width:24px; height:24px; object-fit:contain; opacity:0; transform:scale(.5); }
+.wr-tally.on{ opacity:1; }
+.wr-tally-pips{ display:flex; gap:6px; flex-wrap:wrap; justify-content:center; }
+.wr-pip{ width:40px; height:40px; object-fit:contain; opacity:0; transform:scale(.5); }
 .wr-pip.in{ animation:wr-pip-in .22s cubic-bezier(.2,1.5,.4,1) forwards; }
 @keyframes wr-pip-in{ to{ opacity:1; transform:none; } }
-.wr-tally-n{ font-family:var(--display); font-size:17px; font-weight:700; text-align:right; }
+.wr-tally-n{
+  font-family:var(--display); font-size:24px; font-weight:700; color:#fdf6e6;
+  min-width:22px; text-shadow:0 2px 6px rgba(0,0,0,.8);
+}
 
 .wr-scene-verdict{
-  margin:2px 0 0; font-family:var(--display); font-size:30px; font-weight:700;
-  text-shadow:0 3px 16px rgba(0,0,0,.9);
+  margin:2px 0 0; font-family:var(--display); font-size:32px; font-weight:700;
+  text-shadow:0 2px 6px rgba(0,0,0,.8), 0 6px 20px rgba(0,0,0,.5);
   animation:wr-boom .4s cubic-bezier(.2,1.4,.4,1) both;
 }
 .wr-scene-verdict.win{ color:var(--mint); }
