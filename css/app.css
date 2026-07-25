@@ -1199,10 +1199,14 @@ button{ cursor:pointer; border:0; background:none; }
 .wr-scene{
   position:absolute; inset:0; z-index:45;
   display:grid; align-content:start; justify-items:center; gap:18px;
-  padding:26px 20px 20px; background:rgba(0,0,0,.15); backdrop-filter:blur(1px);
+  padding:26px 20px 20px;
+  /* ไม่ทับพื้นหลังแล้ว — ของทุกชิ้นในฉากมีเงาของตัวเองพอให้อ่านออกบนกระดาน
+     ทับทั้งกระดานทำให้มองไม่เห็นว่าเรือกับกล่องอยู่ตรงไหน ซึ่งเป็นข้อมูลที่ต้องใช้ตัดสินใจ */
+  pointer-events:none;
 }
+.wr-scene > *{ pointer-events:auto; }
 /* ตอนกัปตันต้องคลิกเรือ ฉากต้องไม่บัง */
-.wr-scene.clear{ background:none; backdrop-filter:none; pointer-events:none; align-content:end; }
+.wr-scene.clear{ align-content:end; }
 .wr-scene.clear .wr-scene-title{ display:none; }
 .wr-scene.clear .wr-scene-body{ pointer-events:auto; }
 
@@ -1243,7 +1247,11 @@ button{ cursor:pointer; border:0; background:none; }
 .wr-scene-lines i:last-child{ right:-46vw; transform:scaleX(-1); }
 @keyframes wr-line{ from{ width:0; } to{ width:46vw; } }
 
-.wr-scene-note{ margin:0; font-size:13.5px; color:var(--ink); text-shadow:0 2px 8px rgba(0,0,0,.9); }
+.wr-scene-note{
+  margin:0; font-size:13.5px; color:#fdf6e6; font-weight:600;
+  padding:5px 12px; border-radius:999px;
+  background:rgba(8,6,20,.82); text-shadow:0 1px 4px rgba(0,0,0,.9);
+}
 .wr-scene-body{ display:grid; justify-items:center; gap:12px; }
 
 /* ── ไพ่โหวตคว่ำกลางจอ ───────────────────────────────── */
@@ -1254,8 +1262,11 @@ button{ cursor:pointer; border:0; background:none; }
   transition:transform .6s cubic-bezier(.4,0,.2,1), opacity .42s;
 }
 .wr-vb img{ width:100%; border-radius:7px; display:block;
-  box-shadow:0 6px 16px rgba(0,0,0,.6); }
-.wr-vb-name{ font-size:10.5px; color:var(--ink); text-shadow:0 1px 4px rgba(0,0,0,.9); }
+  box-shadow:0 8px 22px rgba(0,0,0,.75); }
+.wr-vb-name{
+  font-size:10.5px; color:#fdf6e6; padding:2px 7px; border-radius:999px;
+  background:rgba(8,6,20,.85); text-shadow:0 1px 3px rgba(0,0,0,.9);
+}
 .wr-vb.from-deck{ animation:wr-vb-deck .46s cubic-bezier(.2,1.2,.4,1) both; }
 @keyframes wr-vb-in{ from{ opacity:0; transform:translateY(16px) scale(.8); } }
 @keyframes wr-vb-deck{ from{ opacity:0; transform:translateX(120px) rotate(14deg); } }
@@ -1279,7 +1290,10 @@ button{ cursor:pointer; border:0; background:none; }
 .wr-vb-row.gone{ transform:scale(.1); opacity:0; transition:transform .42s, opacity .42s; }
 
 /* ── นับสัญลักษณ์ ────────────────────────────────────── */
-.wr-tallies{ display:grid; gap:8px; min-width:min(340px, 80vw); }
+.wr-tallies{
+  display:grid; gap:8px; min-width:min(340px, 80vw);
+  filter:drop-shadow(0 8px 20px rgba(0,0,0,.7));
+}
 .wr-tally{
   display:grid; grid-template-columns:74px 1fr 28px; align-items:center; gap:10px;
   padding:7px 11px; border-radius:11px;

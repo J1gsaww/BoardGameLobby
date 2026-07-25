@@ -517,7 +517,9 @@ export async function tick(ctx) {
 
   if (st.phase === 'reveal') {
     if (!due) return null;
-    return { state: openTurn({ ...st, phase: 'play', deadline: turnDeadline(st, now) }) };
+    /* ประทับเวลาที่เริ่มทอยไว้ในสถานะกลาง ทุกคนจึงเห็นลูกเต๋าพร้อมกัน
+       ของเดิมให้แต่ละเครื่องตัดสินเองว่าเคยโชว์ไปหรือยัง ใครเปิดหน้าไม่ทันก็อด */
+    return { state: openTurn({ ...st, phase: 'play', dieAt: now, deadline: turnDeadline(st, now) }) };
   }
 
   if (st.vote) {

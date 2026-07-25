@@ -574,9 +574,14 @@ export function showDice(el, sides, face, note) {
   setTimeout(() => { box.hidden = true; box.innerHTML = ''; }, ROLL_MS + 2600);
 }
 
+const DIE_WINDOW = 5200;   /* ช่วงที่ยังโชว์ลูกเต๋าอยู่ นับจากเวลาที่สถานะบอก */
+
 function paintDice(el, st) {
-  if (!st.die || st.phase !== 'play') return;   /* ทอยหลังโชว์ไพ่ประเทศจบแล้วเท่านั้น */
-  const key = st.die.sides + ':' + st.die.face + ':' + st.roundNo;
+  if (!st.die || st.phase !== 'play' || !st.dieAt) return;
+  /* เข้ามาช้ากว่าช่วงโชว์ก็ไม่ต้องโชว์ย้อนหลัง แต่ถ้ายังอยู่ในช่วงก็เห็นเหมือนกันทุกคน */
+  if (Date.now() - st.dieAt > DIE_WINDOW) return;
+
+  const key = 'die:' + st.dieAt;
   if (dieShown === key) return;
   dieShown = key;
   showDice(el, st.die.sides, st.die.face,
