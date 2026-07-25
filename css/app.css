@@ -649,8 +649,9 @@ button{ cursor:pointer; border:0; background:none; }
   height:auto; pointer-events:none;
   filter:drop-shadow(0 2px 5px rgba(0,0,0,.6));
 }
-.wr-box-b{ filter:drop-shadow(0 0 3px #7ab4ff) drop-shadow(0 2px 5px rgba(0,0,0,.6)); }
-.wr-box-f{ filter:drop-shadow(0 0 3px #f2647e) drop-shadow(0 2px 5px rgba(0,0,0,.6)); }
+/* British แดง · France น้ำเงิน — สลับจากเดิมตามที่ตกลงกันใหม่ */
+.wr-box-b{ filter:drop-shadow(0 0 3px #ff6b78) drop-shadow(0 2px 5px rgba(0,0,0,.6)); }
+.wr-box-f{ filter:drop-shadow(0 0 3px #6aa8ff) drop-shadow(0 2px 5px rgba(0,0,0,.6)); }
 
 /* ── แถบนับกล่อง ─────────────────────────────────── */
 .wr-legend{
@@ -1060,7 +1061,9 @@ button{ cursor:pointer; border:0; background:none; }
 }
 .wr-nation-tag{ font-family:var(--display); font-size:17px; font-weight:700; }
 .wr-nation-goal{ font-size:11px; color:var(--muted); line-height:1.4; }
-.n-B{ color:#7fb2ff; } .n-F{ color:#ff8f9c; } .n-D{ color:#ffc861; }
+/* British แดง · France น้ำเงิน */
+/* British แดง · France น้ำเงิน — สลับจากเดิม */
+.n-B{ color:#ff8f9c; } .n-F{ color:#7fb2ff; } .n-D{ color:#ffc861; }
 
 /* หน้าเปิดไพ่ประเทศ — บังทั้งจอไว้ก่อนเริ่มทอยลูกเต๋า */
 .wr-reveal{
@@ -1464,8 +1467,8 @@ button{ cursor:pointer; border:0; background:none; }
 .wr-side-btn:not(:disabled):hover{ border-color:currentColor; background:rgba(255,255,255,.06); }
 .wr-side-btn:disabled{ opacity:.32; cursor:not-allowed; }
 .wr-side-name{ font-family:var(--display); font-size:16px; font-weight:700; }
-.wr-side-btn.n-B .wr-side-name{ color:#7fb2ff; }
-.wr-side-btn.n-F .wr-side-name{ color:#ff8f9c; }
+.wr-side-btn.n-B .wr-side-name{ color:#ff8f9c; }
+.wr-side-btn.n-F .wr-side-name{ color:#7fb2ff; }
 .wr-side-n{ font-family:var(--mono); font-size:12px; color:var(--ink); }
 .wr-side-why{ font-size:10.5px; color:var(--muted); }
 
@@ -1499,3 +1502,22 @@ button{ cursor:pointer; border:0; background:none; }
   height:auto; pointer-events:none; opacity:.92;
   filter:drop-shadow(0 2px 5px rgba(0,0,0,.75));
 }
+
+
+/* กล่องที่เลือกไว้ว่าจะย้าย — เรืองเหลืองจนกว่าจะกดยืนยันหรือยกเลิก */
+.wr-box.picked{
+  filter:drop-shadow(0 0 7px var(--lamp)) drop-shadow(0 0 16px rgba(244,169,73,.8));
+  animation:wr-box-pick 1.4s ease-in-out infinite;
+}
+@keyframes wr-box-pick{
+  0%,100%{ filter:drop-shadow(0 0 6px var(--lamp)) drop-shadow(0 0 12px rgba(244,169,73,.55)); }
+  50%    { filter:drop-shadow(0 0 9px var(--lamp)) drop-shadow(0 0 22px rgba(244,169,73,.95)); }
+}
+
+/* ใบเปล่าในสำรับ — บอกให้ชัดว่าเป็นไพ่จริงใบหนึ่ง ไม่ใช่ภาพที่โหลดไม่ขึ้น */
+.vote-card.blank::after{
+  content:attr(data-blank);
+  position:absolute; inset:auto 0 4px; text-align:center;
+  font-family:var(--mono); font-size:8.5px; letter-spacing:.08em; color:var(--muted);
+}
+.vote-card.blank{ position:relative; }

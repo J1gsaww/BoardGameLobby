@@ -94,9 +94,24 @@ function row(face, kind, lang) {
   return `<span class="vc-row vc-${kind}">${icons || '<span class="vc-none">\u2014</span>'}</span>`;
 }
 
+/* ป้ายของใบเปล่า เก็บไว้ในไฟล์นี้เลย ไม่ผ่านระบบคีย์ภาษา
+   เพราะ i18n แตะ localStorage ตอนโหลดโมดูล ซึ่งทำให้ชุดทดสอบฝั่ง Node ล้มทั้งไฟล์ */
+const BLANK = {
+  th: { name: 'ใบเปล่า',
+        tip: 'ไพ่ใบเปล่าของสำรับ ไม่มีสัญลักษณ์ในทุกแถว ลงไปก็ไม่นับให้ฝ่ายไหน' },
+  en: { name: 'blank',
+        tip: 'The deck\u2019s blank card \u2014 no symbol on any row, so it counts for nobody' }
+};
+
 export function voteCard(card, lang = 'th') {
   if (!card) return '';
-  if (card.blank) return `<span class="vote-card blank"><span class="vc-none">\u2014</span></span>`;
+  /* ใบเปล่าเป็นไพ่จริงใบหนึ่งในสำรับ (ใบที่ 25 ไม่มีสัญลักษณ์เลยสักแถว)
+     ติดป้ายไว้ให้ชัด ไม่งั้นดูเหมือนภาพที่โหลดไม่ขึ้น */
+  if (card.blank) {
+    const b = BLANK[lang] || BLANK.th;
+    return `<span class="vote-card blank" data-blank="${esc(b.name)}" title="${esc(b.tip)}">
+      <span class="vc-none">\u2014</span></span>`;
+  }
   return `<span class="vote-card">
     ${row(card.attack, 'attack', lang)}
     ${row(card.brawl, 'brawl', lang)}

@@ -128,7 +128,16 @@ function shell(el, ctx) {
   // ผูกปุ่มครั้งเดียวด้วยการดักที่ตัวแม่ ปุ่มข้างในจึงไม่ต้องผูกใหม่ทุกรอบ
   el.querySelector('.wr-pieces').addEventListener('click', e => {
     const box = e.target.closest('[data-cargo]');
-    if (box) { openMenu(el, box, { kind: 'cargo', cargo: box.dataset.cargo }); return; }
+    if (box) {
+      /* คลิกกล่อง = เลือกกล่องนั้นเป็นกล่องที่จะย้าย แล้วรอยืนยัน
+         เก็บฝั่งของกล่องไว้ใน plan.from เลย จะได้ไม่ต้องเลือกทิศซ้ำอีกรอบ */
+      const [, side] = String(box.dataset.cargo).split(':');
+      plan = { act: 'shiftCargo', from: side === 'f' ? 'F' : 'B',
+               box: box.dataset.cargo, via: 'menu' };
+      openMenu(el, box, { kind: 'cargo', cargo: box.dataset.cargo });
+      paint(el);
+      return;
+    }
 
     const b = e.target.closest('[data-spot]');
     if (!b) { if (!plan) closeMenu(); paint(el); return; }
@@ -147,7 +156,7 @@ function shell(el, ctx) {
     if (now && meUid && BOAT_IDS.includes(boat)
         && actionsFor(now, meUid).includes('toBoat')
         && boatsFrom(now.pos?.[meUid]).includes(boat)) {
-      plan = { act: 'toBoat', boat, from: 'menu' };
+      plan = { act: 'toBoat', boat, via: 'menu' };
       openMenu(el, b, { kind: 'aim' });
       paint(el);
       return;
@@ -307,6 +316,11 @@ export function render(el, ctx) {
   /* ช่วงกัปตันเล็งเป้า — เรือที่ยิงได้เรืองแสง ชี้แล้วโตขึ้นและเป็นสีแดง คลิกคือเลือก
      ทำบนกระดานจริงไม่ใช่ในฉาก เพราะต้องเห็นว่ากล่องอยู่ลำไหนก่อนตัดสินใจ */
   const aimMine = st.aim && st.aim.by === ctx.me.uid && !st.aim.target;
+  /* กล่องที่กำลังจะย้าย เรืองเหลืองไว้ให้เห็นว่าเลือกใบไหนอยู่ */
+  el.querySelectorAll('[data-cargo]').forEach(b => {
+    b.classList.toggle('picked', plan?.act === 'shiftCargo' && plan.box === b.dataset.cargo);
+  });
+
   el.querySelectorAll('[data-piece]').forEach(node => {
     const hot = aimMine && st.aim.options.includes(node.dataset.piece);
     node.classList.toggle('aim-hot', !!hot);
@@ -316,7 +330,7 @@ export function render(el, ctx) {
       ? (e) => {
           e.stopPropagation();
           /* เปิดเมนูยืนยันติดกับเรือลำที่คลิก จะได้เห็นชัดว่ากำลังเล็งลำไหน */
-          plan = { act: 'aimAt', target: node.dataset.piece, from: 'menu' };
+          plan = { act: 'aimAt', target: node.dataset.piece, via: 'menu' };
           openMenu(el, node, { kind: 'aim' });
           paint(el);
         }
@@ -731,7 +745,7 @@ function paintMenu(el, st, ctx) {
 function pawnMenu(st, ctx) {
   /* มีแผนที่เริ่มจากเมนูนี้ค้างอยู่ ก็แสดงแผนกับปุ่มยืนยันตรงนี้เลย
      ไม่ต้องให้ผู้เล่นเหลือบไปหาปุ่มยืนยันที่อีกมุมจอ */
-  if (plan?.from === 'menu') return planBody(st, ctx);
+  if (plan?.via === 'menu') return planBody(st, ctx);
 
   const meUid = ctx.me.uid;
   const spot = st.pos?.[menu.uid];
@@ -742,7 +756,11 @@ function pawnMenu(st, ctx) {
   if (mine) {
     /* ถามกติกาว่าทำอะไรได้จริงตอนนี้ ไม่ใช่ลอกรายการตามบทบาทดิบ ๆ
        ของเดิมกัปตันอยู่คนเดียวก็ยังเห็นปุ่มไล่คนลงเรือ ทั้งที่ไม่มีใครให้ไล่ */
-    const acts = actionsFor(st, meUid).filter(k => !['voteCard', 'toBoat'].includes(k));
+    /* Action ที่ทำผ่านแถวการ์ดด้านล่างอยู่แล้ว ไม่ต้องมาซ้ำในเมนูข้างตัว
+       เพราะกดจากตรงนี้ก็ยังต้องไปเลือกช่องการ์ดอยู่ดี ไม่ได้ช่วยอะไร */
+    const viaCards = ['activate', 'peek', 'force'];
+    const acts = actionsFor(st, meUid)
+      .filter(k => !['voteCard', 'toBoat'].includes(k) && !viaCards.includes(k));
     acts.forEach(k => rows.push(btnRow(k, t('wreck.act.' + k), true)));
 
     const boats = boatsFrom(spot);
@@ -792,9 +810,9 @@ const btnRow = (act, label, on, arg = '', tip = '') =>
    เมนูต้องไม่ปิดตัวเอง ไม่งั้นแผนจะหายไปพร้อมเมนูโดยไม่มีอะไรให้กด */
 function runMenu(el, ctx, act, arg) {
   if (act === 'force') { closeMenu(); forcing = arg; picks = []; paint(el); return; }
-  if (act === 'move') plan = { act: 'toBoat', boat: String(arg).split(':')[0], from: 'menu' };
-  else if (act === 'kick') plan = { act: 'kick', uid: arg, from: 'menu' };
-  else plan = { act, from: 'menu' };
+  if (act === 'move') plan = { act: 'toBoat', boat: String(arg).split(':')[0], via: 'menu' };
+  else if (act === 'kick') plan = { act: 'kick', uid: arg, via: 'menu' };
+  else plan = { act, via: 'menu' };
   paint(el);
 }
 
@@ -897,6 +915,12 @@ export function planBody(st, ctx) {
   if (plan.act === 'aimAt') {
     rows = `<div class="wr-plan-row"><span>${esc(t('wreck.plan.target'))}</span>
       <span class="wr-chip on">${esc(t('wreck.place.' + plan.target))}</span></div>`;
+  } else if (plan.act === 'shiftCargo' && plan.box) {
+    /* เลือกกล่องจากกระดานมาแล้ว ไม่ต้องถามทิศซ้ำ บอกแค่ว่าจะย้ายไปไหน */
+    const to = plan.from === 'B' ? 'F' : 'B';
+    rows = `<div class="wr-plan-row"><span>${esc(t('wreck.plan.move'))}</span>
+      <span class="wr-chip on">${esc(t('wreck.' + (plan.from === 'B' ? 'british' : 'france')))}
+        \u2192 ${esc(t('wreck.' + (to === 'B' ? 'british' : 'france')))}</span></div>`;
   } else if (plan.act === 'shiftCargo') {
     /* บอกจำนวนกล่องจริงของทั้งสองฝั่ง และปิดทิศที่ทำไม่ได้
        ของเดิมมีแค่ปุ่มสองปุ่มที่ไม่บอกอะไรเลยว่ากำลังย้ายอะไรไปไหน */
@@ -943,8 +967,8 @@ export function wirePlan(box, el, ctx) {
   if (off) off.onclick = () => { plan = null; closeMenu(); paint(el); };
   const go = box.querySelector('[data-plan="go"]');
   if (go) go.onclick = () => {
-    const { act, from: origin, ...rest } = plan;
-    void origin;
+    const { act, via, ...rest } = plan;
+    void via;
     plan = null;
     closeMenu();
     ctx.send(act, rest);
