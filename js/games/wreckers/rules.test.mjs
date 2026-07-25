@@ -13,7 +13,7 @@ import {
   actionsFor, boatsOpen, canShift, maroon, pileOf, redeal, shuffle,
   startVote, voters, voteReady, tallyRow, attackPasses, mutinyPasses, brawlSplit,
   moveBox, countBoxes, score, winningSide, winners, dutchCount, dealNations, dutchAllowed,
-  attackTargets, takeSides, keepSides, canAttack, canVoteNow,
+  attackTargets, takeSides, keepSides, canAttack, canVoteNow, refill,
   holdCard, dropHeld, giveCard, addSkip, owesSkip, burnSkip, advance,
   addVoteBan, isVoteBanned, burnVoteBans, voteWeight, setVoteWeight, clearVoteWeights,
   addMark, markCount, marksIn, clearMark, swapSpots, shuffleQueue,
@@ -410,13 +410,18 @@ ok('ตั้งค่าค้างไว้แล้วคนเปลี่�
 
 const members = P.map((uid, i) => ({ uid, role: 'player', left: false, seat: i, name: uid.toUpperCase(), online: true }));
 
+/* มือเริ่มต้นต้องไม่ซ้ำกันระหว่างคน
+   ของเดิมแจก v01,v02,v03 ให้ทุกคนเหมือนกัน ซึ่งเป็นสถานะที่เกิดขึ้นจริงไม่ได้
+   และทำให้เทสเรื่องจำนวนไพ่ทั้งระบบเชื่อถือไม่ได้ */
+const seatHand = (i) => [1, 2, 3].map(n => 'v' + String(i * 3 + n).padStart(2, '0'));
+
 function ctxOf(state, hands = {}, nations = {}, picks = {}) {
   return {
     state,
     members,
     settings: { turnSeconds: 60 },
-    secrets: Object.fromEntries(P.map(u => [u, {
-      vote: hands[u] || ['v01', 'v02', 'v03'],
+    secrets: Object.fromEntries(P.map((u, i) => [u, {
+      vote: hands[u] || seatHand(i),
       nation: nations[u] || 'B',
       pick: picks[u] || null
     }]))
@@ -655,8 +660,10 @@ group('ต่อสาย · ผลของการโหวต');
     ok('ยิงไม่ติด ผ่านตาไปเลย', done.state.turn, 'b');
     ok('ไม่มีช่วงเลือกเป้า', !done.state.aim, true);
   }
-  ok('ทุกคนได้มือใหม่ครบตามเพดาน', Object.values(done.state.votes), [3, 3, 3, 3, 3, 3]);
-  ok('สับใหม่แล้วกองเหลือเท่าเดิม', done.state.voteDeck, DECK.length - 18);
+  ok('ทุกคนถือครบตามเพดานอีกครั้ง', Object.values(done.state.votes), [3, 3, 3, 3, 3, 3]);
+  /* วัดเป็นความสัมพันธ์ ไม่ใช่ตัวเลขตายตัว — ไพ่ต้องไม่หายและไม่งอกไม่ว่าจะกี่คน */
+  const inHand = Object.values(done.state.votes).reduce((n, x) => n + x, 0);
+  ok('ไพ่ไม่หายไม่งอก มือรวมกับกองเท่าสำรับ', done.state.voteDeck + inHand, DECK.length);
 }
 {
   /* หม้อไม่มีปืนใหญ่เลย โจมตีต้องไม่สำเร็จ กล่องต้องอยู่ที่เดิม */
@@ -1119,4 +1126,28 @@ group('ชั้น 3 · ไพ่โหวตหมดถาวรแล้ว�
                maxVote: Object.fromEntries(P.map(u => [u, 0])),
                votes: Object.fromEntries(P.map(u => [u, 0])) };
   ok('ไม่เหลือผู้ร่วมโหวตเลยสักคน', voters(st, 'attack', 'shipL'), []);
+}
+
+
+group('ชั้น 3 · จั่วทดแทนเฉพาะใบที่ลงไป');
+{
+  const seats = ['a', 'b', 'c'];
+  const cap = { a: 3, b: 3, c: 3 };
+  const hands = { a: ['v01', 'v02'], b: ['v04', 'v05'], c: ['v07', 'v08', 'v09'] };
+
+  const r = refill(seats, hands, cap, zero);
+  ok('ใบเดิมในมือไม่ถูกแตะเลย', hands.a.every(x => r.hands.a.includes(x)), true);
+  ok('เติมจนเต็มเพดาน', [r.hands.a.length, r.hands.b.length, r.hands.c.length], [3, 3, 3]);
+  ok('คนที่ยังเต็มอยู่ไม่ได้ใบใหม่', r.hands.c, hands.c);
+
+  const all = [...r.hands.a, ...r.hands.b, ...r.hands.c];
+  ok('ไม่มีไพ่ซ้ำระหว่างมือ', new Set(all).size, all.length);
+  ok('จำนวนไพ่ทั้งระบบไม่เปลี่ยน', all.length + r.pile.length, DECK.length);
+  ok('ไพ่ที่เพิ่งลงไปในหม้อกลับเข้ากองเอง', r.pile.includes('v03'), true);
+
+  const cut = refill(seats, hands, { a: 1, b: 3, c: 3 }, zero);
+  ok('เพดานลดแล้วมือถูกตัดให้เท่าเพดาน', cut.hands.a.length, 1);
+
+  const none = refill(seats, hands, { a: 0, b: 3, c: 3 }, zero);
+  ok('เพดานเหลือศูนย์ก็ไม่มีไพ่เลย', none.hands.a, []);
 }

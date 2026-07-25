@@ -254,6 +254,33 @@ export function redeal(seats, maxVote, rng = Math.random) {
   return { hands, pile: bag };
 }
 
+/* จั่วทดแทนเฉพาะใบที่ลงไป — มือที่เหลือไม่ถูกแตะเลย
+
+   ต่างจาก redeal ตรงที่ไม่ได้สับใหม่ทั้งวง ใบที่ถืออยู่จึงอยู่กับที่ข้ามการโหวต
+   ผลคือการจำว่าใครน่าจะถืออะไรมีความหมายจริง และการเลือกว่าจะทิ้งใบไหน
+   กลายเป็นการตัดสินใจระยะยาว ไม่ใช่แค่รอบนี้
+
+   กองที่เหลือ = สำรับทั้งใบ ลบมือทุกคน ไพ่ที่เพิ่งลงไปในหม้อจึงกลับเข้ากองเอง
+   เพราะมันไม่อยู่ในมือใครแล้ว ไม่ต้องเก็บกองทิ้งไว้ที่ไหน */
+export function refill(seats, hands, maxVote, rng = Math.random) {
+  const held = new Set(Object.values(hands).flat());
+  const bag = shuffle(DECK.map(c => c.id).filter(id => !held.has(id)), rng);
+
+  const out = {};
+  for (const uid of seats) {
+    /* ไม่รู้ว่าคนนี้ถืออะไรอยู่ = ห้ามแจกให้เด็ดขาด
+       เพราะไพ่ของเขาไม่ได้ถูกกันออกจากกอง ถ้าแจกจะได้ใบซ้ำกับที่เขาถืออยู่
+       ปล่อยมือเขาไว้เฉย ๆ ปลอดภัยกว่าเดาแล้วทำให้ไพ่งอกในระบบ */
+    if (!(uid in hands)) continue;
+
+    const want = Math.max(0, maxVote?.[uid] ?? 0);
+    const mine = [...(hands[uid] || [])].slice(0, want);
+    while (mine.length < want && bag.length) mine.push(bag.shift());
+    out[uid] = mine;
+  }
+  return { hands: out, pile: bag };
+}
+
 /* ── การโหวต ───────────────────────────────────────────────
    ผู้ร่วมโหวตคือทุกคนในสถานที่เดียวกับคนสั่ง
    ข้อยกเว้นเดียว: ก่อกบฏ กัปตันโหวตไม่ได้ เพราะเป็นคนที่ถูกโหวตเอง */

@@ -23,7 +23,7 @@ import {
   actionsFor, boatsOpen, maroon, pileOf, shuffle, redeal, advance, burnVoteBans, clearVoteWeights,
   buildEventDeck, refillSlots, emptyDeck,
   startVote, voteReady, tallyRow, attackPasses, mutinyPasses, brawlSplit,
-  moveBox, score, winningSide, winners, dealNations, pushLog,
+  moveBox, score, winningSide, winners, dealNations, pushLog, refill,
   attackTargets, takeSides, keepSides, canAttack
 } from './rules.js';
 
@@ -485,11 +485,13 @@ export function reveal(ctx, st, hands, picks, rng = Math.random) {
      ส่วนน้ำหนักเสียงพิเศษใช้ได้ครั้งเดียว จบหม้อนี้ก็ล้างทิ้ง */
   next = clearVoteWeights(burnVoteBans(next, Object.keys(next.voteBan || {})));
 
-  /* สับใหม่ทั้งสำรับแล้วแจกคืน — ทุกคนได้มือใหม่หมดหลังโหวตทุกครั้ง */
-  const fresh = redeal(next.seats, next.maxVote, rng);
+  /* จั่วทดแทนเฉพาะใบที่ลงไป มือที่เหลืออยู่กับที่
+     ไพ่ที่ส่งเข้าหม้อถูกตัดออกจากมือไปแล้วตอนส่ง จึงกลับเข้ากองเองโดยอัตโนมัติ */
+  const fresh = refill(next.seats, hands, next.maxVote, rng);
   next = {
     ...next,
-    votes: countHands(fresh.hands),
+    /* รวมกับของเดิม เพราะ refill ข้ามคนที่ไม่รู้มือไป ถ้าเขียนทับหมดชื่อเขาจะหาย */
+    votes: { ...next.votes, ...countHands(fresh.hands) },
     voteDeck: fresh.pile.length,
     /* เก็บผลไว้ให้หน้าจอโชว์ต่อ เพราะ passTurn จะล้าง vote ทิ้ง */
     lastVote: { kind: v.kind, place: v.place, caller: v.caller,
