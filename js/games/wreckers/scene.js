@@ -38,8 +38,9 @@ const ATTACK_ORDER = [
 
 let key = '';        // ฉาก (หนึ่งการโหวตทั้งกระบวน)
 let at = 0;          // เริ่มฉากตอนกี่โมง
-let stage = '';      // ช่วงย่อยที่สร้าง DOM ไปแล้ว
+let phase = '';      // ช่วงย่อยที่ไปถึงแล้ว
 let stageAt = 0;     // ช่วงย่อยเริ่มตอนกี่โมง
+let aimView = '';    // มุมมองย่อยของช่วงกัปตันเลือก
 let raf = 0;
 let seen = new Set();
 let sendFn = null;
@@ -57,12 +58,18 @@ function sceneKey(st) {
 
 export function stopScene() {
   if (raf) cancelAnimationFrame(raf);
-  raf = 0; key = ''; stage = ''; seen = new Set();
+  raf = 0; key = ''; phase = ''; aimView = ''; seen = new Set();
 }
 
-function setStage(name) {
-  if (stage === name) return false;
-  stage = name; stageAt = now();
+/* ช่วงย่อยเดินหน้าอย่างเดียว ถอยกลับไม่ได้เด็ดขาด
+   บั๊กที่เจอมาแล้ว: reveal() สั่งเข้าช่วง pot ทุกเฟรมโดยไม่ดูว่าเลยไปถึง tally แล้ว
+   พอถึง tally เฟรมถัดไปก็ดีดกลับมา pot แล้วสร้างไพ่ใหม่ วนไม่มีวันจบ */
+const ORDER = ['collect', 'pot', 'tally', 'aim'];
+const rank = (p) => ORDER.indexOf(p);
+
+function goto(name) {
+  if (rank(name) <= rank(phase)) return false;
+  phase = name; stageAt = now();
   return true;
 }
 
@@ -81,7 +88,7 @@ export function paintScene(el, st, ctx) {
   }
 
   if (key !== want) {
-    key = want; at = now(); stage = ''; seen = new Set();
+    key = want; at = now(); phase = ''; aimView = ''; seen = new Set();
     box.hidden = false;
     box.innerHTML = `
       <div class="wr-scene-title">
@@ -108,20 +115,33 @@ export function paintScene(el, st, ctx) {
   body.hidden = ms < T.intro;
 
   let busy = ms < T.intro;
-  if (!body.hidden) {
-    if (st.vote) busy = collect(body, st) || busy;
-    else if (st.lastVote && !doneShowing(st)) busy = reveal(body, st) || busy;
-    else if (st.aim) aim(body, st, ctx);
-    else busy = reveal(body, st) || busy;
-  }
+  if (!body.hidden) busy = step(body, st, ctx) || busy;
 
   /* ขอเฟรมถัดไปเฉพาะตอนที่ยังมีอะไรขยับจริง ๆ */
   if (busy) raf = requestAnimationFrame(() => paintScene(el, st, ctx));
 }
 
-/* เล่าจบแล้วหรือยัง — จบแล้วก็หยุดขอเฟรม ปล่อยให้ค้างไว้เฉย ๆ */
-function doneShowing(st) {
-  return stage === 'tally' && !!st.aim;
+/* ตัวเดินเรื่อง — ตัดสินว่าตอนนี้ควรอยู่ช่วงไหน แล้วเดินไปข้างหน้าเท่านั้น
+   คืนค่า true เมื่อยังมีอะไรขยับ เพื่อขอเฟรมถัดไป */
+function step(body, st, ctx) {
+  if (st.vote) { goto('collect'); return collect(body, st); }
+
+  /* เข้ามาตอนกัปตันกำลังเลือกอยู่แล้ว ก็ข้ามการเล่าย้อนหลังไปเลย */
+  if (!phase && st.aim) { goto('aim'); return aim(body, st, ctx); }
+
+  if (st.lastVote && rank(phase) < rank('tally')) {
+    if (pot(body, st.lastVote)) return true;
+    goto('tally');
+  }
+
+  if (phase === 'tally') {
+    if (tally(body, st.lastVote)) return true;
+    if (!st.aim) return false;          /* ยิงไม่ติดก็จบแค่นี้ ค้างผลไว้ */
+    goto('aim');
+  }
+
+  if (phase === 'aim' && st.aim) return aim(body, st, ctx);
+  return false;
 }
 
 function titleOf(st) {
@@ -138,7 +158,7 @@ function titleOf(st) {
 
 /* ── รอไพ่ ─────────────────────────────────────────────── */
 function collect(body, st) {
-  if (setStage('collect')) {
+  if (goto('collect') || !body.querySelector('.wr-vb-row')) {
     body.innerHTML = `<div class="wr-vb-row wiggle"></div><p class="wr-scene-note"></p>`;
   }
   const row = body.querySelector('.wr-vb-row');
@@ -168,18 +188,16 @@ function voteBack(name) {
 
 /* ── เปิดผล ────────────────────────────────────────────
    ไม่ล้างไพ่ที่มีอยู่ — เติมใบจากกองกลางต่อท้าย แล้วค่อยรวมกันหุบหาย */
-function reveal(body, st) {
-  const v = st.lastVote;
-  if (!v) return false;
-  const pot = v.pot || [];
+function pot(body, v) {
+  const cards = v.pot || [];
 
-  if (setStage('pot')) {
+  if (goto('pot')) {
     let row = body.querySelector('.wr-vb-row');
     if (!row) {
       /* เข้ามากลางคัน ไม่ทันเห็นช่วงรอไพ่ ก็สร้างไพ่ทั้งกองขึ้นมาเลย */
       body.innerHTML = `<div class="wr-vb-row"></div><p class="wr-scene-note"></p>`;
       row = body.querySelector('.wr-vb-row');
-      pot.slice(0, -1).forEach(() => row.appendChild(voteBack('')));
+      cards.slice(0, -1).forEach(() => row.appendChild(voteBack('')));
     }
     row.classList.remove('wiggle');
     const extra = voteBack('');
@@ -210,13 +228,13 @@ function reveal(body, st) {
     row.classList.toggle('merge', ms > T.deckCard);
     row.classList.toggle('gone', ms > T.deckCard + T.merge);
   }
-  if (ms < T.deckCard + T.merge + T.vanish) return true;
-
-  return tally(body, v);
+  return ms < T.deckCard + T.merge + T.vanish;
 }
 
 function tally(body, v) {
-  if (setStage('tally')) {
+  if (!v) return false;
+  if (goto('tally') || !body.querySelector('.wr-tallies')) {
+    stageAt = stageAt || now();
     body.innerHTML = `<div class="wr-tallies"></div>`;
     const wrap = body.querySelector('.wr-tallies');
     for (const sym of ATTACK_ORDER) {
@@ -265,7 +283,8 @@ function tally(body, v) {
 function aim(body, st, ctx) {
   const mine = st.aim.by === ctx.me.uid;
   const want = mine ? (st.aim.target ? 'side' : 'pick') : 'wait';
-  if (!setStage('aim:' + want)) return;
+  if (aimView === want) return false;
+  aimView = want;
 
   if (want === 'wait') {
     body.innerHTML = `<p class="wr-scene-note">${esc(t('wreck.scene.waitAim', {
@@ -282,6 +301,7 @@ function aim(body, st, ctx) {
       b.onclick = () => sendFn?.('storeAt', { side: b.dataset.side });
     });
   }
+  return false;
 }
 
 /* ยังต้องมีให้ ui.js เรียกได้ แม้ตอนนี้จะไม่ได้ใช้แผนในฉากแล้ว */
