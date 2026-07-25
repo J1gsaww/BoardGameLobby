@@ -18,7 +18,7 @@ const FIRESTORE_API = [
 
 export let db = null;
 export let fb = {};
-export const me = { uid: null };
+export const me = { uid: null, drifted: false };
 
 export async function connect() {
   const cfg = window.FIREBASE_CONFIG;
@@ -54,8 +54,22 @@ export async function connect() {
     throw new AppError('err.signInFailed', { msg: 'Firestore API ไม่ครบ: ' + missing.join(', ') });
   }
 
+  /* ไม่ถอดตัวดักออกหลังได้ uid แรก — ปล่อยให้ตามตัวตนจริงตลอดอายุแท็บ
+     โหมด ?dev=multi เก็บ session ไว้ในแรม พอหลุดแล้วเข้าใหม่จะได้ผู้ใช้คนใหม่
+     ถ้า me.uid ยังค้างเป็นคนเก่า ทุกอย่างที่เขียนจะโดนกฎปฏิเสธ ทั้งที่หน้าจอดูปกติ */
   const user = await new Promise((res, rej) => {
-    const stop = a.onAuthStateChanged(auth, u => { if (u) { stop(); res(u); } });
+    let first = true;
+    a.onAuthStateChanged(auth, u => {
+      if (!u) return;
+      if (first) { first = false; res(u); return; }
+      if (u.uid !== me.uid) {
+        console.error('[net] ตัวตนเปลี่ยนกลางคัน', me.uid, '→', u.uid,
+          '· ต้องออกแล้วเข้าห้องใหม่ ไม่งั้นจะเขียนอะไรไม่ได้เลย');
+        me.uid = u.uid;
+        me.drifted = true;
+      }
+    });
+    const stop = () => {};
     a.signInAnonymously(auth).catch(e => {
       stop();
       rej(

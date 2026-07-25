@@ -54,6 +54,7 @@ export const room = {
 let watchers = [];
 let unsubs = [];
 let beat = null;
+let beatWarned = false;
 let profileName = 'ผู้เล่น';
 let skew = 0;            // ต่างระหว่างนาฬิกาเครื่องนี้กับของเซิร์ฟเวอร์
 let lastBeatAt = 0;
@@ -228,9 +229,18 @@ function attach(code) {
   }, err => console.error('[secret]', err)));
 
   lastBeatAt = Date.now();
+  beatWarned = false;
   beat = setInterval(() => {
     lastBeatAt = Date.now();
-    fb.updateDoc(memberRef(me.uid), { lastSeen: fb.serverTimestamp() }).catch(() => {});
+    /* เคยกลืน error ทิ้งทั้งหมด ทำให้ปัญหาสิทธิ์กลายเป็นอาการ "อยู่ดี ๆ ก็หลุด"
+       ซึ่งไล่หาสาเหตุยากมาก ตอนนี้เตือนครั้งเดียวแล้วเงียบต่อ */
+    fb.updateDoc(memberRef(me.uid), { lastSeen: fb.serverTimestamp() }).catch(e => {
+      if (!beatWarned && String(e.code || '').includes('permission-denied')) {
+        beatWarned = true;
+        console.error('[room] เขียนสัญญาณชีพไม่ได้ — uid ในเครื่องไม่ตรงกับ token จริง'
+          + ' คนอื่นจะเห็นว่าเราหลุด ทั้งที่หน้าจอยังปกติ');
+      }
+    });
   }, HEARTBEAT);
 
   window.addEventListener('beforeunload', bail);
@@ -472,9 +482,12 @@ let hostUnsubs = [];
 let queue = [];
 let busy = false;
 let clock = null;
+let denyAt = 0;          /* ครั้งล่าสุดที่เซิร์ฟเวอร์ปฏิเสธว่าเราเป็นเจ้าของห้อง */
+
+const DENY_COOL = 8000;   /* โดนปฏิเสธแล้วเว้นสักพักค่อยลองใหม่ กันวนถี่ ๆ */
 
 function syncHostDuties() {
-  if (room.isHost && !hostUnsubs.length) startHostDuties();
+  if (room.isHost && !hostUnsubs.length && Date.now() - denyAt > DENY_COOL) startHostDuties();
   if (!room.isHost && hostUnsubs.length) stopHostDuties();
   if (room.isHost) armClock();
 }
@@ -488,16 +501,29 @@ function startHostDuties() {
   }
 }
 
+/* listener ของเจ้าของห้องล้มเพราะสิทธิ์ = เราไม่ใช่เจ้าของห้องจริงในสายตาเซิร์ฟเวอร์
+   ต้องเลิกทำหน้าที่ทันที ไม่ใช่ปล่อยให้ error วนไปเรื่อย ๆ จนคอนโซลท่วม
+   เกิดได้สองทาง — โดนคนอื่นยึดตำแหน่งไปแล้ว หรือ uid ในเครื่องไม่ตรงกับ token จริง */
+function hostDenied(where, err) {
+  console.error(`[${where}]`, err.code || err);
+  if (String(err.code || '').includes('permission-denied')) {
+    console.warn('[room] เซิร์ฟเวอร์ไม่ยอมรับว่าเราเป็นเจ้าของห้อง เลิกทำหน้าที่แล้ว'
+      + ' — เช็กว่าโดนยึดตำแหน่งไปหรือ uid ในเครื่องไม่ตรงกับ token');
+    stopHostDuties();
+    denyAt = Date.now();
+  }
+}
+
 function attachHostListeners() {
   hostUnsubs.push(fb.onSnapshot(secretsOf(), s => {
     room.secrets = Object.fromEntries(s.docs.map(d => [d.id, d.data()]));
     emit();
-  }, err => console.error('[secrets]', err)));
+  }, err => hostDenied('secrets', err)));
 
   hostUnsubs.push(fb.onSnapshot(fb.query(actionsOf(), fb.orderBy('at')), s => {
     s.docChanges().forEach(c => { if (c.type === 'added') queue.push(c.doc); });
     drain();
-  }, err => console.error('[actions]', err)));
+  }, err => hostDenied('actions', err)));
 }
 
 function stopHostDuties() {
@@ -665,11 +691,17 @@ async function maybeClaimHost() {
 
   claiming = true;
   try {
+    /* หน่วงแบบสุ่มสั้น ๆ ก่อนยึด — ทุกเครื่องคำนวณด้วยข้อมูลชุดเดียวกัน
+       ถ้ายิงพร้อมกันเป๊ะจะแย่งกันไปมาไม่จบ หน่วงคนละนิดแล้วคนแรกชนะไปเลย */
+    await new Promise(r => setTimeout(r, 200 + Math.random() * 500));
+    if (room.isHost || !room.doc) return;      /* ระหว่างหน่วงมีคนยึดไปแล้ว */
+
     await fb.updateDoc(roomRef(), { hostUid: me.uid, touchedAt: fb.serverTimestamp() });
     console.info('[room] รับตำแหน่งเจ้าของห้องแทนคนที่หลุด');
   } catch (e) {
     console.warn('ยึดตำแหน่งไม่สำเร็จ (อาจมีคนอื่นยึดไปก่อน)', e.code || e);
+    denyAt = Date.now();                       /* ยึดไม่ได้ก็อย่าเพิ่งไปเปิดหน้าที่ */
   } finally {
-    setTimeout(() => { claiming = false; }, 3000);
+    setTimeout(() => { claiming = false; }, 4000);
   }
 }
