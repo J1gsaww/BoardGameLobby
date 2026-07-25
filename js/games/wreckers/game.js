@@ -22,7 +22,8 @@ import {
   actionsFor, boatsOpen, maroon, pileOf, shuffle, redeal, advance, burnVoteBans, clearVoteWeights,
   buildEventDeck, refillSlots, emptyDeck,
   startVote, voteReady, tallyRow, attackPasses, mutinyPasses, brawlSplit,
-  moveBox, score, winningSide, winners, dealNations, pushLog, attackTargets
+  moveBox, score, winningSide, winners, dealNations, pushLog,
+  attackTargets, takeSides, keepSides, canAttack
 } from './rules.js';
 
 /* เวลาค้างหน้าไพ่ประเทศก่อนเริ่มทอยลูกเต๋า */
@@ -192,6 +193,7 @@ export async function onAction(ctx, action) {
     case 'shiftCargo': return shiftCargo(ctx, uid, payload.from);
     case 'attack':     return callVote(ctx, uid, 'attack', payload);
     case 'aimAt':      return aimAt(ctx, uid, payload);
+    case 'takeFrom':   return takeFrom(ctx, uid, payload);
     case 'storeAt':    return storeAt(ctx, uid, payload);
     case 'mutiny':     return callVote(ctx, uid, 'mutiny', payload);
     case 'islandVote': return callVote(ctx, uid, 'islandVote', payload);
@@ -255,9 +257,17 @@ function activate(ctx, uid, { slot }) {
     lastEvent: { id, by: uid, slot: i, at: (st.logSeq || 0) + 1 }
   };
 
+  /* ช่องนี้ได้ใบใหม่แล้ว ความรู้เดิมของทุกคนเกี่ยวกับช่องนี้ต้องหายไปด้วย
+     ไม่งั้นจะเห็นหน้าไพ่เก่าค้างอยู่ทั้งที่ของจริงเปลี่ยนไปแล้ว */
+  const cleared = {};
+  for (const [u, sec] of playerSecrets(ctx)) {
+    if (!sec?.peek?.seen?.some(x => x.slot === i)) continue;
+    cleared[u] = { ...sec, peek: { ...sec.peek, seen: sec.peek.seen.filter(x => x.slot !== i) } };
+  }
+
   return {
     state: passTurn(pushLog(shown, 'wreck.log.activate', { name: st.names?.[uid] })),
-    secrets: { _deck: next }
+    secrets: { _deck: next, ...cleared }
   };
 }
 
@@ -284,22 +294,27 @@ function peek(ctx, uid, { slot }) {
 
   const need = Math.min(2, deck.slots.filter(Boolean).length);
   const slots = [...(cur?.slots || []), i];
+  const openSlots = slots.map(n => n + 1).join(', ');
   const mine = ctx.secrets?.[uid] || {};
 
-  /* เริ่มดูรอบใหม่ = ล้างของเก่าทิ้ง · ดูใบที่สองต่อ = ต่อท้ายของรอบนี้ */
-  const seen = [...(cur ? (mine.peek?.seen || []) : []), { slot: i, id }];
+  /* ความรู้เก่าไม่หายเมื่อแอบดูรอบใหม่ — รู้แล้วรู้เลยจนกว่าใบนั้นจะถูกเปิดไป
+     เก็บทีละช่อง ช่องเดิมที่ดูซ้ำก็แค่ทับข้อมูลเดิม */
+  const keep = (mine.peek?.seen || []).filter(x => x.slot !== i);
+  const seen = [...keep, { slot: i, id }];
   const secrets = { [uid]: { ...mine, peek: { seen, at: (st.logSeq || 0) + 1 } } };
 
   if (slots.length < need) {
     return {
-      state: pushLog({ ...st, peek: { uid, slots, left: need - slots.length } },
+      state: pushLog({ ...st, peek: { uid, slots, left: need - slots.length },
+                       lastPeek: { by: uid, slots, at: (st.logSeq || 0) + 1 } },
                      'wreck.log.peekOne', { name: st.names?.[uid], n: need - slots.length }),
       secrets
     };
   }
 
-  const done = pushLog({ ...st, peek: null }, 'wreck.log.peek',
-                       { name: st.names?.[uid], n: slots.length });
+  const done = pushLog({ ...st, peek: null,
+                         lastPeek: { by: uid, slots, at: (st.logSeq || 0) + 1 } },
+                       'wreck.log.peek', { name: st.names?.[uid], at: openSlots });
   return { state: passTurn(done), secrets };
 }
 
@@ -446,15 +461,29 @@ export function resolveAttack(st, n) {
 
   return pushLog({
     ...st,
-    aim: { by: v.caller, place: v.place, options: attackTargets(v.place), target: null }
+    aim: {
+      by: v.caller, place: v.place,
+      options: attackTargets(v.place, st.cargo),
+      target: null, from: null
+    }
   }, 'wreck.log.attackWin', {});
 }
 
 /* กัปตันเลือกลำที่จะยิง */
 function aimAt(ctx, uid, { target }) {
   const st = ctx.state;
-  if (!st.aim?.options.includes(target)) return null;
-  return { state: { ...st, aim: { ...st.aim, target } } };
+  if (st.aim?.by !== uid) return null;
+  if (!st.aim.options.includes(target)) return null;
+  return { state: { ...st, aim: { ...st.aim, target, from: null } } };
+}
+
+/* ยิงเรืออีกลำต้องเลือกด้วยว่าจะขโมยกล่องจากฝั่งประเทศไหน
+   ฝั่งที่ไม่มีกล่องเลยเลือกไม่ได้ ไม่งั้นจะยิงแล้วไม่ได้อะไร */
+function takeFrom(ctx, uid, { side }) {
+  const st = ctx.state;
+  if (st.aim?.by !== uid || !st.aim.target) return null;
+  if (!takeSides(st.cargo, st.aim.target).includes(side)) return null;
+  return { state: { ...st, aim: { ...st.aim, from: side } } };
 }
 
 /* แล้วเลือกว่าจะเก็บกล่องไว้ฝั่งประเทศไหน — ถึงตรงนี้ค่อยย้ายกล่องจริงและจบตา
@@ -464,9 +493,11 @@ function storeAt(ctx, uid, { side }) {
   const aim = st.aim;
   if (!aim?.target) return null;
 
-  const keep = side === 'F' ? 'F' : 'B';
-  const box = st.cargo[aim.target];
-  const from = aim.target === 'merchant' ? null : ((box?.F || 0) > (box?.B || 0) ? 'F' : 'B');
+  /* ฝั่งที่เต็มเพดานแล้วเก็บเพิ่มไม่ได้ */
+  if (!keepSides(st.cargo, aim.place).includes(side)) return null;
+  const keep = side;
+  const from = aim.target === 'merchant' ? null : aim.from;
+  if (aim.target !== 'merchant' && !from) return null;
 
   const cargo = moveBox(st.cargo, aim.target, from, aim.place, keep);
   const next = cargo
@@ -567,13 +598,14 @@ export async function tick(ctx) {
   if (st.aim) {
     const aim = st.aim;
     const target = aim.target || aim.options[0];
-    const box = st.cargo[target];
-    const from = target === 'merchant' ? null : ((box?.F || 0) > (box?.B || 0) ? 'F' : 'B');
-    const cargo = moveBox(st.cargo, target, from, aim.place, 'B');
+    const from = target === 'merchant' ? null : (aim.from || takeSides(st.cargo, target)[0] || 'B');
+    const keep = keepSides(st.cargo, aim.place)[0] || 'B';
+    const cargo = moveBox(st.cargo, target, from, aim.place, keep);
     const done = cargo
-      ? pushLog({ ...st, cargo }, 'wreck.log.attackTook', { target, side: 'B' })
+      ? pushLog({ ...st, cargo }, 'wreck.log.attackTook', { target, side: keep })
       : pushLog(st, 'wreck.log.attackNoRoom', {});
-    return { state: passTurn({ ...done, aim: null }) };
+    const took = cargo ? { by: aim.by, target, side: keep, at: (done.logSeq || 0) } : null;
+    return { state: passTurn({ ...done, aim: null, lastTake: took }) };
   }
 
   if (st.turnSeconds && offline(st.turn) && !st.graced) {

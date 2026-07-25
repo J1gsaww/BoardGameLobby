@@ -13,6 +13,7 @@ import {
   actionsFor, boatsOpen, canShift, maroon, pileOf, redeal, shuffle,
   startVote, voters, voteReady, tallyRow, attackPasses, mutinyPasses, brawlSplit,
   moveBox, countBoxes, score, winningSide, winners, dutchCount, dealNations, dutchAllowed,
+  attackTargets, takeSides, keepSides, canAttack,
   holdCard, dropHeld, giveCard, addSkip, owesSkip, burnSkip, advance,
   addVoteBan, isVoteBanned, burnVoteBans, voteWeight, setVoteWeight, clearVoteWeights,
   addMark, markCount, marksIn, clearMark, swapSpots, shuffleQueue,
@@ -702,16 +703,65 @@ group('ต่อสาย · กัปตันเลือกเป้าหล
   ok('เลือกครบแล้วจบตา', [stored.state.turn, stored.state.aim], ['b', null]);
 }
 {
-  /* ยิงเรืออีกลำ ต้นทางหยิบจากฝั่งที่มีมากกว่าเอง ไม่ต้องให้เลือกซ้อนอีกชั้น */
+  /* ยิงเรืออีกลำ ต้องเลือกฝั่งที่จะขโมยก่อน แล้วค่อยเลือกฝั่งที่จะเก็บ */
   const base = {
     ...filled(),
     cargo: { shipL: { B: 0, F: 0 }, shipR: { B: 1, F: 2 }, island: { B: 1, F: 1 }, merchant: 3 },
-    aim: { by: 'a', place: 'shipL', options: ['merchant', 'shipR'], target: 'shipR' }
+    aim: { by: 'a', place: 'shipL', options: ['merchant', 'shipR'], target: 'shipR', from: null }
   };
-  const r = await onAction(ctxOf(base), { uid: 'a', type: 'storeAt', payload: { side: 'B' } });
-  ok('หยิบจากฝั่งที่มีมากกว่า', r.state.cargo.shipR.F, 1);
-  ok('ฝั่งที่มีน้อยกว่าไม่ถูกแตะ', r.state.cargo.shipR.B, 1);
+  ok('ยังไม่เลือกฝั่งที่จะขโมย ก็เก็บไม่ได้',
+     await onAction(ctxOf(base), { uid: 'a', type: 'storeAt', payload: { side: 'B' } }), null);
+  ok('ขั้นตอนตอนนี้คือเลือกฝั่งที่จะขโมย', actionsFor(base, 'a'), ['takeFrom']);
+
+  const took = await onAction(ctxOf(base), { uid: 'a', type: 'takeFrom', payload: { side: 'F' } });
+  ok('เลือกฝั่งที่จะขโมยแล้ว', took.state.aim.from, 'F');
+  ok('ขั้นถัดไปคือเลือกฝั่งที่จะเก็บ', actionsFor(took.state, 'a'), ['storeAt']);
+
+  const r = await onAction(ctxOf(took.state), { uid: 'a', type: 'storeAt', payload: { side: 'B' } });
+  ok('ขโมยจากฝั่งที่เลือก', r.state.cargo.shipR.F, 1);
+  ok('อีกฝั่งไม่ถูกแตะ', r.state.cargo.shipR.B, 1);
   ok('ไปลงฝั่งที่กัปตันเลือก', r.state.cargo.shipL.B, 1);
+}
+{
+  /* ฝั่งที่ไม่มีกล่องเลย ขโมยไม่ได้ */
+  const base = {
+    ...filled(),
+    cargo: { shipL: { B: 0, F: 0 }, shipR: { B: 0, F: 2 }, island: { B: 1, F: 1 }, merchant: 3 },
+    aim: { by: 'a', place: 'shipL', options: ['merchant', 'shipR'], target: 'shipR', from: null }
+  };
+  ok('ฝั่งที่ว่างเปล่าเลือกขโมยไม่ได้',
+     await onAction(ctxOf(base), { uid: 'a', type: 'takeFrom', payload: { side: 'B' } }), null);
+  ok('ฝั่งที่มีกล่องเลือกได้',
+     (await onAction(ctxOf(base), { uid: 'a', type: 'takeFrom', payload: { side: 'F' } })).state.aim.from, 'F');
+}
+{
+  /* ฝั่งที่เต็มเพดานแล้ว เก็บเพิ่มไม่ได้ */
+  const base = {
+    ...filled(),
+    cargo: { shipL: { B: 3, F: 0 }, shipR: { B: 0, F: 0 }, island: { B: 1, F: 1 }, merchant: 4 },
+    aim: { by: 'a', place: 'shipL', options: ['merchant'], target: 'merchant', from: null }
+  };
+  ok('ฝั่งที่เต็มสามกล่องแล้วเก็บเพิ่มไม่ได้',
+     await onAction(ctxOf(base), { uid: 'a', type: 'storeAt', payload: { side: 'B' } }), null);
+  ok('อีกฝั่งที่ยังว่างเก็บได้',
+     (await onAction(ctxOf(base), { uid: 'a', type: 'storeAt', payload: { side: 'F' } })).state.cargo.shipL.F, 1);
+}
+
+group('เงื่อนไขการสั่งโหวตยิง');
+{
+  const full = { ...filled(), cargo: { shipL: { B: 3, F: 3 }, shipR: { B: 1, F: 1 }, island: { B: 0, F: 0 }, merchant: 0 } };
+  ok('เรือตัวเองเต็มหกกล่องแล้ว สั่งยิงไม่ได้', actionsFor(full, 'a').includes('attack'), false);
+
+  const empty = { ...filled(), cargo: { shipL: { B: 1, F: 0 }, shipR: { B: 0, F: 0 }, island: { B: 1, F: 1 }, merchant: 0 } };
+  ok('ไม่มีอะไรให้ชิงเลย สั่งยิงไม่ได้', actionsFor(empty, 'a').includes('attack'), false);
+  ok('เรืออีกลำว่างเปล่า จึงไม่ใช่เป้าที่เลือกได้',
+     attackTargets('shipL', empty.cargo), []);
+
+  const ok2 = { ...filled(), cargo: { shipL: { B: 1, F: 0 }, shipR: { B: 0, F: 2 }, island: { B: 1, F: 1 }, merchant: 0 } };
+  ok('มีเรือให้ชิงและมีที่เก็บ สั่งยิงได้', actionsFor(ok2, 'a').includes('attack'), true);
+  ok('เป้าที่เลือกได้เหลือเฉพาะลำที่มีกล่อง', attackTargets('shipL', ok2.cargo), ['shipR']);
+  ok('ฝั่งที่ขโมยได้มีเฉพาะฝั่งที่มีกล่อง', takeSides(ok2.cargo, 'shipR'), ['F']);
+  ok('ฝั่งที่เก็บได้ต้องยังไม่เต็ม', keepSides(ok2.cargo, 'shipL'), ['B', 'F']);
 }
 {
   /* กัปตันหายไประหว่างเลือก นาฬิกาต้องเลือกให้แล้วไปต่อ */

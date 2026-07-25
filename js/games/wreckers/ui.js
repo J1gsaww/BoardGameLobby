@@ -459,8 +459,12 @@ function paintEvents(el, st, ctx) {
     if (card.dataset.face !== html) { card.dataset.face = html; card.innerHTML = html; }
 
     /* รู้ว่าเป็นใบอะไรแล้วก็ให้ชี้เมาส์อ่านคำอธิบายได้ */
+    /* คำอธิบายต้องอยู่ที่ตัวช่อง ไม่ใช่ที่ตัวการ์ด
+       เพราะการ์ดตั้ง overflow:hidden ไว้ให้ภาพไม่ล้นขอบ ป๊อปอัพเลยโดนตัดหายไปด้วย */
     const info = known ? (eventById(known)?.[lang] || eventById(known)?.th) : null;
-    if (info) card.dataset.tip = info.desc; else card.removeAttribute('data-tip');
+    if (info) slot.dataset.tip = `${info.name} — ${info.desc}`;
+    else slot.removeAttribute('data-tip');
+    card.removeAttribute('data-tip');
 
     card.classList.toggle('peeked', !!known);
     card.classList.toggle('gone', !filled);
@@ -470,6 +474,7 @@ function paintEvents(el, st, ctx) {
     const acts = slot.querySelector('.wr-event-acts');
     acts.classList.toggle('ready', on && mine && !usedByPeek);
     slot.querySelector('[data-ev="activate"]').disabled = !(on && mine && filled && !mid);
+    /* ดูใบที่เคยเปิดไปแล้วซ้ำได้ ห้ามเฉพาะใบที่เพิ่งดูไปในการแอบดูรอบนี้ */
     slot.querySelector('[data-ev="peek"]').disabled = !(on && mine && filled && !usedByPeek);
     slot.classList.toggle('used', !!usedByPeek);
   });

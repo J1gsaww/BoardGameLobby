@@ -1162,8 +1162,8 @@ button{ cursor:pointer; border:0; background:none; }
 .vc-row .vc-slot + .vc-slot .vc-icon{ max-width:20px; }
 
 /* ── คำอธิบายการ์ดตอนชี้เมาส์ ─────────────────────────── */
-.wr-event[data-tip]{ position:relative; }
-.wr-event[data-tip]:hover::after{
+.wr-event-slot[data-tip]{ position:relative; }
+.wr-event-slot[data-tip]:hover::after{
   content:attr(data-tip);
   position:absolute; left:50%; bottom:calc(100% + 8px); transform:translateX(-50%);
   z-index:40; width:230px; padding:8px 10px; border-radius:10px;
@@ -1440,3 +1440,32 @@ button{ cursor:pointer; border:0; background:none; }
   transition:width .25s ease-out;
 }
 .wr-loading-n{ font-family:var(--mono); font-size:11px; color:var(--muted); }
+
+/* ── เลือกฝั่งประเทศ: ขโมยจาก / เก็บไว้ ────────────────────
+   สองขั้นนี้ถามคล้ายกันมากจนกดผิดได้ง่าย จึงแยกด้วยสีกับไอคอนนำหน้า
+   ขั้นขโมยเป็นโทนแดงพร้อมลูกศรออก · ขั้นเก็บเป็นโทนเขียวพร้อมลูกศรเข้า */
+.wr-sidepick{
+  display:grid; gap:12px; justify-items:center;
+  padding:16px 20px; border-radius:16px;
+  background:rgba(10,8,22,.92); border:2px solid currentColor;
+}
+.wr-sidepick-take{ color:var(--rose); }
+.wr-sidepick-keep{ color:var(--mint); }
+.wr-side-head{
+  margin:0; font-family:var(--display); font-size:18px; font-weight:700; color:currentColor;
+}
+.wr-sidepick-take .wr-side-head::before{ content:'\2196  '; }
+.wr-sidepick-keep .wr-side-head::before{ content:'\2199  '; }
+.wr-side-btns{ display:flex; gap:12px; }
+.wr-side-btn{
+  display:grid; gap:3px; justify-items:center; min-width:132px;
+  padding:12px 18px; border-radius:13px;
+  background:var(--sunk); border:2px solid var(--line);
+}
+.wr-side-btn:not(:disabled):hover{ border-color:currentColor; background:rgba(255,255,255,.06); }
+.wr-side-btn:disabled{ opacity:.32; cursor:not-allowed; }
+.wr-side-name{ font-family:var(--display); font-size:16px; font-weight:700; }
+.wr-side-btn.n-B .wr-side-name{ color:#7fb2ff; }
+.wr-side-btn.n-F .wr-side-name{ color:#ff8f9c; }
+.wr-side-n{ font-family:var(--mono); font-size:12px; color:var(--ink); }
+.wr-side-why{ font-size:10.5px; color:var(--muted); }

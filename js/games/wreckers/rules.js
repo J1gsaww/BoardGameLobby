@@ -128,7 +128,12 @@ export function actionsFor(st, uid) {
 
   /* โหวตยิงผ่านแล้ว เหลือให้กัปตันเลือกเป้ากับฝั่งที่จะเก็บกล่อง
      เลือกทีหลังเพราะจะได้ไม่ต้องตัดสินใจตั้งแต่ยังไม่รู้ว่าจะยิงติดไหม */
-  if (st.aim?.by === uid) return [st.aim.target ? 'storeAt' : 'aimAt'];
+  if (st.aim?.by === uid) {
+    /* สามจังหวะ — เลือกลำที่จะยิง · เลือกฝั่งที่จะขโมย (เฉพาะยิงเรือ) · เลือกฝั่งที่จะเก็บ */
+    if (!st.aim.target) return ['aimAt'];
+    if (st.aim.target !== 'merchant' && !st.aim.from) return ['takeFrom'];
+    return ['storeAt'];
+  }
 
   const place = placeOf(spot);
   const role = roleOf(spot);
@@ -141,7 +146,7 @@ export function actionsFor(st, uid) {
   if (boatsOpen(st, spot).length) out.push('toBoat');
 
   if (role === 'captain') {
-    if (canCallVote(st, place)) out.push('attack');
+    if (canAttack(st, place)) out.push('attack');
     if (occupants(st.pos, place).length > 1) out.push('kick');
   }
   if (role === 'mate' && canCallVote(st, place)) out.push('mutiny');
@@ -247,8 +252,30 @@ export function voters(st, kind, place) {
   return line.filter(uid => roleAt(st.pos, uid) !== 'captain');
 }
 
-/* เรือที่ยิงได้จากเรือลำนี้ — เรือสินค้ากับเรืออีกลำเท่านั้น ยิงลำตัวเองไม่ได้ */
-export const attackTargets = (place) => ['merchant', ...SHIP_IDS.filter(s => s !== place)];
+/* เรือที่ยิงได้จริง — ต้องมีกล่องให้ชิงด้วย ยิงลำที่ว่างเปล่าไปก็ไม่ได้อะไร
+   ยิงลำตัวเองไม่ได้อยู่แล้ว */
+export function attackTargets(place, cargo) {
+  const all = ['merchant', ...SHIP_IDS.filter(s => s !== place)];
+  if (!cargo) return all;
+  return all.filter(t => (t === 'merchant' ? cargo.merchant > 0
+    : (cargo[t]?.B || 0) + (cargo[t]?.F || 0) > 0));
+}
+
+/* ฝั่งประเทศที่ขโมยจากเป้าได้ — ต้องมีกล่องอยู่จริง
+   เรือสินค้าไม่มีฝั่ง จึงไม่ต้องเลือก */
+export const takeSides = (cargo, target) =>
+  target === 'merchant' ? [] : ['B', 'F'].filter(s => (cargo?.[target]?.[s] || 0) > 0);
+
+/* ฝั่งที่เก็บกล่องไว้ได้บนเรือตัวเอง — ฝั่งที่เต็มเพดานแล้วใส่เพิ่มไม่ได้ */
+export const keepSides = (cargo, place) =>
+  ['B', 'F'].filter(s => (cargo?.[place]?.[s] || 0) < SHIP_CARGO_CAP);
+
+/* สั่งโหวตยิงได้ไหม — ต้องมีที่ให้ชิง และมีที่ให้เก็บ
+   เรือตัวเองเต็มหกกล่องแล้วยิงไปก็วางไม่ได้ จึงไม่ให้สั่งตั้งแต่แรก */
+export const canAttack = (st, place) =>
+  canCallVote(st, place)
+  && attackTargets(place, st.cargo).length > 0
+  && keepSides(st.cargo, place).length > 0;
 
 export function startVote(st, { kind, place, caller }) {
   const list = voters(st, kind, place);

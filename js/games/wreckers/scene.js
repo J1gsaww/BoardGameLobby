@@ -15,6 +15,7 @@
 
 import { t } from '../../i18n.js';
 import { VOTE_ART, ICON_EXT } from './vote.js';
+import { takeSides, keepSides, SHIP_CARGO_CAP } from './rules.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -62,6 +63,8 @@ const now = () => performance.now();
    ผูกกับคนสั่งกับสถานที่ ไม่ผูกกับช่วง จึงไม่ถูกตัดใหม่กลางทาง */
 function sceneKey(st) {
   if (st.vote) return `ep:${st.vote.caller}:${st.vote.place}`;
+  /* ประกาศการแอบดูเป็นฉากสั้น ๆ ของตัวเอง ไม่ปนกับฉากโหวต */
+  if (st.lastPeek && !dismissed.has('peek:' + st.lastPeek.at)) return `peek:${st.lastPeek.at}`;
   if (st.aim) return `ep:${st.aim.by}:${st.aim.place}`;
   if (st.lastVote && !dismissed.has(st.lastVote.at))
     return `ep:${st.lastVote.caller}:${st.lastVote.place}`;
@@ -146,6 +149,7 @@ export function paintScene(el, st, ctx) {
 /* ตัวเดินเรื่อง — ตัดสินว่าตอนนี้ควรอยู่ช่วงไหน แล้วเดินไปข้างหน้าเท่านั้น
    คืนค่า true เมื่อยังมีอะไรขยับ เพื่อขอเฟรมถัดไป */
 function step(body, st, ctx) {
+  if (key.startsWith('peek:')) return peekNote(body, st);
   if (st.vote) { goto('collect'); return collect(body, st); }
 
   /* เข้ามาตอนกัปตันกำลังเลือกอยู่แล้ว ก็ข้ามการเล่าย้อนหลังไปเลย */
@@ -200,7 +204,23 @@ function step(body, st, ctx) {
 /* ชื่อฉากเดินหน้าอย่างเดียวเหมือนช่วงย่อย
    พอถึงช่วงเล็งแล้ว st.aim หายไปตอนกัปตันเลือกเสร็จ ถ้าคำนวณใหม่จาก st เฉย ๆ
    ชื่อจะเด้งกลับไปเป็น Call to Shoot ให้เห็นแวบหนึ่งก่อนฉากปิด */
+/* ฉากประกาศการแอบดู — ขึ้นสั้น ๆ แล้วปิดเอง ไม่ค้าง */
+function peekNote(body, st) {
+  if (goto('collect')) {
+    body.innerHTML = `<p class="wr-scene-note">${esc(t('wreck.scene.peeked', {
+      name: st.names?.[st.lastPeek.by] || '?',
+      slots: st.lastPeek.slots.map(n => n + 1).join(', ')
+    }))}</p>`;
+  }
+  if (now() - stageAt < T.linger) return true;
+  dismissed.add('peek:' + st.lastPeek.at);
+  closing = true;
+  return false;
+}
+
 function titleOf(st, ph) {
+  if (st.lastPeek && key.startsWith('peek:'))
+    return { who: t('wreck.act.peek'), big: st.names?.[st.lastPeek.by] || '?' };
   const v = st.vote || st.lastVote;
   const aiming = !!st.aim || ph === 'aim';
   const who = st.aim ? st.aim.by : v?.caller;
@@ -354,27 +374,65 @@ function tally(body, v) {
 
 /* ── กัปตันเลือก ───────────────────────────────────────── */
 function aim(body, st, ctx) {
-  const mine = st.aim.by === ctx.me.uid;
-  const want = mine ? (st.aim.target ? 'side' : 'pick') : 'wait';
-  if (aimView === want) return false;
-  aimView = want;
+  const a = st.aim;
+  const mine = a.by === ctx.me.uid;
+  const want = !mine ? 'wait'
+    : !a.target ? 'pick'
+    : (a.target !== 'merchant' && !a.from) ? 'take'
+    : 'side';
+  const sig = want + ':' + (a.target || '') + ':' + (a.from || '');
+  if (aimView === sig) return false;
+  aimView = sig;
 
   if (want === 'wait') {
     body.innerHTML = `<p class="wr-scene-note">${esc(t('wreck.scene.waitAim', {
       name: st.names?.[st.aim.by] || '?' }))}</p>`;
   } else if (want === 'pick') {
     body.innerHTML = `<p class="wr-scene-note">${esc(t('wreck.scene.pickShip'))}</p>`;
+  } else if (want === 'take') {
+    /* ขั้นขโมย — โทนแดง ชี้ไปที่เรือศัตรู บอกจำนวนกล่องที่มีในแต่ละฝั่ง
+       ต้องหน้าตาต่างจากขั้นเก็บให้ชัด เพราะสองขั้นนี้ถามคล้ายกันมาก
+       ถ้าเหมือนกันจะกดผิดแน่นอน */
+    const can = takeSides(st.cargo, a.target);
+    body.innerHTML = sidePick('take', 'wreck.scene.takeFrom',
+      t('wreck.place.' + a.target), st.cargo[a.target], can, 'takeFrom');
+    wireSides(body, 'takeFrom');
   } else {
-    body.innerHTML = `<p class="wr-scene-note">${esc(t('wreck.scene.pickSide'))}</p>
-      <div class="wr-scene-btns">
-        <button class="wr-scene-btn n-B" data-side="B">${esc(t('wreck.british'))}</button>
-        <button class="wr-scene-btn n-F" data-side="F">${esc(t('wreck.france'))}</button>
-      </div>`;
-    body.querySelectorAll('[data-side]').forEach(b => {
-      b.onclick = () => sendFn?.('storeAt', { side: b.dataset.side });
-    });
+    /* ขั้นเก็บ — โทนเขียว ชี้ไปที่เรือตัวเอง บอกว่าฝั่งไหนเต็มแล้ว */
+    const can = keepSides(st.cargo, a.place);
+    body.innerHTML = sidePick('keep', 'wreck.scene.keepOn',
+      t('wreck.place.' + a.place), st.cargo[a.place], can, 'storeAt');
+    wireSides(body, 'storeAt');
   }
   return false;
+}
+
+/* แผงเลือกฝั่งประเทศ ใช้ทั้งขั้นขโมยและขั้นเก็บ แต่แต่งคนละโทน
+   ฝั่งที่เลือกไม่ได้เป็นปุ่มทึบกดไม่ลง พร้อมบอกเหตุผลด้วยจำนวนกล่อง */
+function sidePick(kind, headKey, where, box, can, action) {
+  const btn = (s) => {
+    const n = box?.[s] || 0;
+    const off = !can.includes(s);
+    const why = kind === 'take' ? (n ? '' : t('wreck.scene.noBox'))
+                                : (off ? t('wreck.scene.full') : '');
+    return `<button class="wr-side-btn n-${s}${off ? ' off' : ''}"
+      data-side="${s}" data-act="${action}"${off ? ' disabled' : ''}>
+        <span class="wr-side-name">${esc(t('wreck.' + (s === 'B' ? 'british' : 'france')))}</span>
+        <span class="wr-side-n">${n} / ${SHIP_CARGO_CAP}</span>
+        ${why ? `<span class="wr-side-why">${esc(why)}</span>` : ''}
+      </button>`;
+  };
+  return `<div class="wr-sidepick wr-sidepick-${kind}">
+      <p class="wr-side-head">${esc(t(headKey, { where }))}</p>
+      <div class="wr-side-btns">${btn('B')}${btn('F')}</div>
+    </div>`;
+}
+
+function wireSides(body, action) {
+  body.querySelectorAll('[data-side]').forEach(b => {
+    if (b.disabled) return;
+    b.onclick = () => sendFn?.(action, { side: b.dataset.side });
+  });
 }
 
 /* ยังต้องมีให้ ui.js เรียกได้ แม้ตอนนี้จะไม่ได้ใช้แผนในฉากแล้ว */
