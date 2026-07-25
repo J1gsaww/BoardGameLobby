@@ -267,7 +267,7 @@ function preload(el) {
 let frozen = null;
 
 function boardView(st) {
-  if (sceneHolding() && frozen) return { ...st, pos: frozen.pos, cargo: frozen.cargo };
+  if (sceneHolding(st) && frozen) return { ...st, pos: frozen.pos, cargo: frozen.cargo };
   frozen = { pos: st.pos, cargo: st.cargo };
   return st;
 }
@@ -877,7 +877,7 @@ function paintDecks(el, st) {
 function paintActions(el, st, ctx) {
   /* ฉากกำลังเล่าผลอยู่ = ยังไม่ให้กดอะไร เพราะกระดานที่เห็นเป็นภาพก่อนผลออก
      ถ้าปล่อยให้กด คำสั่งจะอิงจากภาพที่ไม่ตรงกับสถานะจริงบนเซิร์ฟเวอร์ */
-  const frozenNow = sceneHolding();
+  const frozenNow = sceneHolding(st);
   const me = ctx.me.uid;
   const spot = st.pos?.[me];
   const role = roleOf(spot);
@@ -1007,6 +1007,7 @@ export function wirePlan(box, el, ctx) {
   if (off) off.onclick = () => { plan = null; closeMenu(); paint(el); };
   const go = box.querySelector('[data-plan="go"]');
   if (go) go.onclick = () => {
+    if (!plan) return;      /* กดซ้ำหรือแผนถูกล้างไปแล้ว อย่าให้ล้มทั้งหน้า */
     const { act, via, ...rest } = plan;
     void via;
     plan = null;
@@ -1099,16 +1100,20 @@ function paintRoster(el, st, ctx) {
 
 function cargoOf(p, st, meUid) {
   const c = st.cargo || {};
-  const hot = canTouchCargo(st.pos?.[meUid], st.pos, p.id);
+  /* เช็กรายฝั่ง เพราะฝั่งหนึ่งอาจย้ายได้ อีกฝั่งเต็มปลายทางแล้ว */
+  const hotSide = (side) => canTouchCargo(st.pos?.[meUid], st.pos, p.id, st.cargo, side);
   /* ธงประจำฝั่ง ใช้ไฟล์เดียวกับไอคอนบนไพ่โหวต จะได้เป็นภาษาเดียวกันทั้งเกม */
   const flag = (f) =>
     `<img class="wr-flag" src="${iconSrc(f.side === 'B' ? 'B' : 'R')}" alt=""
       draggable="false" style="left:${f.x}%; top:${f.y}%; width:${FLAG_SIZE}%">`;
 
-  const box = (s, size, side, i) =>
-    `<img class="wr-box wr-box-${side}${hot ? ' hot' : ''}" src="${ART}Cargo.png" alt=""
+  const box = (s, size, side, i) => {
+    const hot = hotSide(side === 'b' ? 'B' : 'F');
+    return `<img class="wr-box wr-box-${side}${hot ? ' hot' : ' locked'}"
+      src="${ART}Cargo.png" alt=""
       ${hot ? `data-cargo="${p.id}:${side}:${i}"` : ''}
       style="left:${s.x}%; top:${s.y}%; width:${size}%; --boxrot:${s.r || 0}deg">`;
+  };
 
   if (p.kind === 'ship') {
     const d = c[p.id] || { B: 0, F: 0 };

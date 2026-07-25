@@ -920,6 +920,8 @@ button{ cursor:pointer; border:0; background:none; }
 
 /* กล่องสมบัติที่แตะได้ */
 .wr-box.hot{ pointer-events:auto; cursor:pointer; }
+/* ปลายทางเต็มแล้ว ย้ายไม่ได้ ทำให้ทึบลงและกดไม่ได้ตั้งแต่แรก */
+.wr-box.locked{ opacity:.55; pointer-events:none; }
 .wr-box.hot:hover{ filter:drop-shadow(0 0 5px var(--lamp)) drop-shadow(0 2px 5px rgba(0,0,0,.6)); }
 
 /* ── ปุ่มลอยบนการ์ดเหตุการณ์ ─────────────────────── */
@@ -1136,6 +1138,10 @@ button{ cursor:pointer; border:0; background:none; }
   position:absolute; inset:0; width:100%; height:100%;
   object-fit:cover; display:block; pointer-events:none;
 }
+/* ป้ายชื่อการ์ดอยู่แถบล่างซึ่งเป็นที่เดียวกับปุ่ม Peek/Activate
+   ถ้าป้ายรับเมาส์ด้วย เมาส์จะสลับไปมาระหว่างป้ายกับปุ่ม เห็นเป็นปุ่มกะพริบ */
+.wr-card-name{ pointer-events:none; }
+.wr-event-acts{ z-index:6; }
 .wr-card-name{
   position:absolute; left:0; right:0; bottom:0; z-index:2;
   padding:7px 5px 6px; text-align:center;

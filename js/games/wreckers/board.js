@@ -206,13 +206,25 @@ export function boatsFrom(spot) {
 export const boatFree = (pos, boat) => !Object.values(pos || {}).includes(boat + ':x');
 
 /* กล่องสมบัติที่ผู้เล่นแตะได้ — ต้องอยู่ในสถานที่เดียวกันและมีสิทธิ์ย้ายกล่อง */
-export function canTouchCargo(spot, pos, place) {
+/* แตะกล่องได้ไหม — นอกจากต้องอยู่ที่นั่นและมีสิทธิ์แล้ว
+   ฝั่งปลายทางต้องยังไม่เต็มด้วย ไม่งั้นกดไปก็ย้ายไม่ได้อยู่ดี
+   ปิดตั้งแต่ตรงนี้ดีกว่าปล่อยให้กดแล้วค่อยถูกปฏิเสธเงียบ ๆ */
+export function canTouchCargo(spot, pos, place, cargo, side) {
   if (!spot) return false;
   const mine = spot.split(':')[0];
   if (mine !== place) return false;
   if (place === 'island') return spot.split(':')[1] === 'G';
-  return canShiftCargo(spot, pos);
+  if (!canShiftCargo(spot, pos)) return false;
+
+  if (cargo && side) {
+    const to = side === 'B' ? 'F' : 'B';
+    if ((cargo[place]?.[to] || 0) >= SHIP_SIDE_CAP) return false;
+  }
+  return true;
 }
+
+/* เพดานกล่องต่อฝั่งบนเรือใหญ่ ต้องตรงกับ SHIP_CARGO_CAP ใน rules.js */
+export const SHIP_SIDE_CAP = 3;
 
 /* ── เวลาต่อตา ───────────────────────────────────────────────
    คนหลุดกลางตาจะได้เวลาผ่อนผันเท่ากับเวลาปกติคูณ 2.5 แต่ไม่เกิน 120 วินาที

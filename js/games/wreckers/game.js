@@ -330,7 +330,10 @@ function toBoat(ctx, uid, boat) {
   const next = pushLog({
     ...st, pos: moved,
     boatFrom: { ...(st.boatFrom || {}), [uid]: came }
-  }, 'wreck.log.toBoat', { name: st.names?.[uid] });
+  }, 'wreck.log.toBoat', {
+    name: st.names?.[uid],
+    which: boat === 'boatL' ? ' \u2190' : ' \u2192'
+  });
 
   return { state: passTurn(next) };
 }

@@ -61,7 +61,7 @@ let stageAt = 0;     // ช่วงย่อยเริ่มตอนกี�
 let aimView = '';    // มุมมองย่อยของช่วงกัปตันเลือก
 let restAt = 0;      // เวลาที่ผลขึ้นครบ ใช้นับถอยหลังก่อนปิดฉาก
 let closing = false; // สั่งปิดฉากในเฟรมนี้
-let holding = false; // ระหว่างนี้กระดานต้องค้างไว้ ห้ามขยับตามสถานะจริง
+const told = new Set();   // ผลของการโหวตที่เล่าจบไปแล้ว
 let raf = 0;
 
 /* ฉากที่เล่าจบและปิดไปแล้ว จะไม่เปิดขึ้นมาอีก
@@ -89,7 +89,7 @@ function sceneKey(st) {
 
 export function stopScene() {
   if (raf) cancelAnimationFrame(raf);
-  raf = 0; key = ''; phase = ''; aimView = ''; holding = false; seen = new Set();
+  raf = 0; key = ''; phase = ''; aimView = ''; seen = new Set();
 }
 
 /* ช่วงย่อยเดินหน้าอย่างเดียว ถอยกลับไม่ได้เด็ดขาด
@@ -121,7 +121,7 @@ export function paintScene(el, st, ctx) {
 
   if (key !== want) {
     key = want; at = now(); phase = ''; aimView = ''; restAt = 0; closing = false;
-  holding = false; seen = new Set();
+  seen = new Set();
     box.hidden = false;
     box.innerHTML = `
       <div class="wr-scene-title">
@@ -174,15 +174,14 @@ function step(body, st, ctx) {
   if (!phase && st.aim) { goto('aim'); return aim(body, st, ctx); }
 
   if (st.lastVote && rank(phase) < rank('tally')) {
-    holding = true;
     if (pot(body, st.lastVote)) return true;
     goto('tally');
   }
 
   if (phase === 'tally') {
-    holding = true;
     if (tally(body, st.lastVote)) return true;
-    holding = false;          /* เล่าจบแล้ว ปล่อยให้กระดานตามสถานะจริงได้ */
+    /* เล่าจบแล้ว ปล่อยให้กระดานตามสถานะจริงได้ */
+    if (st.lastVote) told.add(st.lastVote.at);
 
     /* ผลต้องขึ้นให้ครบก่อน ถึงจะเปิดให้กัปตันเลือกเรือ
        ถ้าปล่อยพร้อมกัน กัปตันจะรู้ผลก่อนคนอื่นและคลิกได้ทั้งที่ผลยังไม่ขึ้น */
@@ -530,7 +529,14 @@ export const sceneAtAim = () => phase === 'aim';
    ผลของการโหวตถูกคำนวณและเขียนลงสถานะทันทีที่ไพ่ครบ กัปตันจึงโดนปลดไปแล้ว
    ตั้งแต่ก่อนที่ฉากจะได้เล่าอะไรเลย ถ้าไม่ค้างไว้ ทุกคนจะเห็นผลจากตำแหน่งบนกระดาน
    ก่อนที่เรื่องจะเล่าถึง ซึ่งทำให้ฉากไม่มีความหมาย */
-export const sceneHolding = () => holding;
+/* ค้างจนกว่าผลของการโหวตครั้งนั้นจะถูกเล่าจบแล้วจริง ๆ
+
+   ต้องตัดสินจาก **สถานะ** ไม่ใช่จากตัวแปรภายในของฉาก
+   เพราะกระดานถูกวาดก่อนที่ฉากจะได้ทำงานในเฟรมเดียวกัน
+   ถ้าถามตัวแปรภายใน คำตอบจะยังเป็นค่าของเฟรมที่แล้วเสมอ
+   กระดานเลยแอบขยับไปหนึ่งเฟรมก่อนฉากจะเริ่มเล่า */
+export const sceneHolding = (st) =>
+  !!st?.lastVote && !told.has(st.lastVote.at);
 
 export const setPlanView = () => {};
 export const setPlanWire = () => {};
