@@ -18,7 +18,7 @@ import { cardById as voteById, voteCard } from './vote.js';
 import { dieSvg, rollPose, HERO, ROLL_MS } from './die.js';
 import { actionsFor, occupants, placeOf } from './rules.js';
 import { BASE_CARDS, cardArt, CARD_BACK } from './events.js';
-import { paintScene, stopScene } from './scene.js';
+import { paintScene, stopScene, setPlanView, setPlanWire } from './scene.js';
 import { EXTRA_CARDS } from './cards.js';
 import { lang } from '../../i18n.js';
 import {
@@ -77,6 +77,7 @@ function shell(el, ctx) {
           <div class="wr-score-bar"></div>
           <div class="wr-menu" hidden></div>
           <div class="wr-dice" hidden></div>
+          <div class="wr-scene" hidden></div>
         </div>
 
         <aside class="wr-side wr-roster">
@@ -115,7 +116,6 @@ function shell(el, ctx) {
 
       <ul class="wr-log" hidden></ul>
 
-      <div class="wr-scene" hidden></div>
       <div class="wr-devpop" hidden></div>
       <div class="wr-reveal" hidden></div>
       <div class="wr-legend"></div>
@@ -139,6 +139,7 @@ function shell(el, ctx) {
   });
 
   el.querySelector('.wr-stage').addEventListener('click', e => {
+    if (plan?.from === 'menu') return;          /* กำลังรอยืนยันอยู่ อย่าเพิ่งปิดเมนู */
     if (!e.target.closest('.wr-menu') && !e.target.closest('[data-spot]')
         && !e.target.closest('[data-cargo]')) { closeMenu(); paint(el); }
   });
@@ -234,7 +235,9 @@ export function render(el, ctx) {
   el.querySelectorAll('[data-piece]').forEach(node => {
     const hot = aimMine && st.aim.options.includes(node.dataset.piece);
     node.classList.toggle('aim-hot', !!hot);
-    node.onclick = hot ? () => { plan = { act: 'aimAt', target: node.dataset.piece }; paint(el); } : null;
+    node.onclick = hot
+      ? () => { plan = { act: 'aimAt', target: node.dataset.piece, from: 'scene' }; paint(el); }
+      : null;
   });
 
   el.querySelectorAll('[data-piece]').forEach(node => {
@@ -246,6 +249,9 @@ export function render(el, ctx) {
 
   paintNation(el, ctx);
   paintReveal(el, st, ctx);
+  /* แผนที่เกิดจากการคลิกเรือ ต้องไปโผล่ในฉากกลางจอ ไม่ใช่คอลัมน์ล่าง */
+  setPlanView(plan?.from === 'scene' ? planBody(st, ctx) : null);
+  setPlanWire(box => wirePlan(box, el, ctx));
   paintScene(el, st, ctx);
   paintHand(el, st, ctx);
   paintRoster(el, st, ctx);
@@ -326,6 +332,9 @@ function paintHand(el, st, ctx) {
 
   const box = el.querySelector('.wr-hand-cards');
   box.classList.toggle('asking', asking);
+  /* เรืองแสงทั้งกล่อง ไม่ใช่แค่ไพ่ — ตอนโหวตสายตาทุกคนอยู่กลางจอ
+     ถ้าไม่ดึงสายตากลับมาที่มือ จะไม่มีใครรู้ว่าต้องส่งไพ่ */
+  el.querySelector('.wr-hand')?.classList.toggle('asking', asking);
   if (box.dataset.sig !== html) {
     box.dataset.sig = html;
     box.innerHTML = html;
@@ -615,10 +624,15 @@ function paintMenu(el, st, ctx) {
   box.querySelectorAll('[data-do]').forEach(b => {
     b.onclick = () => runMenu(el, ctx, b.dataset.do, b.dataset.arg);
   });
+  wirePlan(box, el, ctx);
 }
 
 /* เมนูของหมาก — ของตัวเองได้ Action ตามตำแหน่ง ของคนอื่นได้บังคับเปิดการ์ดกับไล่ลงเรือ */
 function pawnMenu(st, ctx) {
+  /* มีแผนที่เริ่มจากเมนูนี้ค้างอยู่ ก็แสดงแผนกับปุ่มยืนยันตรงนี้เลย
+     ไม่ต้องให้ผู้เล่นเหลือบไปหาปุ่มยืนยันที่อีกมุมจอ */
+  if (plan?.from === 'menu') return planBody(st, ctx);
+
   const meUid = ctx.me.uid;
   const spot = st.pos?.[menu.uid];
   const mine = menu.uid === meUid;
@@ -761,59 +775,18 @@ function startAction(el, st, ctx, act) {
   paint(el);
 }
 
-function paintPlan(el, st, ctx) {
-  const box = el.querySelector('.wr-plan');
-  if (!box) return;
-
-  if (!plan) {
-    if (box.dataset.sig !== '') { box.dataset.sig = ''; box.innerHTML = ''; }
-    box.hidden = true;
-    return;
-  }
-
-  const pick = (field, value, label) =>
-    `<button class="wr-chip${plan[field] === value ? ' on' : ''}"
-       data-set="${field}" data-val="${esc(value)}">${esc(label)}</button>`;
-
-  let rows = '';
-  if (plan.act === 'aimAt') {
-    rows += `<div class="wr-plan-row"><span>${esc(t('wreck.plan.target'))}</span>
-      <span class="wr-chip on">${esc(t('wreck.place.' + plan.target))}</span></div>`;
-  } else if (plan.act === 'shiftCargo') {
-    rows += `<div class="wr-plan-row"><span>${esc(t('wreck.plan.move'))}</span>
-      ${pick('from', 'B', t('wreck.plan.bToF'))}${pick('from', 'F', t('wreck.plan.fToB'))}</div>`;
-  } else if (plan.act === 'kick') {
-    const here = occupants(st.pos, placeOf(st.pos[ctx.me.uid])).filter(u => u !== ctx.me.uid);
-    rows += `<div class="wr-plan-row"><span>${esc(t('wreck.plan.who'))}</span>
-      ${here.map(u => pick('uid', u, st.names?.[u] || '?')).join('')}</div>`;
-  }
-
-  const html = `<div class="wr-plan-head">${esc(t('wreck.act.' + plan.act))}</div>${rows}
-    <div class="wr-plan-go">
-      <button class="wr-act" data-plan="go"${plan.act === 'kick' && !plan.uid ? ' disabled' : ''}>
-        ${esc(t('wreck.plan.confirm'))}</button>
-      <button class="wr-act ghost" data-plan="off">${esc(t('wreck.cancel'))}</button>
-    </div>`;
-
+/* แถวตัวเลือกกับปุ่มยืนยัน — ใช้ร่วมกันทั้งคอลัมน์ล่างและเมนูข้างหมาก
+   เขียนที่เดียวจะได้ไม่มีทางที่สองที่ถามไม่เหมือนกัน */
+export function planBody(st, ctx) {
+  if (!plan) return '';
+  const html = planBody(st, ctx);
   box.hidden = false;
   if (box.dataset.sig === html) return;
   box.dataset.sig = html;
   box.innerHTML = html;
-
-  box.querySelectorAll('[data-set]').forEach(b => {
-    b.onclick = () => { plan = { ...plan, [b.dataset.set]: b.dataset.val }; paint(el); };
-  });
-  box.querySelector('[data-plan="off"]').onclick = () => { plan = null; paint(el); };
-  box.querySelector('[data-plan="go"]').onclick = () => {
-    const { act, ...rest } = plan;
-    plan = null;
-    ctx.send(act, rest);
-  };
+  wirePlan(box, el, ctx);
 }
 
-/* ── แผงโหวต ──────────────────────────────────────────────
-   ระหว่างโหวตทุกคนในสถานที่นั้นต้องส่งไพ่ ใครส่งแล้วเห็นได้ทั้งวง
-   แต่ส่งใบไหนไม่มีใครเห็นจนกว่าจะเปิดหม้อพร้อมกัน */
 function paintVote(el, st, ctx) {
   const box = el.querySelector('.wr-vote-panel');
   if (!box) return;

@@ -1331,3 +1331,27 @@ button{ cursor:pointer; border:0; background:none; }
 /* เนื้อหาของฉากไล่ลงมาจากแถบประกาศ ไม่ลอยกลางจอ */
 .wr-scene-body{ margin-top:2px; }
 .wr-scene.clear .wr-scene-body{ margin-bottom:18px; }
+
+/* ── กล่องมือไพ่ตอนถึงคิวส่งไพ่ ─────────────────────────
+   ต้องเรืองทั้งกล่อง ไม่ใช่แค่ไพ่ เพราะตอนโหวตสายตาทุกคนอยู่ที่กระดาน */
+.wr-hand.asking{
+  border-color:var(--lamp);
+  box-shadow:0 0 0 1px var(--lamp) inset, 0 0 22px rgba(244,169,73,.35);
+  animation:wr-hand-call 1.8s ease-in-out infinite;
+}
+@keyframes wr-hand-call{
+  0%,100%{ box-shadow:0 0 0 1px var(--lamp) inset, 0 0 18px rgba(244,169,73,.25); }
+  50%    { box-shadow:0 0 0 2px var(--lamp) inset, 0 0 30px rgba(244,169,73,.5); }
+}
+.wr-hand.asking h4{ color:var(--lamp); }
+
+/* แผนรอยืนยันที่โผล่ในฉากกลางจอ */
+.wr-scene-plan{
+  min-width:min(280px, 78vw); padding:12px 14px; border-radius:14px;
+  background:rgba(12,9,26,.94); border:1px solid var(--lamp);
+}
+
+/* เมนูข้างหมากตอนกลายเป็นแผนรอยืนยัน ให้กว้างพอวางปุ่มสองปุ่ม */
+.wr-menu .wr-plan-go{ display:flex; gap:7px; margin-top:9px; }
+.wr-menu .wr-plan-go .wr-act{ flex:1; }
+@media (prefers-reduced-motion:reduce){ .wr-hand.asking{ animation:none; } }

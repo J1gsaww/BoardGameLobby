@@ -70,6 +70,10 @@ export function stopScene() {
 
 /* ── วาด ───────────────────────────────────────────────────
    เรียกทุกครั้งที่สถานะเปลี่ยน และเรียกตัวเองซ้ำด้วย rAF ระหว่างที่ยังเล่าไม่จบ */
+/* แผนที่รอยืนยันซึ่งเกิดจากการคลิกเรือ — ui.js เป็นคนถือ ส่งเข้ามาให้วาด */
+let planView = null;
+export const setPlanView = (html) => { planView = html || null; };
+
 export function paintScene(el, st, ctx) {
   const box = el.querySelector('.wr-scene');
   if (!box) return;
@@ -96,7 +100,12 @@ export function paintScene(el, st, ctx) {
 
   const html = render(st, ctx);
   box.hidden = false;
-  if (box.dataset.sig !== html) { box.dataset.sig = html; box.innerHTML = html; wire(box, ctx); }
+  if (box.dataset.sig !== html) {
+    box.dataset.sig = html;
+    box.innerHTML = html;
+    wire(box, ctx);
+    if (onPlanWire) onPlanWire(box);
+  }
 
   /* ยังเล่าไม่จบก็ขอเฟรมถัดไป จบแล้วก็หยุด ไม่กินซีพียูทิ้งไว้ */
   if (!finished(st, ctx)) {
@@ -231,7 +240,9 @@ function aim(st, ctx) {
       name: st.names?.[st.aim.by] || '?' }))}</p>`;
   }
   if (!st.aim.target) {
-    return `<p class="wr-scene-note">${esc(t('wreck.scene.pickShip'))}</p>`;
+    return planView
+      ? `<div class="wr-scene-plan">${planView}</div>`
+      : `<p class="wr-scene-note">${esc(t('wreck.scene.pickShip'))}</p>`;
   }
   return `<p class="wr-scene-note">${esc(t('wreck.scene.pickSide'))}</p>
     <div class="wr-scene-btns">
@@ -239,6 +250,9 @@ function aim(st, ctx) {
       <button class="wr-scene-btn n-F" data-side="F">${esc(t('wreck.france'))}</button>
     </div>`;
 }
+
+let onPlanWire = null;
+export const setPlanWire = (fn) => { onPlanWire = fn; };
 
 function wire(box, ctx) {
   box.querySelectorAll('[data-side]').forEach(b => {
