@@ -11,7 +11,8 @@
    ตกที่ version.json จุดเดียว = แถบแดงขึ้นค้างตลอด กด Reload ก็ไม่หาย
    ตกที่ ?v= = ไฟล์ใหม่ขึ้นไปแล้วแต่เบราว์เซอร์ยังหยิบของเก่ามาใช้ */
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 
 const OLD = JSON.parse(readFileSync('version.json', 'utf8')).build;
 
@@ -37,7 +38,10 @@ const edits = {
   'version.json': [[/("build"\s*:\s*")[^"]+(")/, `$1${NEW}$2`]],
   'index.html': [
     [/(data-build=")[^"]+(")/g, `$1${NEW}$2`],
-    [/(\?v=)[^"]+(")/g, `$1${NEW}$2`]
+    /* จับเฉพาะค่าที่อยู่ใน src= หรือ href= จริง ๆ
+       ของเดิมจับคำว่าเลขรุ่นที่ไหนก็ได้ในไฟล์ พอมีคอมเมนต์อธิบายเรื่องนี้
+       คอมเมนต์เองก็โดนกินไปด้วย แล้วแท็บข้างล่างพังตามทั้งบล็อก */
+    [/((?:src|href)="[^"]*\?v=)[^"]*(")/g, `$1${NEW}$2`]
   ],
   'js/env.js': [[/(window\.BUILD\s*=\s*')[^']+(')/, `$1${NEW}$2`]]
 };
@@ -55,4 +59,30 @@ for (const [f, rules] of Object.entries(edits)) {
 }
 
 if (!total) { console.log('\nไม่พบจุดที่ต้องเปลี่ยนเลย ตรวจโครงไฟล์ก่อน'); process.exit(1); }
-console.log(`\n${OLD}  →  ${NEW}   (${total} จุด)`);
+
+/* ── แผนที่โมดูล ────────────────────────────────────────────
+   ?v= ที่ต่อท้าย app.js บังคับให้โหลดใหม่ได้แค่ตัวมันเอง
+   ไฟล์ที่มัน import ต่อ (i18n.js, board.js, rules.js, ...) เขียนเป็นชื่อไฟล์เปล่า
+   เบราว์เซอร์จึงหยิบของเก่าในแคชมาใช้ปนกับไฟล์ใหม่ — อาการคือแก้แล้วไม่เปลี่ยน
+   หรือเปลี่ยนครึ่ง ๆ เช่นปุ่มใหม่โผล่แต่คำแปลยังเป็นคีย์ดิบ
+
+   แก้ด้วย importmap: ประกาศไว้ว่าทุก path ให้ไปหยิบเวอร์ชันที่ต่อ ?v= แทน
+   สร้างใหม่ทุกครั้งที่ bump จึงไม่มีทางลืมไฟล์ใหม่ */
+function walk(dir) {
+  return readdirSync(dir).flatMap(f => {
+    const full = join(dir, f);
+    if (statSync(full).isDirectory()) return walk(full);
+    return f.endsWith('.js') && !f.endsWith('.test.mjs') ? [full] : [];
+  });
+}
+
+const mods = walk('js').map(f => './' + f.replace(/\\/g, '/')).sort();
+const map = { imports: Object.fromEntries(mods.map(m => [m, `${m}?v=${NEW}`])) };
+
+let html = readFileSync('index.html', 'utf8');
+html = html.replace(/<script type="importmap" id="modmap">[\s\S]*?<\/script>/,
+  `<script type="importmap" id="modmap">${JSON.stringify(map)}</script>`);
+writeFileSync('index.html', html);
+console.log(`  index.html — แผนที่โมดูล ${mods.length} ไฟล์`);
+
+console.log(`\n${OLD}  →  ${NEW}   (${total} จุด + แผนที่โมดูล)`);

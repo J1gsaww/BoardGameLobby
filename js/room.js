@@ -296,6 +296,25 @@ export const setReady = (on) =>
 
 /* ── สิ่งที่เฉพาะเจ้าของห้องทำได้ ─────────────────── */
 
+/* ปิดห้องทิ้งทั้งห้อง — ลบสมาชิก ไพ่ คำขอ แชท รูป แล้วลบตัวห้อง
+   มีไว้เพราะห้องที่คนออกไม่ครบจะค้างอยู่จนกว่าจะครบสิบสองชั่วโมง
+   และคนที่ไม่ใช่เจ้าของห้องลบไม่ได้เลยตามกฎความปลอดภัย จึงต้องเป็นปุ่มของเจ้าของห้อง */
+export async function closeRoom() {
+  if (!room.isHost || !room.code) return false;
+  const code = room.code;
+  detach();
+  room.closed = false;
+  try {
+    await wipeRoom(code);
+    console.info('[room] ปิดห้อง', code, 'เรียบร้อย');
+  } catch (e) {
+    console.warn('ปิดห้องไม่สมบูรณ์', e);
+    return false;
+  }
+  emit();
+  return true;
+}
+
 export async function pickGame(gameId) {
   if (!room.isHost) return;
   const game = Games.get(gameId);

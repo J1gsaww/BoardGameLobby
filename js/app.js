@@ -426,6 +426,7 @@ function paintRoom() {
 
   $('lobbyNote').textContent = note;
   $('lobbyNote').classList.remove('warn');
+  $('btnCloseRoom').hidden = !room.isHost;
 }
 
 Room.watch((room) => {
@@ -830,6 +831,32 @@ $('btnSettingBack').onclick = () => { show(cameFrom === 'view-setting' ? 'view-h
 $('btnReady').onclick = () => Room.setReady(!Room.room.mine?.ready);
 $('btnStart').onclick = () => Room.start();
 $('btnBack').onclick  = () => Room.backToLobby();
+/* ปิดห้อง — กดสองครั้งถึงจะทำงาน กันเผลอกดตอนเกมกำลังเล่นอยู่ */
+let closeArmed = false;
+$('btnCloseRoom').onclick = async () => {
+  const b = $('btnCloseRoom');
+  if (!closeArmed) {
+    closeArmed = true;
+    b.textContent = t('lobby.closeRoomSure');
+    b.classList.add('armed');
+    setTimeout(() => {
+      closeArmed = false;
+      b.textContent = t('lobby.closeRoom');
+      b.classList.remove('armed');
+    }, 4000);
+    return;
+  }
+  closeArmed = false;
+  b.classList.remove('armed');
+  b.textContent = t('lobby.closeRoom');
+  await Room.closeRoom();
+  lastRoom = null;
+  Music.setTrack(Music.defaultTrack());
+  stopAmbience();
+  show('view-home');
+  err(null);
+};
+
 $('btnLeave').onclick = async () => {
   await Room.leaveRoom();
   lastRoom = null;

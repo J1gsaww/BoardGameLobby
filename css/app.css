@@ -1061,3 +1061,7 @@ button{ cursor:pointer; border:0; background:none; }
 .seg.off{ opacity:.34; text-decoration:line-through; }
 .field-hint{ margin:6px 0 0; font-size:11px; color:var(--muted); line-height:1.5; }
 .card-picker-toggle{ width:100%; margin-bottom:8px; }
+
+/* ปุ่มปิดห้อง — สีเตือนตั้งแต่แรก และเข้มขึ้นตอนรอกดยืนยัน */
+.link.danger{ color:var(--rose); }
+.link.danger.armed{ font-weight:700; text-decoration:underline; }
