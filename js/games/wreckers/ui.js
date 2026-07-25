@@ -25,7 +25,7 @@ import {
   ART, PIECES, STAGE_RATIO, SHIP_SLOTS, ISLAND_SLOTS, BOAT_SLOT, roleOf, EVENT_SLOTS,
   COMMON_ACTIONS, ROLE_ACTIONS, canShiftCargo, boatsFrom, boatFree, canTouchCargo,
   SHIP_SLOT_SIZE, ISLAND_SLOT_SIZE,
-  SHIP_CARGO, SHIP_CARGO_SIZE, ISLAND_CARGO, ISLAND_CARGO_SIZE,
+  SHIP_CARGO, SHIP_CARGO_SIZE, SHIP_CARGO_TALL, ISLAND_CARGO, ISLAND_CARGO_SIZE,
   MERCHANT_CARGO, MERCHANT_CARGO_SIZE
 } from './board.js';
 
@@ -933,16 +933,18 @@ function paintRoster(el, st, ctx) {
 function cargoOf(p, st, meUid) {
   const c = st.cargo || {};
   const hot = canTouchCargo(st.pos?.[meUid], st.pos, p.id);
-  const box = (s, size, side, i) =>
-    `<img class="wr-box wr-box-${side}${hot ? ' hot' : ''}" src="${ART}Cargo.png" alt=""
+  /* tall ที่ส่งมาคือความสูงที่บังคับเอง ไม่ส่งก็ปล่อยให้สูงตามสัดส่วนไฟล์ */
+  const box = (s, size, side, i, tall) =>
+    `<img class="wr-box wr-box-${side}${hot ? ' hot' : ''}${tall ? ' fit' : ''}"
+      src="${ART}Cargo.png" alt=""
       ${hot ? `data-cargo="${p.id}:${side}:${i}"` : ''}
-      style="left:${s.x}%; top:${s.y}%; width:${size}%; --boxrot:${s.r || 0}deg">`;
+      style="left:${s.x}%; top:${s.y}%; width:${size}%${tall ? `; height:${tall}%` : ''}; --boxrot:${s.r || 0}deg">`;
 
   if (p.kind === 'ship') {
     const d = c[p.id] || { B: 0, F: 0 };
     return [
-      ...SHIP_CARGO.B.slice(0, d.B).map((s, i) => box(s, SHIP_CARGO_SIZE, 'b', i)),
-      ...SHIP_CARGO.F.slice(0, d.F).map((s, i) => box(s, SHIP_CARGO_SIZE, 'f', i))
+      ...SHIP_CARGO.B.slice(0, d.B).map((s, i) => box(s, SHIP_CARGO_SIZE, 'b', i, SHIP_CARGO_TALL)),
+      ...SHIP_CARGO.F.slice(0, d.F).map((s, i) => box(s, SHIP_CARGO_SIZE, 'f', i, SHIP_CARGO_TALL))
     ].join('');
   }
   if (p.kind === 'island') {

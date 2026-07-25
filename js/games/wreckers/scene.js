@@ -23,12 +23,12 @@ export const VOTE_BACK = `${VOTE_ART}back${ICON_EXT}`;
 
 const T = {
   intro: 1480,     // เส้นวิ่ง + ชื่อโผล่ + ค้างให้อ่าน
-  deckCard: 900,   // ใบจากกองกลางสไลด์เข้ามาแล้วค้างให้ทัน
+  deckCard: 1500,  // ใบจากกองกลางสไลด์เข้ามาแล้วค้างให้ทันดู
   merge: 700,      // วิ่งมาซ้อนกัน
   vanish: 480,     // หุบหาย
-  tick: 340,       // ระยะห่างของไอคอนแต่ละตัว — ช้าพอให้ลุ้นทีละอัน
-  verdict: 520,
-  linger: 2200     // ค้างผลไว้ให้อ่านก่อนปิดฉากเอง
+  tick: 430,       // ระยะห่างของไอคอนแต่ละตัว — ช้าพอให้ลุ้นทีละอัน
+  verdict: 700,
+  linger: 3200     // ค้างผลไว้ให้อ่านก่อนปิดฉากเอง
 };
 
 const ATTACK_ORDER = [
@@ -43,6 +43,7 @@ let phase = '';      // ช่วงย่อยที่ไปถึงแล�
 let stageAt = 0;     // ช่วงย่อยเริ่มตอนกี่โมง
 let aimView = '';    // มุมมองย่อยของช่วงกัปตันเลือก
 let restAt = 0;      // เวลาที่ผลขึ้นครบ ใช้นับถอยหลังก่อนปิดฉาก
+let closing = false; // สั่งปิดฉากในเฟรมนี้
 let raf = 0;
 
 /* ฉากที่เล่าจบและปิดไปแล้ว จะไม่เปิดขึ้นมาอีก
@@ -94,9 +95,10 @@ export function paintScene(el, st, ctx) {
     if (key) { box.hidden = true; box.innerHTML = ''; stopScene(); }
     return;
   }
+  closing = false;
 
   if (key !== want) {
-    key = want; at = now(); phase = ''; aimView = ''; restAt = 0; seen = new Set();
+    key = want; at = now(); phase = ''; aimView = ''; restAt = 0; closing = false; seen = new Set();
     box.hidden = false;
     box.innerHTML = `
       <div class="wr-scene-title">
@@ -125,6 +127,11 @@ export function paintScene(el, st, ctx) {
   let busy = ms < T.intro;
   if (!body.hidden) busy = step(body, st, ctx) || busy;
 
+  /* ปิดฉากแล้วต้องซ่อนเดี๋ยวนี้เลย
+     ของเดิมแค่จำว่าปิดแล้วแต่ไม่ขอเฟรมต่อ กล่องเลยค้างอยู่บนจอตลอดกาล
+     เพราะไม่มีใครกลับมาเช็กว่า sceneKey กลายเป็นว่างไปแล้ว */
+  if (closing) { box.hidden = true; box.innerHTML = ''; stopScene(); return; }
+
   /* ขอเฟรมถัดไปเฉพาะตอนที่ยังมีอะไรขยับจริง ๆ */
   if (busy) raf = requestAnimationFrame(() => paintScene(el, st, ctx));
 }
@@ -152,6 +159,7 @@ function step(body, st, ctx) {
       if (!restAt) restAt = now();
       if (now() - restAt < T.linger) return true;
       dismissed.add(st.lastVote.at);
+      closing = true;
       return false;
     }
   }
@@ -165,6 +173,7 @@ function step(body, st, ctx) {
     if (!restAt) restAt = now();
     if (now() - restAt < T.linger) return true;
     if (st.lastVote) dismissed.add(st.lastVote.at);
+    closing = true;
     return false;
   }
   return false;
