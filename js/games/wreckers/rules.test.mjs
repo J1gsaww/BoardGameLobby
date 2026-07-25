@@ -469,18 +469,18 @@ group('ต่อสาย · โหมดไม่จับเวลา');
 }
 {
   const st = { ...filled(), turnSeconds: 0, deadline: null };
-  const done = (await onAction(ctxOf(st), { uid: 'a', type: 'peek' })).state;
+  const done = (await onAction(ctxOf(st), { uid: 'a', type: 'force' })).state;
   ok('ไม่จับเวลา ส่งตาต่อแล้วก็ยังไม่มีเส้นตาย', done.deadline, null);
 }
 
 group('ต่อสาย · หนึ่งตาหนึ่ง Action');
 {
   const st = filled();
-  const r = await onAction(ctxOf(st), { uid: 'a', type: 'peek' });
+  const r = await onAction(ctxOf(st), { uid: 'a', type: 'force' });
   ok('ทำแล้วส่งตาต่อทันที', r.state.turn, 'b');
-  const bad = await onAction(ctxOf(r.state), { uid: 'a', type: 'peek' });
+  const bad = await onAction(ctxOf(r.state), { uid: 'a', type: 'force' });
   ok('คนเดิมทำซ้ำในตาของคนอื่นไม่ได้', bad, null);
-  const notMine = await onAction(ctxOf(st), { uid: 'c', type: 'peek' });
+  const notMine = await onAction(ctxOf(st), { uid: 'c', type: 'force' });
   ok('ยังไม่ถึงตาก็ทำไม่ได้', notMine, null);
 }
 {
@@ -503,10 +503,53 @@ group('ต่อสาย · ลงเรือเล็กแล้วขึ้
   /* วนจนกลับมาถึงตาเขาอีกครั้ง */
   let s = r.state;
   for (const uid of ['b', 'c', 'd', 'e', 'f']) {
-    s = (await onAction(ctxOf(s), { uid, type: 'peek' })).state;
+    s = (await onAction(ctxOf(s), { uid, type: 'force' })).state;
   }
   ok('ครบรอบแล้วกลับมาถึงตาเขา และขึ้นฝั่งให้อัตโนมัติ', s.pos.a, 'island:3');
   ok('ขึ้นฝั่งแล้วยังเป็นตาของเขาอยู่ ไม่เสีย Action', s.turn, 'a');
+}
+
+group('ต่อสาย · สำรับเหตุการณ์ เปิดกับแอบดู');
+{
+  const out = init({ members, settings: { turnSeconds: 60, extraCards: [] } });
+  const play = { ...out.state, phase: 'play', turn: 'a', pos: filled().pos, seats: [...P],
+                 names: filled().names, out: [] };
+  const ctx = { ...ctxOf(play), secrets: out.secrets, hostUid: 'a' };
+  const deck = out.secrets._deck;
+
+  const opened = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 1 } });
+  ok('เปิดแล้วทุกคนเห็นว่าเป็นใบอะไร', opened.state.lastEvent.id, deck.slots[1]);
+  ok('ใบที่เปิดไปกองทิ้ง', opened.secrets._deck.discard, [deck.slots[1]]);
+  ok('ช่องว่างถูกเติมด้วยใบบนสุดของกอง', opened.secrets._deck.slots[1], deck.draw[0]);
+  ok('บนโต๊ะยังครบห้าใบ', opened.secrets._deck.slots.filter(Boolean).length, 5);
+  ok('กองลดลงหนึ่งใบ', opened.state.eventDeck, deck.draw.length - 1);
+  ok('เปิดแล้วผ่านตาไปคนถัดไป', opened.state.turn, 'b');
+  ok('จำนวนใบทั้งสำรับไม่เปลี่ยน',
+     opened.secrets._deck.slots.length + opened.secrets._deck.draw.length
+       + opened.secrets._deck.discard.length, 24);
+
+  const empty = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 9 } });
+  ok('ช่องนอกช่วงเปิดไม่ได้', empty, null);
+}
+{
+  const out = init({ members, settings: { turnSeconds: 60, extraCards: [] } });
+  const play = { ...out.state, phase: 'play', turn: 'a', pos: filled().pos, seats: [...P],
+                 names: filled().names, out: [] };
+  const ctx = { ...ctxOf(play), secrets: out.secrets, hostUid: 'a' };
+  const deck = out.secrets._deck;
+
+  const r = await onAction(ctx, { uid: 'a', type: 'peek', payload: { slots: [0, 3] } });
+  ok('เห็นสองใบตามที่เลือก', r.secrets.a.peek.seen.map(x => x.id), [deck.slots[0], deck.slots[3]]);
+  ok('จำไว้ด้วยว่าเป็นช่องไหน', r.secrets.a.peek.seen.map(x => x.slot), [0, 3]);
+  ok('แอบดูแล้วสำรับไม่ขยับเลย', '_deck' in r.secrets, false);
+  ok('สถานะสาธารณะไม่บอกว่าเห็นใบอะไร', JSON.stringify(r.state).includes(deck.slots[0]), false);
+  ok('แอบดูก็กินหนึ่งตาเหมือนกัน', r.state.turn, 'b');
+
+  const many = await onAction(ctx, { uid: 'a', type: 'peek', payload: { slots: [0, 1, 2, 3] } });
+  ok('ดูได้มากสุดสองใบ', many.secrets.a.peek.seen.length, 2);
+
+  const none = await onAction(ctx, { uid: 'a', type: 'peek', payload: { slots: [] } });
+  ok('ไม่เลือกช่องเลยก็ทำไม่ได้', none, null);
 }
 
 group('ต่อสาย · กัปตันไล่คนลงจากเรือ');

@@ -17,7 +17,7 @@ import { mountSea, stopSea } from './sea.js';
 import { cardById as voteById, voteCard } from './vote.js';
 import { dieSvg, rollPose, HERO, ROLL_MS } from './die.js';
 import { actionsFor, occupants, placeOf, SHIP_IDS } from './rules.js';
-import { BASE_CARDS } from './events.js';
+import { BASE_CARDS, cardArt, CARD_BACK } from './events.js';
 import { EXTRA_CARDS } from './cards.js';
 import { lang } from '../../i18n.js';
 import {
@@ -91,16 +91,14 @@ function shell(el, ctx) {
           <div class="wr-event-row">
             ${Array.from({ length: EVENT_SLOTS }, (_, i) =>
               `<div class="wr-event-slot" data-event="${i + 1}">
-                 <button class="wr-card wr-event">
-                   <span class="wr-card-face">${esc(t('wreck.event'))}</span>
-                   <span class="wr-card-no">${i + 1}</span>
-                 </button>
+                 <button class="wr-card wr-event"></button>
                  <div class="wr-event-acts">
                    <button class="wr-mini" data-ev="activate">${esc(t('wreck.act.activate'))}</button>
                    <button class="wr-mini" data-ev="peek">${esc(t('wreck.act.peek'))}</button>
                  </div>
                </div>`).join('')}
           </div>
+          <div class="wr-event-open" hidden></div>
           <p class="wr-event-note" hidden></p>
           <div class="wr-devcards" hidden></div>
           <div class="wr-decks"></div>
@@ -148,7 +146,13 @@ function shell(el, ctx) {
 
   el.querySelector('.wr-event-row').addEventListener('click', e => {
     const mini = e.target.closest('[data-ev]');
-    if (mini && !mini.disabled) { picks = []; forcing = null; paint(el); return; }
+    if (mini && !mini.disabled) {
+      const nums = picks.map(n => Number(n) - 1);          /* หน้าจอนับ 1 แต่โค้ดนับ 0 */
+      if (mini.dataset.ev === 'activate') ctx.send('activate', { slot: nums[0] });
+      else ctx.send('peek', { slots: nums });
+      picks = []; forcing = null; paint(el);
+      return;
+    }
 
     const slot = e.target.closest('.wr-event-slot');
     if (!slot) return;
@@ -236,7 +240,7 @@ export function render(el, ctx) {
   paintVote(el, st, ctx);
   paintLog(el, st);
   paintDecks(el, st);
-  paintEvents(el);
+  paintEvents(el, st, ctx);
   paintDevCards(el, ctx);
 
   const scoreHtml = legend(st);
@@ -322,24 +326,71 @@ function paintHand(el, st, ctx) {
 /* ── การ์ดเหตุการณ์ ────────────────────────────────────────
    ชี้เมาส์แล้วปุ่มโผล่มาจาง ๆ แต่ยังกดไม่ได้
    ต้องเลือกใบก่อนปุ่มถึงจะชัดและกดได้ — เปิดใช้ 1 ใบ แอบดูใช้ 2 ใบ */
-function paintEvents(el) {
+const ALL_EVENTS = [...BASE_CARDS, ...EXTRA_CARDS];
+const eventById = (id) => ALL_EVENTS.find(c => c.id === id) || null;
+
+/* หน้าการ์ด — ภาพเต็มใบแล้วแปะชื่อทับที่แถบล่าง
+   ชื่อวาดด้วยฟอนต์ของเกม ไม่ได้ฝังอยู่ในภาพ สลับภาษาแล้วเปลี่ยนตามทันที
+   ภาพหายก็ไม่พัง — onerror ซ่อน img ทิ้ง แล้วพื้นหลัง CSS เดิมโผล่มาแทน */
+function eventFace(id) {
+  const c = eventById(id);
+  if (!c) return '';
+  const info = c[lang] || c.th;
+  return `<img class="wr-card-img" src="${esc(cardArt(id))}" alt=""
+      draggable="false" onerror="this.remove()">
+    <span class="wr-card-name">${esc(info.name)}</span>`;
+}
+
+const eventBack = () => `<img class="wr-card-img" src="${esc(CARD_BACK)}" alt=""
+  draggable="false" onerror="this.remove()">`;
+
+function paintEvents(el, st, ctx) {
+  /* ใบที่ตัวเองแอบดูไว้ เห็นคนเดียว คนอื่นยังเห็นเป็นไพ่คว่ำ */
+  const seen = {};
+  for (const s of ctx.secret?.peek?.seen || []) seen[s.slot] = s.id;
+
   el.querySelectorAll('.wr-event-slot').forEach(slot => {
     const n = slot.dataset.event;
+    const i = Number(n) - 1;
     const on = picks.includes(n);
+    const filled = i < (st.events ?? 0);
     slot.classList.toggle('on', on);
 
+    const card = slot.querySelector('.wr-event');
+    const face = !filled ? '' : (seen[i] ? eventFace(seen[i]) : eventBack());
+    const html = face + `<span class="wr-card-no">${n}</span>`;
+    if (card.dataset.face !== html) { card.dataset.face = html; card.innerHTML = html; }
+    card.classList.toggle('peeked', !!seen[i]);
+    card.classList.toggle('gone', !filled);
+
     const acts = slot.querySelector('.wr-event-acts');
-    acts.classList.toggle('ready', on);
-    slot.querySelector('[data-ev="activate"]').disabled = !(on && picks.length === 1);
-    slot.querySelector('[data-ev="peek"]').disabled = !on;   // เลือกใบเดียวก็แอบดูได้
+    const mine = st.turn === ctx.me.uid && st.phase === 'play' && !st.vote;
+    acts.classList.toggle('ready', on && mine);
+    slot.querySelector('[data-ev="activate"]').disabled = !(on && mine && picks.length === 1 && filled);
+    slot.querySelector('[data-ev="peek"]').disabled = !(on && mine && filled);
   });
 
   const note = el.querySelector('.wr-event-note');
-  if (!note) return;
-  note.textContent = forcing
-    ? t('wreck.forcing', { name: live?.state?.names?.[forcing] || '?' })
-    : picks.length === 1 ? t('wreck.pickMore') : '';
-  note.hidden = !note.textContent;
+  if (note) {
+    note.textContent = forcing
+      ? t('wreck.forcing', { name: st.names?.[forcing] || '?' })
+      : picks.length === 1 ? t('wreck.pickMore') : '';
+    note.hidden = !note.textContent;
+  }
+
+  paintReveal2(el, st);
+}
+
+/* ใบที่เพิ่งถูกเปิด — ทุกคนเห็นเหมือนกัน วางไว้ข้างแถวการ์ด */
+function paintReveal2(el, st) {
+  const box = el.querySelector('.wr-event-open');
+  if (!box) return;
+  const ev = st.lastEvent;
+  const html = !ev ? '' : `<span class="wr-open-label">${esc(t('wreck.opened', {
+    name: st.names?.[ev.by] || '?' }))}</span>
+    <span class="wr-card wr-open-card">${eventFace(ev.id)}</span>`;
+  box.hidden = !html;
+  if (box.dataset.sig !== html) { box.dataset.sig = html; box.innerHTML = html; }
 }
 
 /* ── แผงทดสอบ ──────────────────────────────────────────────

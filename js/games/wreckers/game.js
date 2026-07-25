@@ -192,12 +192,12 @@ export async function onAction(ctx, action) {
     case 'mutiny':     return callVote(ctx, uid, 'mutiny', payload);
     case 'islandVote': return callVote(ctx, uid, 'islandVote', payload);
 
-    /* สามอันนี้เป็นเรื่องของการ์ด Event ยังไม่ได้ทำ กินสิทธิ์ Action ไปก่อน
-       ใส่ไว้เพื่อให้ลำดับตาเดินได้จริงตอนทดสอบ */
-    case 'activate':
-    case 'peek':
+    case 'activate': return activate(ctx, uid, payload);
+    case 'peek':     return peek(ctx, uid, payload);
+
+    /* บังคับให้คนอื่นเปิด ยังไม่ได้ทำ กินสิทธิ์ Action ไปก่อน */
     case 'force':
-      return { state: passTurn(pushLog(st, 'wreck.log.' + type, { name: st.names?.[uid] })) };
+      return { state: passTurn(pushLog(st, 'wreck.log.force', { name: st.names?.[uid] })) };
 
     default: return null;
   }
@@ -226,6 +226,55 @@ function devCard(ctx, uid, { slot, id }) {
   return {
     state: pushLog({ ...st, eventDeck: draw.length }, 'wreck.log.devCard', { slot: i + 1 }),
     secrets: { _deck: { ...deck, slots, draw } }
+  };
+}
+
+/* ── เปิดการ์ดเหตุการณ์ ────────────────────────────────────
+   เปิดแล้วใบนั้นออกจากโต๊ะไปกองทิ้ง แล้วจั่วใบใหม่มาเติมช่องทันที
+   ผลของการ์ดยังไม่ได้ทำ ตอนนี้แค่เปิดให้เห็นว่าเป็นใบอะไรและสำรับเดินจริง */
+function activate(ctx, uid, { slot }) {
+  const st = ctx.state;
+  const i = Number(slot);
+  const deck = deckOf(ctx);
+  const id = deck.slots?.[i];
+  if (!Number.isInteger(i) || !id) return null;
+
+  const slots = [...deck.slots];
+  slots[i] = null;
+  const next = refillSlots({ ...deck, slots, discard: [...(deck.discard || []), id] }, EVENT_SLOTS);
+
+  const shown = {
+    ...st,
+    events: next.slots.filter(Boolean).length,
+    eventDeck: next.draw.length,
+    /* เปิดแล้วทุกคนต้องเห็นว่าเป็นใบอะไร เก็บไว้ในสถานะสาธารณะ */
+    lastEvent: { id, by: uid, slot: i, at: (st.logSeq || 0) + 1 }
+  };
+
+  return {
+    state: passTurn(pushLog(shown, 'wreck.log.activate', { name: st.names?.[uid] })),
+    secrets: { _deck: next }
+  };
+}
+
+/* ── แอบดู ─────────────────────────────────────────────────
+   ดูได้สองใบแล้ววางกลับที่เดิม สำรับไม่ขยับเลย
+   สิ่งที่เห็นเก็บไว้ในข้อมูลลับของคนดูคนเดียว คนอื่นเห็นแค่ว่ามีคนแอบดู
+   ไม่มีวันหมดอายุ เพราะกติกาคือรู้แล้วรู้เลย */
+function peek(ctx, uid, { slots }) {
+  const st = ctx.state;
+  const deck = deckOf(ctx);
+  const want = (Array.isArray(slots) ? slots : [])
+    .map(Number).filter(i => Number.isInteger(i) && i >= 0 && i < EVENT_SLOTS).slice(0, 2);
+  if (!want.length) return null;
+
+  const seen = want.map(i => ({ slot: i, id: deck.slots?.[i] || null })).filter(x => x.id);
+  if (!seen.length) return null;
+
+  const mine = ctx.secrets?.[uid] || {};
+  return {
+    state: passTurn(pushLog(st, 'wreck.log.peek', { name: st.names?.[uid], n: seen.length })),
+    secrets: { [uid]: { ...mine, peek: { seen, at: (st.logSeq || 0) + 1 } } }
   };
 }
 

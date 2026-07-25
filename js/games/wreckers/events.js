@@ -13,11 +13,15 @@
    ───────────────────────────────────────────────────────────── */
 
 /* ภาพการ์ด — เจนมาเป็น PNG จึงใช้ PNG ตรง ๆ ไม่แปลงกลางทาง
-   ถ้าวันหลังอยากลดขนาดไฟล์ด้วย WebP แก้ที่ CARD_EXT บรรทัดเดียว */
-export const CARD_ART = 'assets/game/wreckers/cards/';
+   แยกโฟลเดอร์ตามชุด: สำรับมาตรฐานอยู่ standard · การ์ดพิเศษอยู่ special
+   ประกอบ path ผ่าน cardArt() เท่านั้น จะได้เปลี่ยนที่เดียวจบ */
+export const CARD_ART = 'assets/game/wreckers/cards/events/';
 export const CARD_EXT = '.png';
-export const cardArt = (id) => `${CARD_ART}${id}${CARD_EXT}`;
-export const CARD_BACK = cardArt('back');
+
+const isBase = (id) => BASE_CARDS.some(c => c.id === id);
+export const cardArt = (id) =>
+  `${CARD_ART}${isBase(id) ? 'standard' : 'special'}/${id}${CARD_EXT}`;
+export const CARD_BACK = `${CARD_ART}back${CARD_EXT}`;
 
 export const BASE_CARDS = [
   /* ── Common ชนิดละ 3 ใบ (รวม 12) ────────────────────────── */

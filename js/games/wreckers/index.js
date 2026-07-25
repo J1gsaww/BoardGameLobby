@@ -114,6 +114,8 @@ register({
       'wreck.nation.D.goal': 'ชนะเมื่อสองฝั่งมีกล่องเท่ากัน',
       'wreck.offlineWait': 'รอ {n} วินาทีเผื่อคนที่หลุดกลับมา',
       'wreck.dev.head': 'เครื่องมือทดสอบ — เลือกใบที่จะวางในแต่ละช่อง',
+      'wreck.opened': '{name} เปิดการ์ด',
+      'wreck.peeked': 'คุณแอบดูไว้ — คนอื่นยังเห็นเป็นไพ่คว่ำ',
       'wreck.log.devCard': 'เครื่องมือทดสอบ: เปลี่ยนการ์ดในช่อง {slot}',
 
       'wreck.plan.target': 'ยิงลำไหน',
@@ -147,7 +149,7 @@ register({
       'wreck.nation.D': 'ดัตช์',
 
       'wreck.log.activate': '{name} เปิดการ์ดเหตุการณ์',
-      'wreck.log.peek': '{name} แอบดูการ์ด',
+      'wreck.log.peek': '{name} แอบดูการ์ด {n} ใบ',
       'wreck.log.force': '{name} บังคับให้คนอื่นเปิดการ์ด',
       'wreck.log.toBoat': '{name} ลงเรือเล็ก',
       'wreck.log.ashore': '{name} ขึ้นฝั่งแล้ว',
@@ -242,6 +244,8 @@ register({
       'wreck.nation.D.goal': 'Win when both sides hold the same',
       'wreck.offlineWait': 'waiting {n}s in case they reconnect',
       'wreck.dev.head': 'Test tool \u2014 choose what sits in each slot',
+      'wreck.opened': '{name} flipped',
+      'wreck.peeked': 'You peeked at this \u2014 everyone else still sees the back',
       'wreck.log.devCard': 'Test tool: slot {slot} replaced',
 
       'wreck.plan.target': 'Fire at',
@@ -275,7 +279,7 @@ register({
       'wreck.nation.D': 'Dutch',
 
       'wreck.log.activate': '{name} flipped an event card',
-      'wreck.log.peek': '{name} peeked at the deck',
+      'wreck.log.peek': '{name} peeked at {n} card(s)',
       'wreck.log.force': '{name} forced someone to flip',
       'wreck.log.toBoat': '{name} boarded a rowboat',
       'wreck.log.ashore': '{name} came ashore',
