@@ -775,10 +775,71 @@ function startAction(el, st, ctx, act) {
   paint(el);
 }
 
-/* แถวตัวเลือกกับปุ่มยืนยัน — ใช้ร่วมกันทั้งคอลัมน์ล่างและเมนูข้างหมาก
+/* แถวตัวเลือกกับปุ่มยืนยัน — ใช้ร่วมกันทั้งคอลัมน์ล่าง เมนูข้างหมาก และฉากกลางจอ
    เขียนที่เดียวจะได้ไม่มีทางที่สองที่ถามไม่เหมือนกัน */
 export function planBody(st, ctx) {
   if (!plan) return '';
+
+  const pick = (field, value, label) =>
+    `<button class="wr-chip${plan[field] === value ? ' on' : ''}"
+       data-set="${field}" data-val="${esc(value)}">${esc(label)}</button>`;
+
+  let rows = '';
+  if (plan.act === 'aimAt') {
+    rows = `<div class="wr-plan-row"><span>${esc(t('wreck.plan.target'))}</span>
+      <span class="wr-chip on">${esc(t('wreck.place.' + plan.target))}</span></div>`;
+  } else if (plan.act === 'shiftCargo') {
+    rows = `<div class="wr-plan-row"><span>${esc(t('wreck.plan.move'))}</span>
+      ${pick('from', 'B', t('wreck.plan.bToF'))}${pick('from', 'F', t('wreck.plan.fToB'))}</div>`;
+  } else if (plan.act === 'kick') {
+    const here = occupants(st.pos, placeOf(st.pos[ctx.me.uid])).filter(u => u !== ctx.me.uid);
+    rows = plan.uid
+      ? `<div class="wr-plan-row"><span>${esc(t('wreck.plan.who'))}</span>
+          <span class="wr-chip on">${esc(st.names?.[plan.uid] || '?')}</span></div>`
+      : `<div class="wr-plan-row"><span>${esc(t('wreck.plan.who'))}</span>
+          ${here.map(u => pick('uid', u, st.names?.[u] || '?')).join('')}</div>`;
+  } else if (plan.act === 'toBoat') {
+    rows = `<div class="wr-plan-row"><span>${esc(t('wreck.act.toBoat'))}</span>
+      <span class="wr-chip on">${esc(t('wreck.place.' + plan.boat))}</span></div>`;
+  }
+
+  const blocked = plan.act === 'kick' && !plan.uid;
+  return `<div class="wr-plan-head">${esc(t('wreck.act.' + plan.act))}</div>${rows}
+    <div class="wr-plan-go">
+      <button class="wr-act" data-plan="go"${blocked ? ' disabled' : ''}>
+        ${esc(t('wreck.plan.confirm'))}</button>
+      <button class="wr-act ghost" data-plan="off">${esc(t('wreck.cancel'))}</button>
+    </div>`;
+}
+
+/* ผูกปุ่มของแผน — ใช้ได้กับทุกที่ที่วาดแผนออกมา */
+export function wirePlan(box, el, ctx) {
+  box.querySelectorAll('[data-set]').forEach(b => {
+    b.onclick = () => { plan = { ...plan, [b.dataset.set]: b.dataset.val }; paint(el); };
+  });
+  const off = box.querySelector('[data-plan="off"]');
+  if (off) off.onclick = () => { plan = null; closeMenu(); paint(el); };
+  const go = box.querySelector('[data-plan="go"]');
+  if (go) go.onclick = () => {
+    const { act, from: origin, ...rest } = plan;
+    void origin;
+    plan = null;
+    closeMenu();
+    ctx.send(act, rest);
+  };
+}
+
+/* แผงยืนยันของคอลัมน์ล่าง — แผนที่เริ่มจากที่อื่นจะไปโผล่ที่นั่นแทน */
+function paintPlan(el, st, ctx) {
+  const box = el.querySelector('.wr-plan');
+  if (!box) return;
+
+  if (!plan || plan.from) {
+    box.hidden = true;
+    if (box.dataset.sig) { box.dataset.sig = ''; box.innerHTML = ''; }
+    return;
+  }
+
   const html = planBody(st, ctx);
   box.hidden = false;
   if (box.dataset.sig === html) return;

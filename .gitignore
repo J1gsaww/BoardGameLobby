@@ -1,0 +1,9 @@
+# คีย์ของโปรเจกต์ ไม่ควรขึ้น GitHub
+js/firebase-config.js
+
+# ของที่ลงเพิ่มเอง ไม่ต้องเก็บในรีโป
+node_modules/
+
+# ขยะของระบบปฏิบัติการ
+.DS_Store
+Thumbs.db

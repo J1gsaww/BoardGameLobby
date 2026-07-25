@@ -76,7 +76,13 @@ function walk(dir) {
   });
 }
 
-const mods = walk('js').map(f => './' + f.replace(/\\/g, '/')).sort();
+/* ไฟล์ที่มีเฉพาะในเครื่องผู้ใช้ ไม่ได้อยู่ในรีโป (คีย์ไม่ควรขึ้น GitHub)
+   ต้องใส่ในแผนที่ด้วยเสมอ ไม่งั้นเครื่องที่มีไฟล์จริงจะฟ้องว่าแผนที่ขาด
+   และไฟล์นั้นก็จะไม่ถูกล้างแคชตอนเปลี่ยนเลขรุ่น */
+const LOCAL_ONLY = ['./js/firebase-config.js'];
+
+const found = walk('js').map(f => './' + f.replace(/\\/g, '/'));
+const mods = [...new Set([...found, ...LOCAL_ONLY])].sort();
 const map = { imports: Object.fromEntries(mods.map(m => [m, `${m}?v=${NEW}`])) };
 
 let html = readFileSync('index.html', 'utf8');

@@ -357,7 +357,9 @@ ok('ฝรั่งเศสมากกว่า ฝรั่งเศสชน
 
 group('ชั้น 4 · ไพ่ประเทศ');
 ok('คนคี่ได้ดัตช์หนึ่งคน', dutchCount(7, 'auto'), 1);
-ok('คนคู่ได้ดัตช์สองคน', dutchCount(6, 'auto'), 2);
+ok('คนคู่ไม่มีดัตช์', dutchCount(6, 'auto'), 0);
+ok('สี่คนก็ไม่มีดัตช์', dutchCount(4, 'auto'), 0);
+ok('แปดคนก็ไม่มีดัตช์ถ้าไม่ได้เลือกเอง', dutchCount(8, 'auto'), 0);
 ok('กำหนดเองได้ว่าสองคน', dutchCount(8, '2'), 2);
 ok('เลือกหนึ่งคนได้ที่ห้าคน', dutchAllowed(5, '1'), true);
 ok('เลือกหนึ่งคนได้ที่เจ็ดคน', dutchAllowed(7, '1'), true);
@@ -370,10 +372,10 @@ ok('เลือกหนึ่งคนไม่ได้ที่หกคน'
 ok('เลือกสองคนได้ที่แปดกับสิบ', [dutchAllowed(8, '2'), dutchAllowed(10, '2')], [true, true]);
 ok('เลือกสองคนไม่ได้ที่หกคน', dutchAllowed(6, '2'), false);
 ok('ตามจำนวนคนกดได้เสมอ', dutchAllowed(4, 'auto'), true);
-ok('ตั้งค่าค้างไว้แล้วคนเปลี่ยน ให้ตกกลับเป็นอัตโนมัติ', dutchCount(6, '1'), 2);
+ok('ตั้งค่าค้างไว้แล้วคนเปลี่ยน ให้ตกกลับเป็นอัตโนมัติ', dutchCount(6, '1'), 0);
 {
   const n = dealNations(['a', 'b', 'c', 'd', 'e', 'f'], 'auto', fakeRng([0.2, 0.8, 0.4, 0.6, 0.1]));
-  ok('หกคน ดัตช์สอง ที่เหลือแบ่งสองสอง', nationTally(n), [['B', 2], ['D', 2], ['F', 2]]);
+  ok('หกคนไม่มีดัตช์ แบ่งสามสาม', nationTally(n), [['B', 3], ['F', 3]]);
   ok('ทุกคนได้ประเทศครบ', Object.keys(n).length, 6);
 }
 {
@@ -645,7 +647,7 @@ group('ต่อสาย · ผลของการโหวต');
     ok('ระหว่างรอเลือก กัปตันทำได้แค่เล็งเป้า', actionsFor(done.state, 'a'), ['aimAt']);
   } else {
     ok('ยิงไม่ติด ผ่านตาไปเลย', done.state.turn, 'b');
-    ok('ไม่มีช่วงเลือกเป้า', done.state.aim, undefined);
+    ok('ไม่มีช่วงเลือกเป้า', !done.state.aim, true);
   }
   ok('ทุกคนได้มือใหม่ครบตามเพดาน', Object.values(done.state.votes), [3, 3, 3, 3, 3, 3]);
   ok('สับใหม่แล้วกองเหลือเท่าเดิม', done.state.voteDeck, DECK.length - 18);
@@ -658,7 +660,7 @@ group('ต่อสาย · ผลของการโหวต');
   const done = await onAction(ctx, { uid: 'c', type: 'voteCard', payload: { card: 'v01' } });
   const n = done.state.lastVote.counts;
   if (!attackPasses(n)) {
-    ok('โจมตีไม่สำเร็จ กล่องอยู่ที่เดิมและผ่านตาไป', [done.state.cargo.merchant, done.state.aim], [4, undefined]);
+    ok('โจมตีไม่สำเร็จ กล่องอยู่ที่เดิมและผ่านตาไป', [done.state.cargo.merchant, !done.state.aim], [4, true]);
   } else {
     ok('โจมตีสำเร็จ เปิดช่วงให้เลือกเป้า', done.state.aim.by, 'a');
   }

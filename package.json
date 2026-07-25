@@ -1,0 +1,12 @@
+{
+  "name": "boardgamelobby",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node run-tests.mjs",
+    "setup": "npm install acorn --no-save"
+  },
+  "devDependencies": {
+    "acorn": "^8.12.0"
+  }
+}

@@ -100,7 +100,7 @@ register({
       'game.wreckers.dutch.1': '1 คน',
       'game.wreckers.dutch.2': '2 คน',
       'game.wreckers.dutch.hint':
-        'ตามจำนวนคน = คนคี่ได้ดัตช์ 1 คน คนคู่ได้ 2 คน · เลือก 1 คนได้เมื่อมี 5, 7, 9 คน · เลือก 2 คนได้เมื่อมี 8, 10 คน',
+        'ตามจำนวนคน = คนคี่ได้ดัตช์ 1 คน คนคู่ไม่มีดัตช์ · เลือก 1 คนได้เมื่อมี 5, 7, 9 คน · เลือก 2 คนได้เมื่อมี 8, 10 คน',
       'game.wreckers.turnSeconds.0': 'ไม่จับเวลา',
 
       'wreck.nation.head': 'ประเทศของคุณ',
@@ -254,7 +254,7 @@ register({
       'game.wreckers.dutch.1': '1',
       'game.wreckers.dutch.2': '2',
       'game.wreckers.dutch.hint':
-        'By player count = 1 Dutch for odd, 2 for even \u00b7 pick 1 with 5, 7, 9 players \u00b7 pick 2 with 8, 10',
+        'By player count = 1 Dutch for odd, none for even \u00b7 pick 1 with 5, 7, 9 players \u00b7 pick 2 with 8, 10',
       'game.wreckers.turnSeconds.0': 'No timer',
 
       'wreck.nation.head': 'Your nation',

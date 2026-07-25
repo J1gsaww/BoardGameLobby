@@ -39,6 +39,8 @@ if (!mapTag) {
   };
   walk('js');
 
+  /* แผนที่มีสิทธิ์มีมากกว่าไฟล์ที่เห็นในเครื่องนี้ได้ เพราะบางไฟล์เป็นของเฉพาะเครื่อง
+     (เช่นไฟล์คีย์ที่ไม่ได้ commit) จึงตรวจแค่ว่าไฟล์ที่ "มีอยู่จริง" อยู่ในแผนที่ครบไหม */
   const missing = files.filter(f => !imports[f]);
   if (missing.length) add(`index.html importmap (ขาด ${missing.length} ไฟล์)`, '(ไม่ครบ)');
   else {
