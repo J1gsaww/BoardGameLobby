@@ -21,7 +21,8 @@ const ICON_FILE = {
   A: 'agree', D: 'disagree'
 };
 
-export const iconSrc = (ch) => (ICON_FILE[ch] ? `${VOTE_ART}${ICON_FILE[ch]}.png` : '');
+export const ICON_EXT = '.webp';
+export const iconSrc = (ch) => (ICON_FILE[ch] ? `${VOTE_ART}${ICON_FILE[ch]}${ICON_EXT}` : '');
 
 export const ICON = Object.fromEntries(Object.keys(ICON_FILE).map(ch =>
   [ch, `<img class="vc-icon" src="${iconSrc(ch)}" alt="" draggable="false" loading="lazy">`]

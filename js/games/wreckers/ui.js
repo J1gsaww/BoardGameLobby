@@ -17,7 +17,7 @@ import { mountSea, stopSea } from './sea.js';
 import { cardById as voteById, voteCard } from './vote.js';
 import { dieSvg, rollPose, HERO, ROLL_MS } from './die.js';
 import { actionsFor, occupants, placeOf } from './rules.js';
-import { BASE_CARDS, cardArt, CARD_BACK } from './events.js';
+import { BASE_CARDS, cardArt, cardArtAlt, CARD_BACK, CARD_BACK_ALT } from './events.js';
 import { paintScene, stopScene, setPlanView, setPlanWire } from './scene.js';
 import { EXTRA_CARDS } from './cards.js';
 import { lang } from '../../i18n.js';
@@ -129,7 +129,7 @@ function shell(el, ctx) {
     if (box) { openMenu(el, box, { kind: 'cargo', cargo: box.dataset.cargo }); return; }
 
     const b = e.target.closest('[data-spot]');
-    if (!b) { closeMenu(); paint(el); return; }
+    if (!b) { if (!plan) closeMenu(); paint(el); return; }
 
     if (b.dataset.who) {                                  // มีคนยืนอยู่ เปิดเมนู
       openMenu(el, b, { kind: 'pawn', uid: b.dataset.who, spot: b.dataset.spot });
@@ -139,7 +139,7 @@ function shell(el, ctx) {
   });
 
   el.querySelector('.wr-stage').addEventListener('click', e => {
-    if (plan?.from === 'menu') return;          /* กำลังรอยืนยันอยู่ อย่าเพิ่งปิดเมนู */
+    if (plan) return;                          /* กำลังรอยืนยันอยู่ อย่าเพิ่งปิดเมนู */
     if (!e.target.closest('.wr-menu') && !e.target.closest('[data-spot]')
         && !e.target.closest('[data-cargo]')) { closeMenu(); paint(el); }
   });
@@ -240,7 +240,9 @@ export function render(el, ctx) {
     node.onclick = hot
       ? (e) => {
           e.stopPropagation();
-          plan = { act: 'aimAt', target: node.dataset.piece, from: 'scene' };
+          /* เปิดเมนูยืนยันติดกับเรือลำที่คลิก จะได้เห็นชัดว่ากำลังเล็งลำไหน */
+          plan = { act: 'aimAt', target: node.dataset.piece, from: 'menu' };
+          openMenu(el, node, { kind: 'aim' });
           paint(el);
         }
       : null;
@@ -256,7 +258,7 @@ export function render(el, ctx) {
   paintNation(el, ctx);
   paintReveal(el, st, ctx);
   /* แผนที่เกิดจากการคลิกเรือ ต้องไปโผล่ในฉากกลางจอ ไม่ใช่คอลัมน์ล่าง */
-  setPlanView(plan?.from === 'scene' ? planBody(st, ctx) : null);
+  setPlanView(null);
   setPlanWire(box => wirePlan(box, el, ctx));
   paintScene(el, st, ctx);
   paintHand(el, st, ctx);
@@ -363,10 +365,11 @@ function eventFace(id) {
   const c = eventById(id);
   if (!c) return '';
   const info = c[lang] || c.th;
-  /* ใบที่ยังไม่มีไฟล์ภาพ: onerror ลบ img ทิ้ง เหลือพื้นหลัง CSS กับชื่อการ์ด
-     ยังอ่านออกว่าเป็นใบอะไร ไม่พัง และไม่ต้องมีไฟล์สำรอง */
-  return `<img class="wr-card-img" src="${esc(cardArt(id))}" alt=""
-      draggable="false" onerror="this.remove()">
+  /* ลอง WebP ก่อน ไม่เจอค่อยสลับไป PNG แล้วค่อยยอมแพ้เป็นไพ่คว่ำ
+     ทำแบบนี้เพื่อให้ช่วงที่ยังแปลงไฟล์ไม่ครบ ไม่มีใบไหนหายไปเฉย ๆ */
+  return `<img class="wr-card-img" src="${esc(cardArt(id))}" alt="" draggable="false"
+      data-alt="${esc(cardArtAlt(id))}"
+      onerror="if(this.dataset.alt){this.src=this.dataset.alt;this.dataset.alt='';}else{this.remove();}">
     <span class="wr-card-name">${esc(info.name)}</span>`;
 }
 
@@ -374,8 +377,9 @@ function eventFace(id) {
    ภาพโหลดขึ้นก็บังตัวหนังสือไปเอง โหลดไม่ขึ้น onerror ลบภาพทิ้งแล้วตัวหนังสือโผล่มาแทน
    ได้ของสำรองโดยไม่ต้องเช็กว่าไฟล์มีอยู่จริงไหมก่อนวาด */
 const eventBack = () => `<span class="wr-card-face">${esc(t('wreck.event'))}</span>
-  <img class="wr-card-img" src="${esc(CARD_BACK)}" alt=""
-    draggable="false" onerror="this.remove()">`;
+  <img class="wr-card-img" src="${esc(CARD_BACK)}" alt="" draggable="false"
+    data-alt="${esc(CARD_BACK_ALT)}"
+    onerror="if(this.dataset.alt){this.src=this.dataset.alt;this.dataset.alt='';}else{this.remove();}">`;
 
 function paintEvents(el, st, ctx) {
   const me = ctx.me.uid;
@@ -615,7 +619,9 @@ function paintMenu(el, st, ctx) {
   if (!box) { console.warn('[wreckers] ไม่พบกล่องเมนูในโครง'); return; }
   if (!menu) { box.hidden = true; box.innerHTML = ''; return; }
 
-  const html = menu.kind === 'cargo' ? cargoMenu() : pawnMenu(st, ctx);
+  const html = menu.kind === 'aim' ? planBody(st, ctx)
+             : menu.kind === 'cargo' ? cargoMenu()
+             : pawnMenu(st, ctx);
   if (!html) { box.hidden = true; box.innerHTML = ''; menu = null; return; }
 
   box.hidden = false;
@@ -692,11 +698,13 @@ const btnRow = (act, label, on, arg = '', tip = '') =>
   `<button class="wr-menu-btn" data-do="${act}"${arg ? ` data-arg="${esc(arg)}"` : ''}
     ${on ? '' : 'disabled'}${tip ? ` title="${esc(tip)}"` : ''}>${esc(label)}</button>`;
 
+/* เมนูข้างหมากไม่ยิงคำสั่งทันที ตั้งเป็นแผนรอยืนยันแล้วเมนูเปลี่ยนเป็นปุ่ม Confirm/Cancel
+   เมนูต้องไม่ปิดตัวเอง ไม่งั้นแผนจะหายไปพร้อมเมนูโดยไม่มีอะไรให้กด */
 function runMenu(el, ctx, act, arg) {
-  closeMenu();
-  if (act === 'move')  { ctx.send('toBoat', { boat: String(arg).split(':')[0] }); return; }
-  if (act === 'kick')  { ctx.send('kick', { uid: arg }); return; }
-  if (act === 'force') { forcing = arg; picks = []; paint(el); return; }
+  if (act === 'force') { closeMenu(); forcing = arg; picks = []; paint(el); return; }
+  if (act === 'move') plan = { act: 'toBoat', boat: String(arg).split(':')[0], from: 'menu' };
+  else if (act === 'kick') plan = { act: 'kick', uid: arg, from: 'menu' };
+  else plan = { act, from: 'menu' };
   paint(el);
 }
 

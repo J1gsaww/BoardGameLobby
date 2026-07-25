@@ -1199,8 +1199,9 @@ button{ cursor:pointer; border:0; background:none; }
 .wr-scene{
   position:absolute; inset:0; z-index:45;
   display:grid; align-content:start; justify-items:center; gap:18px;
-  padding:26px 20px 20px;
-  background:rgba(0,0,0,.15);
+  /* เว้นบนเยอะขึ้นเพราะแถบคะแนนลอยอยู่บนสุดของกระดาน ถ้าไม่เว้นจะทับกันอ่านไม่ออก */
+  padding:64px 20px 20px;
+  background:rgba(0,0,0,.30);
   /* ตัวฉากไม่รับคลิก ปล่อยให้ทะลุไปถึงเรือบนกระดานได้
      ลูกของฉัน (ปุ่ม แผงยืนยัน) ค่อยรับคลิกเอง ไม่งั้นกัปตันคลิกเรือไม่ได้ */
   pointer-events:none;

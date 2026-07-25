@@ -12,17 +12,25 @@
    ผลของแต่ละใบจะไปอยู่ที่ไฟล์ผลการ์ดแยกต่างหาก เพราะบางใบต้องถามผู้เล่นก่อน
    ───────────────────────────────────────────────────────────── */
 
-/* ภาพการ์ด — เจนมาเป็น PNG จึงใช้ PNG ตรง ๆ ไม่แปลงกลางทาง
-   แยกโฟลเดอร์ตามชุด: สำรับมาตรฐานอยู่ standard · การ์ดพิเศษอยู่ special
-   ประกอบ path ผ่าน cardArt() เท่านั้น จะได้เปลี่ยนที่เดียวจบ */
+/* ภาพการ์ด — ใช้ WebP เป็นหลักเพราะภาพวาดที่ไล่เฉดทุกพิกเซล PNG บีบอัดไม่ลง
+   วัดจากไฟล์จริงในโปรเจกต์นี้แล้ว WebP เล็กกว่าราว 84% โดยตาแยกไม่ออก
+
+   มี PNG เป็นตัวสำรอง เพราะช่วงที่ยังแปลงไฟล์ไม่ครบจะได้ไม่มีใบไหนหาย
+   หน้าจอลอง WebP ก่อน โหลดไม่เจอค่อยสลับไป PNG แล้วค่อยยอมแพ้เป็นไพ่คว่ำ
+
+   แยกโฟลเดอร์ตามชุด: สำรับมาตรฐานอยู่ standard · การ์ดพิเศษอยู่ special */
 export const CARD_ART = 'assets/game/wreckers/cards/events/';
-export const CARD_EXT = '.png';
+export const CARD_EXT = '.webp';
+export const CARD_ALT = '.png';
 
 const isBase = (id) => BASE_CARDS.some(c => c.id === id);
-export const cardArt = (id) =>
-  `${CARD_ART}${isBase(id) ? 'standard' : 'special'}/${id}${CARD_EXT}`;
+const dirOf = (id) => (isBase(id) ? 'standard' : 'special');
+
+export const cardArt = (id) => `${CARD_ART}${dirOf(id)}/${id}${CARD_EXT}`;
+export const cardArtAlt = (id) => `${CARD_ART}${dirOf(id)}/${id}${CARD_ALT}`;
 /* หลังการ์ด อยู่นอกโฟลเดอร์ standard/special เพราะไม่ใช่การ์ดใบไหนโดยเฉพาะ */
 export const CARD_BACK = `${CARD_ART}back${CARD_EXT}`;
+export const CARD_BACK_ALT = `${CARD_ART}back${CARD_ALT}`;
 
 export const BASE_CARDS = [
   /* ── Common ชนิดละ 3 ใบ (รวม 12) ────────────────────────── */

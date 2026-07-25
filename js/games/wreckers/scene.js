@@ -1,24 +1,33 @@
-/* scene.js — ฉากกลางบนกระดานตอนโหวต
+/* scene.js — ฉากบนกระดานตอนโหวต
    ─────────────────────────────────────────────────────────────
-   บทเรียนจากรุ่นก่อน: ห้ามเขียน innerHTML ใหม่ทุกเฟรมเด็ดขาด
-   ทุกครั้งที่เขียนทับ แอนิเมชัน CSS จะเริ่มนับหนึ่งใหม่ (กลายเป็นลูปไม่หยุด)
-   และ <img> จะเริ่มโหลดใหม่ตั้งแต่ต้น จึงไม่มีวันโหลดเสร็จ ภาพเลยไม่เคยขึ้น
+   กฎเหล็กสองข้อที่เคยพลาดมาแล้วทั้งคู่
 
-   รุ่นนี้จึง **สร้าง DOM ครั้งเดียวต่อหนึ่งช่วง** แล้วหลังจากนั้นแตะเฉพาะ
-   คลาสกับข้อความ ของที่มีอยู่แล้วไม่ถูกสร้างใหม่อีกเลย
+   1) ห้ามเขียน innerHTML ใหม่ทุกเฟรม — แอนิเมชันจะเริ่มนับหนึ่งใหม่
+      (เห็นเป็นลูปไม่หยุด) และ <img> จะโหลดใหม่จนไม่มีวันเสร็จ
+   2) ต้องมีลูป rAF ตัวเดียวในระบบ — ของเดิม render() เรียก paintScene
+      แล้ว paintScene ก็ขอเฟรมถัดไปเอง พอห้องอัปเดตทุก 5 วินาที
+      ก็เกิดลูปใหม่ซ้อนขึ้นเรื่อย ๆ จนหลายสิบตัวแย่งกันเขียน DOM
+      ตอนนี้ยกเลิกตัวเก่าทุกครั้งที่เข้าฟังก์ชัน จึงเหลือตัวเดียวเสมอ
+
+   ทั้งการโหวตนับเป็น "หนึ่งฉาก" ยาว ๆ ไม่ตัดใหม่ตอนเปลี่ยนช่วง
+   ไพ่ที่วางอยู่แล้วจึงอยู่ต่อ ใบจากกองกลางสไลด์มาต่อท้าย แล้วค่อยรวมกันหุบหาย
    ───────────────────────────────────────────────────────────── */
 
 import { t } from '../../i18n.js';
-import { VOTE_ART } from './vote.js';
+import { VOTE_ART, ICON_EXT } from './vote.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-export const VOTE_BACK = `${VOTE_ART}back.png`;
+export const VOTE_BACK = `${VOTE_ART}back${ICON_EXT}`;
 
 const T = {
-  lines: 620, pop: 340, hold: 520, deckCard: 520,
-  merge: 640, vanish: 440, tick: 200, verdict: 300
+  intro: 1480,     // เส้นวิ่ง + ชื่อโผล่ + ค้างให้อ่าน
+  deckCard: 900,   // ใบจากกองกลางสไลด์เข้ามาแล้วค้างให้ทัน
+  merge: 700,      // วิ่งมาซ้อนกัน
+  vanish: 480,     // หุบหาย
+  tick: 200,       // ระยะห่างของไอคอนแต่ละตัว
+  verdict: 320
 };
 
 const ATTACK_ORDER = [
@@ -27,24 +36,22 @@ const ATTACK_ORDER = [
   { ch: 'W', file: 'water',  key: 'wreck.sym.W' }
 ];
 
-let key = '';
-let at = 0;
+let key = '';        // ฉาก (หนึ่งการโหวตทั้งกระบวน)
+let at = 0;          // เริ่มฉากตอนกี่โมง
+let stage = '';      // ช่วงย่อยที่สร้าง DOM ไปแล้ว
+let stageAt = 0;     // ช่วงย่อยเริ่มตอนกี่โมง
 let raf = 0;
-let stage = '';
 let seen = new Set();
-let planView = null;
-let onPlanWire = null;
 let sendFn = null;
-
-export const setPlanView = (html) => { planView = html || null; };
-export const setPlanWire = (fn) => { onPlanWire = fn; };
 
 const now = () => performance.now();
 
+/* หนึ่งฉาก = หนึ่งการโหวตทั้งกระบวน ตั้งแต่สั่งจนกัปตันเลือกเสร็จ
+   ผูกกับคนสั่งกับสถานที่ ไม่ผูกกับช่วง จึงไม่ถูกตัดใหม่กลางทาง */
 function sceneKey(st) {
-  if (st.vote) return `call:${st.vote.kind}:${st.vote.caller}:${st.vote.place}`;
-  if (st.aim) return `aim:${st.aim.by}`;
-  if (st.lastVote) return `show:${st.lastVote.at}`;
+  if (st.vote) return `ep:${st.vote.caller}:${st.vote.place}`;
+  if (st.aim) return `ep:${st.aim.by}:${st.aim.place}`;
+  if (st.lastVote) return `ep:${st.lastVote.caller}:${st.lastVote.place}`;
   return '';
 }
 
@@ -53,7 +60,16 @@ export function stopScene() {
   raf = 0; key = ''; stage = ''; seen = new Set();
 }
 
+function setStage(name) {
+  if (stage === name) return false;
+  stage = name; stageAt = now();
+  return true;
+}
+
 export function paintScene(el, st, ctx) {
+  /* ยกเลิกลูปเก่าก่อนเสมอ เหลือตัวเดียวในระบบ */
+  if (raf) { cancelAnimationFrame(raf); raf = 0; }
+
   const box = el.querySelector('.wr-scene');
   if (!box) return;
   sendFn = ctx.send;
@@ -64,10 +80,7 @@ export function paintScene(el, st, ctx) {
     return;
   }
 
-  /* ฉากใหม่ — สร้างหัวครั้งเดียว ต่อจากนี้ไม่แตะ innerHTML ของหัวอีกเลย
-     หัวจึงเล่นแอนิเมชันรอบเดียวแล้วค้าง ไม่วนซ้ำ */
   if (key !== want) {
-    if (raf) cancelAnimationFrame(raf);
     key = want; at = now(); stage = ''; seen = new Set();
     box.hidden = false;
     box.innerHTML = `
@@ -77,26 +90,38 @@ export function paintScene(el, st, ctx) {
         <strong class="wr-scene-big"></strong>
       </div>
       <div class="wr-scene-body" hidden></div>`;
-    const head = titleOf(st);
-    box.querySelector('.wr-scene-who').textContent = head.who;
-    box.querySelector('.wr-scene-big').textContent = head.big;
   }
 
   const ms = now() - at;
   const title = box.querySelector('.wr-scene-title');
   const body = box.querySelector('.wr-scene-body');
 
-  box.classList.toggle('clear', !!(st.aim && st.aim.by === ctx.me.uid && !st.aim.target));
-  title.classList.toggle('up', ms > T.lines + T.pop + T.hold);
-  body.hidden = ms < T.lines + T.pop + T.hold;
+  /* ชื่อเปลี่ยนข้อความได้โดยไม่ต้องสร้างใหม่ แอนิเมชันจึงไม่เริ่มใหม่ */
+  const head = titleOf(st);
+  const who = box.querySelector('.wr-scene-who');
+  const big = box.querySelector('.wr-scene-big');
+  if (who.textContent !== head.who) who.textContent = head.who;
+  if (big.textContent !== head.big) big.textContent = head.big;
 
+  box.classList.toggle('clear', !!(st.aim && st.aim.by === ctx.me.uid && !st.aim.target));
+  title.classList.toggle('up', ms > T.intro);
+  body.hidden = ms < T.intro;
+
+  let busy = ms < T.intro;
   if (!body.hidden) {
-    if (st.vote) collect(body, st);
+    if (st.vote) busy = collect(body, st) || busy;
+    else if (st.lastVote && !doneShowing(st)) busy = reveal(body, st) || busy;
     else if (st.aim) aim(body, st, ctx);
-    else reveal(body, st, ms);
+    else busy = reveal(body, st) || busy;
   }
 
-  raf = requestAnimationFrame(() => paintScene(el, st, ctx));
+  /* ขอเฟรมถัดไปเฉพาะตอนที่ยังมีอะไรขยับจริง ๆ */
+  if (busy) raf = requestAnimationFrame(() => paintScene(el, st, ctx));
+}
+
+/* เล่าจบแล้วหรือยัง — จบแล้วก็หยุดขอเฟรม ปล่อยให้ค้างไว้เฉย ๆ */
+function doneShowing(st) {
+  return stage === 'tally' && !!st.aim;
 }
 
 function titleOf(st) {
@@ -111,10 +136,9 @@ function titleOf(st) {
   return { who: `${t('wreck.role.' + role)} \u00b7 ${st.names?.[who] || '?'}`, big: t(line) };
 }
 
-/* ไพ่ที่วางแล้วอยู่ต่อไปเรื่อย ๆ ใบใหม่แค่ append เข้าไป ไม่วาดใหม่ทั้งแถว */
+/* ── รอไพ่ ─────────────────────────────────────────────── */
 function collect(body, st) {
-  if (stage !== 'collect') {
-    stage = 'collect';
+  if (setStage('collect')) {
     body.innerHTML = `<div class="wr-vb-row wiggle"></div><p class="wr-scene-note"></p>`;
   }
   const row = body.querySelector('.wr-vb-row');
@@ -122,11 +146,7 @@ function collect(body, st) {
   for (const uid of st.vote.done) {
     if (seen.has(uid)) continue;
     seen.add(uid);
-    const card = document.createElement('span');
-    card.className = 'wr-vb';
-    card.innerHTML = `<img src="${esc(VOTE_BACK)}" alt="" draggable="false">
-      <span class="wr-vb-name">${esc(st.names?.[uid] || '?')}</span>`;
-    row.appendChild(card);
+    row.appendChild(voteBack(st.names?.[uid] || '?'));
   }
 
   const left = st.vote.voters.filter(u => !st.vote.done.includes(u));
@@ -135,39 +155,57 @@ function collect(body, st) {
     ? t('wreck.scene.waiting', { who: left.map(u => st.names?.[u] || '?').join(', ') })
     : t('wreck.scene.allIn');
   if (note.textContent !== text) note.textContent = text;
+  return false;    // รอคนกด ไม่ต้องขอเฟรมถี่ ๆ
 }
 
-function reveal(body, st, ms) {
+function voteBack(name) {
+  const c = document.createElement('span');
+  c.className = 'wr-vb';
+  c.innerHTML = `<img src="${esc(VOTE_BACK)}" alt="" draggable="false">` +
+    (name ? `<span class="wr-vb-name">${esc(name)}</span>` : '');
+  return c;
+}
+
+/* ── เปิดผล ────────────────────────────────────────────
+   ไม่ล้างไพ่ที่มีอยู่ — เติมใบจากกองกลางต่อท้าย แล้วค่อยรวมกันหุบหาย */
+function reveal(body, st) {
   const v = st.lastVote;
-  if (!v) return;
+  if (!v) return false;
   const pot = v.pot || [];
 
-  const tMerge = T.deckCard;
-  const tVanish = tMerge + T.merge;
-  const tCount = tVanish + T.vanish;
-
-  if (ms < tCount) {
-    if (stage !== 'pot') {
-      stage = 'pot';
-      body.innerHTML = `<div class="wr-vb-row"></div>`;
-      const row = body.querySelector('.wr-vb-row');
-      pot.forEach((_, i) => {
-        const c = document.createElement('span');
-        c.className = 'wr-vb' + (i === pot.length - 1 ? ' from-deck' : '');
-        c.style.setProperty('--i', i);
-        c.style.setProperty('--n', pot.length);
-        c.innerHTML = `<img src="${esc(VOTE_BACK)}" alt="" draggable="false">`;
-        row.appendChild(c);
-      });
+  if (setStage('pot')) {
+    let row = body.querySelector('.wr-vb-row');
+    if (!row) {
+      /* เข้ามากลางคัน ไม่ทันเห็นช่วงรอไพ่ ก็สร้างไพ่ทั้งกองขึ้นมาเลย */
+      body.innerHTML = `<div class="wr-vb-row"></div><p class="wr-scene-note"></p>`;
+      row = body.querySelector('.wr-vb-row');
+      pot.slice(0, -1).forEach(() => row.appendChild(voteBack('')));
     }
-    const row = body.querySelector('.wr-vb-row');
-    row.classList.toggle('merge', ms > tMerge);
-    row.classList.toggle('gone', ms > tVanish);
-    return;
+    row.classList.remove('wiggle');
+    const extra = voteBack('');
+    extra.classList.add('from-deck');
+    row.appendChild(extra);
+    [...row.children].forEach((c, i) => {
+      c.style.setProperty('--i', i);
+      c.style.setProperty('--n', row.children.length);
+    });
+    const note = body.querySelector('.wr-scene-note');
+    if (note) note.textContent = t('wreck.scene.shuffling');
   }
 
-  if (stage !== 'tally') {
-    stage = 'tally';
+  const ms = now() - stageAt;
+  const row = body.querySelector('.wr-vb-row');
+  if (row) {
+    row.classList.toggle('merge', ms > T.deckCard);
+    row.classList.toggle('gone', ms > T.deckCard + T.merge);
+  }
+  if (ms < T.deckCard + T.merge + T.vanish) return true;
+
+  return tally(body, v);
+}
+
+function tally(body, v) {
+  if (setStage('tally')) {
     body.innerHTML = `<div class="wr-tallies"></div>`;
     const wrap = body.querySelector('.wr-tallies');
     for (const sym of ATTACK_ORDER) {
@@ -177,15 +215,15 @@ function reveal(body, st, ms) {
       row.className = 'wr-tally';
       row.dataset.ch = sym.ch;
       row.innerHTML = `<span class="wr-tally-pips">${
-          Array.from({ length: n }, () =>
-            `<img class="wr-pip" src="${esc(VOTE_ART)}${sym.file}.png" alt="" draggable="false">`
-          ).join('')}</span>
-        <span class="wr-tally-n">0</span>`;
+        Array.from({ length: n }, () =>
+          `<img class="wr-pip" src="${esc(VOTE_ART)}${sym.file}${ICON_EXT}" alt="" draggable="false">`
+        ).join('')}</span><span class="wr-tally-n">0</span>`;
       wrap.appendChild(row);
     }
   }
 
-  const step = Math.floor((ms - tCount) / T.tick);
+  const ms = now() - stageAt;
+  const step = Math.floor(ms / T.tick);
   let before = 0, total = 0;
 
   for (const sym of ATTACK_ORDER) {
@@ -202,30 +240,27 @@ function reveal(body, st, ms) {
     row.querySelectorAll('.wr-pip').forEach((p, i) => p.classList.toggle('in', i < vis));
   }
 
-  /* คำตัดสินเติมครั้งเดียวแล้วค้างอยู่ตรงนั้น */
-  if (ms > tCount + total * T.tick + T.verdict && !body.querySelector('.wr-scene-verdict')) {
+  const endAt = total * T.tick + T.verdict;
+  if (ms > endAt && !body.querySelector('.wr-scene-verdict')) {
     const p = document.createElement('p');
     p.className = 'wr-scene-verdict ' + (v.won ? 'win' : 'fail');
     p.textContent = t(v.won ? 'wreck.scene.hit' : 'wreck.scene.miss');
     body.appendChild(p);
   }
+  return ms <= endAt;      // นับครบแล้วหยุดขอเฟรม ค้างไว้เฉย ๆ
 }
 
+/* ── กัปตันเลือก ───────────────────────────────────────── */
 function aim(body, st, ctx) {
   const mine = st.aim.by === ctx.me.uid;
-  const want = mine ? (st.aim.target ? 'side' : (planView ? 'plan' : 'pick')) : 'wait';
-  const sig = 'aim:' + want + (want === 'plan' ? ':' + planView.length : '');
-  if (stage === sig) return;
-  stage = sig;
+  const want = mine ? (st.aim.target ? 'side' : 'pick') : 'wait';
+  if (!setStage('aim:' + want)) return;
 
   if (want === 'wait') {
     body.innerHTML = `<p class="wr-scene-note">${esc(t('wreck.scene.waitAim', {
       name: st.names?.[st.aim.by] || '?' }))}</p>`;
   } else if (want === 'pick') {
     body.innerHTML = `<p class="wr-scene-note">${esc(t('wreck.scene.pickShip'))}</p>`;
-  } else if (want === 'plan') {
-    body.innerHTML = `<div class="wr-scene-plan">${planView}</div>`;
-    if (onPlanWire) onPlanWire(body);
   } else {
     body.innerHTML = `<p class="wr-scene-note">${esc(t('wreck.scene.pickSide'))}</p>
       <div class="wr-scene-btns">
@@ -237,3 +272,7 @@ function aim(body, st, ctx) {
     });
   }
 }
+
+/* ยังต้องมีให้ ui.js เรียกได้ แม้ตอนนี้จะไม่ได้ใช้แผนในฉากแล้ว */
+export const setPlanView = () => {};
+export const setPlanWire = () => {};
