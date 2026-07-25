@@ -21,6 +21,7 @@ export const CARD_EXT = '.png';
 const isBase = (id) => BASE_CARDS.some(c => c.id === id);
 export const cardArt = (id) =>
   `${CARD_ART}${isBase(id) ? 'standard' : 'special'}/${id}${CARD_EXT}`;
+/* หลังการ์ด อยู่นอกโฟลเดอร์ standard/special เพราะไม่ใช่การ์ดใบไหนโดยเฉพาะ */
 export const CARD_BACK = `${CARD_ART}back${CARD_EXT}`;
 
 export const BASE_CARDS = [

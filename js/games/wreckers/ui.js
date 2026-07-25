@@ -336,13 +336,19 @@ function eventFace(id) {
   const c = eventById(id);
   if (!c) return '';
   const info = c[lang] || c.th;
+  /* ใบที่ยังไม่มีไฟล์ภาพ: onerror ลบ img ทิ้ง เหลือพื้นหลัง CSS กับชื่อการ์ด
+     ยังอ่านออกว่าเป็นใบอะไร ไม่พัง และไม่ต้องมีไฟล์สำรอง */
   return `<img class="wr-card-img" src="${esc(cardArt(id))}" alt=""
       draggable="false" onerror="this.remove()">
     <span class="wr-card-name">${esc(info.name)}</span>`;
 }
 
-const eventBack = () => `<img class="wr-card-img" src="${esc(CARD_BACK)}" alt=""
-  draggable="false" onerror="this.remove()">`;
+/* ไพ่คว่ำ — วางตัวหนังสือไว้ก่อนแล้วเอาภาพทับ
+   ภาพโหลดขึ้นก็บังตัวหนังสือไปเอง โหลดไม่ขึ้น onerror ลบภาพทิ้งแล้วตัวหนังสือโผล่มาแทน
+   ได้ของสำรองโดยไม่ต้องเช็กว่าไฟล์มีอยู่จริงไหมก่อนวาด */
+const eventBack = () => `<span class="wr-card-face">${esc(t('wreck.event'))}</span>
+  <img class="wr-card-img" src="${esc(CARD_BACK)}" alt=""
+    draggable="false" onerror="this.remove()">`;
 
 function paintEvents(el, st, ctx) {
   /* ใบที่ตัวเองแอบดูไว้ เห็นคนเดียว คนอื่นยังเห็นเป็นไพ่คว่ำ */
