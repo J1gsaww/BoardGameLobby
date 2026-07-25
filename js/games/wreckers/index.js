@@ -200,6 +200,7 @@ register({
       'wreck.nation.F': 'ฝรั่งเศส',
       'wreck.nation.D': 'ดัตช์',
 
+      'wreck.log.cardLost': '{name} ไม่ได้เลือกเป้าทันเวลา ผลการ์ดหายไป',
       'wreck.log.activate': '{name} เปิดการ์ดเหตุการณ์',
       'wreck.log.peek': '{name} แอบดูการ์ดช่อง {at}',
       'wreck.log.peekOne': '{name} แอบดูไปหนึ่งใบ เหลืออีก {n}',
@@ -383,6 +384,7 @@ register({
       'wreck.nation.F': 'France',
       'wreck.nation.D': 'Dutch',
 
+      'wreck.log.cardLost': '{name} ran out of time — the card had no effect',
       'wreck.log.activate': '{name} flipped an event card',
       'wreck.log.peek': '{name} peeked at slot {at}',
       'wreck.log.peekOne': '{name} peeked at one \u2014 {n} to go',

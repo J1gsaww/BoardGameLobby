@@ -1575,8 +1575,10 @@ button{ cursor:pointer; border:0; background:none; }
 
 /* ช่วงเลือกเป้าของการ์ด — จอมืดกว่าปกติให้รู้ว่ากำลังอยู่ในช่วงพิเศษ
    ฉากไม่รับคลิกอยู่แล้ว หมากบนกระดานจึงยังกดได้ตามปกติ */
-.wr-scene.picking{ background:rgba(0,0,0,.46); }
-.wr-scene.picking .wr-scene-note{ font-size:15px; }
+/* ช่วงเลือกเป้า — ไม่มีพื้นมืด เพราะต้องมองกระดานแล้วคลิก
+   ความมืดกับคำสั่งให้คลิกเป็นสองอย่างที่สวนทางกัน */
+.wr-scene.bare{ background:none; }
+.wr-scene.bare .wr-scene-title{ opacity:0; pointer-events:none; }
 
 /* คนที่ไพ่โหวตหมดถาวร — บอกเหตุผลไว้ในกล่องมือไพ่ ไม่งั้นดูเหมือนหน้าจอลืมไฮไลท์ */
 .wr-spent{
@@ -1584,4 +1586,32 @@ button{ cursor:pointer; border:0; background:none; }
   font-size:11px; line-height:1.5; text-align:center;
   color:var(--rose); background:rgba(242,100,126,.12);
   border:1px dashed var(--rose);
+}
+
+
+/* ── การ์ดย่อไปเกาะมุมบนขวาตอนเข้าช่วงเลือกเป้า ─────────────
+   ทำหน้าที่เป็นป้ายว่าการ์ดใบนี้กำลังทำงานอยู่ ไม่กินกลางจอ
+   ย้ายด้วย transition ของกล่องเดิม ไม่ได้สร้าง DOM ใหม่ แอนิเมชันจึงไหลต่อ */
+.wr-scene-body{ transition:transform .55s cubic-bezier(.3,.8,.3,1); }
+.wr-scene-body.parked{
+  position:absolute; top:10px; right:12px; margin:0;
+  transform-origin:top right;
+}
+.wr-scene-body.parked .wr-cardup{ gap:3px; max-width:96px; }
+.wr-scene-body.parked .wr-cardup-img{
+  width:74px; border-width:1.5px;
+  box-shadow:0 6px 16px rgba(0,0,0,.7);
+  animation:none;
+}
+.wr-scene-body.parked .wr-cardup-name{ font-size:11.5px; }
+.wr-scene-body.parked .wr-cardup-desc{ display:none; }
+
+/* ข้อความบอกว่าใครกำลังเลือก — วางระหว่างเกาะกับเรือสินค้า
+   มีแต่เงา ไม่มีแถบรอง ตามที่ตกลงกันว่าไม่ต้องมีพื้นมืดแล้ว */
+.wr-scene-line{
+  position:absolute; left:0; right:0; top:66%; margin:0;
+  text-align:center; pointer-events:none;
+  font-family:var(--display); font-size:17px; font-weight:700; color:#fdf6e6;
+  text-shadow:0 2px 5px rgba(0,0,0,.9), 0 5px 18px rgba(0,0,0,.7);
+  animation:wr-pop .4s both;
 }

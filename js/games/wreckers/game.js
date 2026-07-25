@@ -11,7 +11,7 @@
    ไว้ทำชั้นการ์ดแล้วค่อยมาต่อผลของแต่ละใบ */
 
 import {
-  SHIP_SLOTS, EVENT_SLOTS, MAX_VOTE, graceMs, rollStarter, OFFLINE_WAIT
+  SHIP_SLOTS, EVENT_SLOTS, MAX_VOTE, graceMs, rollStarter, OFFLINE_WAIT, PICK_MS
 } from './board.js';
 import { deal } from './vote.js';
 import { BASE_CARDS, ENDER, ENDER_ZONE } from './events.js';
@@ -165,7 +165,8 @@ export function passTurn(st, now = Date.now()) {
     graced: false,
     vote: null,
     peek: null,           /* แอบดูค้างอยู่แล้วหมดเวลา ก็ทิ้งไปพร้อมตา */
-    aim: null
+    aim: null,
+    pending: null
   });
 }
 
@@ -277,7 +278,12 @@ function activate(ctx, uid, { slot }) {
 
   return {
     state: needs
-      ? { ...said, pending: { card: id, by: uid, needs, at: (st.logSeq || 0) + 1 } }
+      ? { ...said,
+          pending: { card: id, by: uid, needs, at: (st.logSeq || 0) + 1 },
+          /* คนเลือกหลุดไปแล้วเกมจะค้างตลอดกาล ต้องมีเพดานเวลาเสมอ
+             หมดเวลาแล้วผลการ์ดหายไปเลย ไม่สุ่มให้ เพราะการ์ดใบอื่นบางใบ
+             สุ่มแล้วจะเสียหายหนักกว่าปล่อยผ่าน */
+          deadline: Date.now() + PICK_MS }
       : passTurn(said),
     secrets: { _deck: next, ...cleared }
   };
@@ -644,6 +650,14 @@ export async function tick(ctx) {
     /* กลับมาแล้วก่อนหมดเพดาน ยกเลิกให้ เล่นต่อได้ตามสบาย */
     if (!st.turnSeconds && !offline(st.turn)) return { state: { ...st, deadline: null, graced: false } };
     return null;
+  }
+
+  /* คนเปิดการ์ดค้างไม่เลือกเป้า — ทิ้งผลการ์ดแล้วผ่านตาไป */
+  if (st.pending) {
+    if (!due) return null;
+    return { state: passTurn(pushLog({ ...st, pending: null },
+                                     'wreck.log.cardLost',
+                                     { name: st.names?.[st.pending.by] })) };
   }
 
   /* กัปตันค้างไม่เลือกเป้า — เลือกให้เองแล้วไปต่อ ไม่งั้นทั้งวงรอคนเดียว */

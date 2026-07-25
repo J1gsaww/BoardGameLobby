@@ -90,7 +90,7 @@ function sceneKey(st) {
   if (st.cardUp && !dismissed.has('card:' + st.cardUp.at)) return `card:${st.cardUp.at}`;
   /* ช่วงรอให้คนเปิดเลือกเป้า — ค้างไว้จนกว่าจะเลือกเสร็จ ไม่มีนับถอยหลัง
      ทุกคนต้องรู้ว่ากำลังอยู่ในช่วงนี้ ไม่ใช่แค่คนที่ต้องเลือก */
-  if (st.pending) return `pick:${st.pending.at}`;
+  if (st.pending) return `card:${st.pending.at}`;   /* กุญแจเดียวกับตอนเปิด ฉากจึงต่อเนื่อง ไม่กะพริบ */
   if (st.aim) return `ep:${st.aim.by}:${st.aim.place}`;
   if (st.lastVote && !dismissed.has(st.lastVote.at))
     return `ep:${st.lastVote.caller}:${st.lastVote.place}`;
@@ -139,7 +139,8 @@ export function paintScene(el, st, ctx) {
         <span class="wr-scene-who"></span>
         <strong class="wr-scene-big"></strong>
       </div>
-      <div class="wr-scene-body" hidden></div>`;
+      <div class="wr-scene-body" hidden></div>
+      <p class="wr-scene-line" hidden></p>`;
   }
 
   namesRef = st.names || {};
@@ -158,7 +159,10 @@ export function paintScene(el, st, ctx) {
      ของเดิมเช็กแค่ว่ามี st.aim ซึ่งเกิดขึ้นตั้งแต่ตอนเปิดผล ผลเลยถูกดันไปอยู่ล่างสุดของกระดาน */
   box.classList.toggle('clear',
     phase === 'aim' && !!st.aim && st.aim.by === ctx.me.uid && !st.aim.target);
-  box.classList.toggle('picking', key.startsWith('pick:'));
+  /* ช่วงเลือกเป้าไม่ต้องมีพื้นมืด เพราะต้องมองกระดานแล้วคลิก
+     ความมืดจะถูกถอดออกตอนการ์ดย่อไปมุม ดูที่คลาส parked ของตัวเนื้อหา */
+  box.classList.toggle('bare', !!st.pending && key.startsWith('card:')
+    && !!box.querySelector('.wr-scene-body.parked'));
   title.classList.toggle('up', ms > T.intro);
   body.hidden = ms < T.intro;
 
@@ -179,8 +183,7 @@ export function paintScene(el, st, ctx) {
 function step(body, st, ctx) {
   if (key.startsWith('peek:')) return peekNote(body, st);
   if (key.startsWith('shout:')) return shoutNote(body, st);
-  if (key.startsWith('card:')) return cardNote(body, st);
-  if (key.startsWith('pick:')) return pickNote(body, st, ctx);
+  if (key.startsWith('card:')) return cardNote(body, st, ctx);
   if (st.vote) { goto('collect'); return collect(body, st); }
 
   /* เข้ามาตอนกัปตันกำลังเลือกอยู่แล้ว ก็ข้ามการเล่าย้อนหลังไปเลย */
@@ -280,49 +283,61 @@ function shoutNote(body, st) {
   return false;
 }
 
-/* การ์ดที่เพิ่งถูกเปิด — โชว์ภาพกับชื่อให้ทุกคนเห็นพร้อมกัน */
-function cardNote(body, st) {
+/* ── การ์ดที่เพิ่งเปิด แล้วต่อด้วยช่วงเลือกเป้า ────────────
+   เป็นฉากเดียวยาว ๆ ไม่ตัดใหม่ตอนเปลี่ยนช่วง
+   ของเดิมแยกเป็นสองฉาก ปิดอันหนึ่งแล้วเปิดอีกอัน จอเลยวูบสว่างคั่นกลาง
+   และหัวเรื่องเล่นแอนิเมชันซ้ำสองรอบ
+
+   ช่วงแรก  การ์ดใหญ่กลางจอ พื้นมืด ให้อ่านว่าเป็นใบอะไร
+   ช่วงสอง  การ์ดย่อไปเกาะมุมบนขวา พื้นสว่างคืน เหลือข้อความบรรทัดเดียว
+            เพราะช่วงนี้ต้องมองกระดานแล้วคลิก จอมืดจะขัดกับสิ่งที่ขอให้ทำ */
+const CARD_READ = 2600;   // เวลาอ่านการ์ดก่อนย่อไปมุม
+
+function cardNote(body, st, ctx) {
+  const id = st.cardUp?.id || st.pending?.card;
+  if (!id) return false;
+
   if (goto('collect')) {
-    const c = cardById(st.cardUp.id);
+    const c = cardById(id);
     const info = c ? (c[lang] || c.th) : null;
     body.innerHTML = `<div class="wr-cardup">
-        <img class="wr-cardup-img" src="${esc(cardArt(st.cardUp.id))}" alt=""
+        <img class="wr-cardup-img" src="${esc(cardArt(id))}" alt=""
           draggable="false" onerror="this.remove()">
-        <span class="wr-cardup-name">${esc(info?.name || st.cardUp.id)}</span>
+        <span class="wr-cardup-name">${esc(info?.name || id)}</span>
         <span class="wr-cardup-desc">${esc(info?.desc || '')}</span>
       </div>`;
   }
-  if (now() - stageAt < T.linger + 900) return true;
+
+  const ms = now() - stageAt;
+  const parked = ms > CARD_READ;
+
+  /* ย่อไปมุมแล้วเอาพื้นมืดออก — เปลี่ยนด้วยคลาส ไม่ได้สร้าง DOM ใหม่
+     แอนิเมชันจึงไหลต่อเนื่องแทนที่จะเริ่มนับหนึ่งใหม่ */
+  body.classList.toggle('parked', parked);
+
+  /* ข้อความอยู่นอกกล่องการ์ด ไม่งั้นพอการ์ดย่อไปมุม ข้อความจะตามไปด้วย
+     ตำแหน่งของมันอิงกับเวทีทั้งผืน จึงค้างอยู่ระหว่างเกาะกับเรือสินค้าได้ */
+  const line = body.parentElement.querySelector('.wr-scene-line');
+  if (line) {
+    const want = !st.pending ? ''
+      : st.pending.by === ctx.me.uid
+        ? t('wreck.scene.pickTargetMe')
+        : t('wreck.scene.pickTargetThem', { name: st.names?.[st.pending.by] || '?' });
+    if (line.textContent !== want) line.textContent = want;
+    line.hidden = !want || !parked;
+  }
+
+  /* ยังต้องเลือกอยู่ = ค้างไว้ ไม่นับถอยหลัง
+     ไม่มีอะไรให้เลือกแล้ว = ขึ้นให้อ่านครบเวลาแล้วปิด */
+  if (st.pending) return !parked;
+  if (ms < CARD_READ + T.linger) return true;
   dismissed.add('card:' + st.cardUp.at);
   closing = true;
   return false;
 }
 
-/* ช่วงเลือกเป้า — จอมืดลงให้รู้ว่าอยู่ในช่วงพิเศษ แต่ยังคลิกกระดานทะลุได้
-   ฉากไม่รับคลิกอยู่แล้ว (pointer-events:none) เงาจึงไม่ขวางการเลือก */
-function pickNote(body, st, ctx) {
-  const mine = st.pending.by === ctx.me.uid;
-  const want = 'pick:' + (mine ? 'me' : 'them');
-  if (aimView === want) return false;
-  aimView = want;
-
-  body.innerHTML = `<p class="wr-scene-note">${esc(mine
-    ? t('wreck.scene.pickTargetMe')
-    : t('wreck.scene.pickTargetThem', { name: st.names?.[st.pending.by] || '?' }))}</p>`;
-  return false;
-}
-
 function titleOf(st, ph, me) {
-  if (st.pending && key.startsWith('pick:')) {
-    const c = cardById(st.pending.card);
-    return {
-      who: c ? (c[lang] || c.th).name : st.pending.card,
-      big: st.pending.by === me
-        ? t('wreck.scene.pickTargetBig')
-        : (st.names?.[st.pending.by] || '?')
-    };
-  }
-  if (st.cardUp && key.startsWith('card:')) {
+  if (key.startsWith('card:')) {
     return { who: t('wreck.scene.cardUp'), big: st.names?.[st.cardUp.by] || '?' };
   }
   if (st.shout && key.startsWith('shout:')) {
