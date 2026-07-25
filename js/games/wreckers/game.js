@@ -1,19 +1,34 @@
 /* game.js — Wreckers ฝั่งกติกา
-   ตอนนี้มีแค่การเดินบนกระดาน ไว้ดูว่าผังและการวางตำแหน่งใช้ได้จริง
-   กติกาที่เหลือ (โหวต การ์ด Event นับแต้ม) ค่อยต่อทีหลัง */
+   ─────────────────────────────────────────────────────────────
+   ไฟล์นี้ทำหน้าที่ต่อสายอย่างเดียว — รับคำขอจากผู้เล่น ตรวจสิทธิ์
+   เรียกกฎใน rules.js แล้วส่งสถานะใหม่กลับ ไม่มีกติกาเขียนซ้ำในนี้
+
+   มือไพ่โหวตกับไพ่ประเทศเก็บใน secrets ของแต่ละคน เจ้าของห้องเห็นครบ
+   คนอื่นเห็นแต่ของตัวเอง สถานะสาธารณะเก็บแค่จำนวนใบ ไม่เก็บว่าใบไหน
+
+   ยังไม่ได้ทำในไฟล์นี้ — ผลของการ์ด Event ทั้ง 49 ใบ
+   ปุ่ม activate / peek / force จึงกินสิทธิ์ Action ไปเฉย ๆ ก่อน
+   ไว้ทำชั้นการ์ดแล้วค่อยมาต่อผลของแต่ละใบ */
 
 import {
-  allSpots, SHIP_SLOTS, EVENT_SLOTS, MAX_VOTE, eventTotal,
-  TURN_OPTIONS, graceMs, rollStarter
+  SHIP_SLOTS, EVENT_SLOTS, MAX_VOTE, eventTotal, TURN_OPTIONS, graceMs, rollStarter
 } from './board.js';
 import { deal } from './vote.js';
+import {
+  SHIP_IDS, BOAT_IDS, BOAT_LINK, VOTE_ROW,
+  placeOf, occupants, joinPlace, isPlaying, nextSeat,
+  actionsFor, boatsOpen, maroon, pileOf, shuffle, redeal,
+  startVote, voteReady, tallyRow, attackPasses, mutinyPasses, brawlSplit,
+  moveBox, score, winningSide, winners, dealNations, pushLog
+} from './rules.js';
 
 const seated = (members) =>
   members.filter(m => m.role === 'player' && !m.left && m.seat !== null)
          .sort((a, b) => a.seat - b.seat);
 
+/* ── เปิดเกม ───────────────────────────────────────────────── */
+
 export function init(ctx) {
-  // สับลำดับก่อน ตำแหน่งบนเรือจึงสุ่มจริง ไม่ได้เรียงตามที่นั่งในห้อง
   const seats = shuffle(seated(ctx.members).map(p => p.uid));
 
   /* แจกตำแหน่งสลับลำไปทีละคนตามลำดับศักดิ์
@@ -25,90 +40,348 @@ export function init(ctx) {
     if (slot) pos[uid] = `${ship}:${slot.id}`;
   });
 
-  // ทอยลูกเต๋าหาคนเริ่ม ทุกเครื่องเห็นหน้าเดียวกันเพราะเจ้าของห้องทอยให้
   const die = rollStarter(seats.length);
   const turnSeconds = Number(ctx.settings?.turnSeconds) || TURN_OPTIONS[2];
-
-  // แจกไพ่โหวตจริง มือแต่ละคนเก็บในข้อมูลลับ เจ้าตัวกับเจ้าของห้องเท่านั้นที่เห็น
   const { hands, pile } = deal(seats, MAX_VOTE);
+  const nations = dealNations(seats, String(ctx.settings?.dutch || 'auto'));
 
   return {
     state: {
-      phase: 'board',
+      phase: 'play',
       roundNo: 1,
       seats,
       names: Object.fromEntries(ctx.members.map(m => [m.uid, m.name || ''])),
+      out: [],
       turn: seats[die.face - 1] || seats[0] || null,
       turnSeconds,
       deadline: Date.now() + turnSeconds * 1000,
       graced: false,
-      die,                                                     // ผลทอยไว้ให้หน้าจอเล่นภาพ
+      die,
       pos,
-      events: EVENT_SLOTS,                                    // การ์ดคว่ำกลางโต๊ะ
-      extraCards: [...(ctx.settings?.extraCards || [])],       // ชุดการ์ดพิเศษที่เลือกใส่
-      eventDeck: eventTotal(ctx.settings) - EVENT_SLOTS,       // ที่เหลือในกอง
-      voteDeck: pile.length,                                   // ไพ่โหวตที่ยังอยู่ในกอง
-      votes: Object.fromEntries(seats.map(u => [u, hands[u].length])), // นับใบในมือ ทุกคนเห็นได้
-      maxVote: Object.fromEntries(seats.map(u => [u, MAX_VOTE])),      // เพดานมือ ลดถาวรได้จาก Maroon ซ้ำ
-      held: Object.fromEntries(seats.map(u => [u, 0])),         // การ์ดที่เก็บขึ้นมือ
-      // ฝั่งซ้ายของทุกลำคือ British ฝั่งขวาคือ France
+      boatFrom: {},
+      events: EVENT_SLOTS,
+      extraCards: [...(ctx.settings?.extraCards || [])],
+      eventDeck: eventTotal(ctx.settings) - EVENT_SLOTS,
+      voteDeck: pile.length,
+      votes: Object.fromEntries(seats.map(u => [u, hands[u].length])),
+      maxVote: Object.fromEntries(seats.map(u => [u, MAX_VOTE])),
+      held: Object.fromEntries(seats.map(u => [u, 0])),
       cargo: {
         shipL: { B: 1, F: 0 },
         shipR: { B: 0, F: 1 },
         island: { B: 1, F: 1 },
         merchant: 4
-      }
+      },
+      vote: null,
+      noVotes: false,
+      log: [],
+      logSeq: 0,
+      result: null
     },
-    secrets: Object.fromEntries(seats.map(u => [u, { vote: hands[u] }]))
+    secrets: Object.fromEntries(
+      seats.map(u => [u, { vote: hands[u], nation: nations[u], pick: null }])
+    )
   };
 }
+
+/* ── ตัวช่วยที่ต้องอ่าน secrets ─────────────────────────────
+   เจ้าของห้องเท่านั้นที่เรียกฟังก์ชันพวกนี้ เพราะมีแต่เขาที่เห็นมือครบทุกคน */
+const handsOf = (ctx) =>
+  Object.fromEntries(Object.entries(ctx.secrets || {}).map(([u, s]) => [u, s?.vote || []]));
+
+const nationsOf = (ctx) =>
+  Object.fromEntries(Object.entries(ctx.secrets || {}).map(([u, s]) => [u, s?.nation || null]));
+
+const secretsFrom = (ctx, hands, picks = {}) =>
+  Object.fromEntries(Object.entries(ctx.secrets || {}).map(([u, s]) => [
+    u, { ...s, vote: hands[u] ?? s?.vote ?? [], pick: picks[u] ?? null }
+  ]));
+
+const countHands = (hands) =>
+  Object.fromEntries(Object.entries(hands).map(([u, h]) => [u, h.length]));
+
+const pickMap = (ctx) =>
+  Object.fromEntries(Object.entries(ctx.secrets || {})
+    .filter(([, s]) => s?.pick).map(([u, s]) => [u, s.pick]));
+
+/* ── เปิดตาถัดไป ───────────────────────────────────────────
+   ขึ้นฝั่งจากเรือเล็กเป็นของแถม ทำให้ตอนเปิดตาเลย ไม่กินสิทธิ์ Action
+   ถ้าปลายทางเต็มก็ค้างอยู่บนเรือเล็กต่อ รอบหน้าค่อยลองใหม่ */
+export function openTurn(st) {
+  const uid = st.turn;
+  const place = placeOf(st.pos?.[uid]);
+  if (!BOAT_IDS.includes(place)) return st;
+
+  const came = st.boatFrom?.[uid];
+  const to = (BOAT_LINK[place] || []).find(p => p !== came) || 'island';
+  const moved = joinPlace(st.pos, uid, to);
+  if (!moved) return pushLog(st, 'wreck.log.boatStuck', { name: st.names?.[uid], place: to });
+
+  const boatFrom = { ...(st.boatFrom || {}) };
+  delete boatFrom[uid];
+  return pushLog({ ...st, pos: moved, boatFrom }, 'wreck.log.ashore',
+                 { name: st.names?.[uid], place: to });
+}
+
+export function passTurn(st, now = Date.now()) {
+  const next = nextSeat(st);
+  return openTurn({
+    ...st,
+    turn: next,
+    deadline: now + st.turnSeconds * 1000,
+    graced: false,
+    vote: null
+  });
+}
+
+/* ── คำขอจากผู้เล่น ────────────────────────────────────────── */
 
 export async function onAction(ctx, action) {
   const st = ctx.state;
-  if (action.type !== 'move') return null;
-  if (st.turn !== action.uid) return null;                     // ยังไม่ถึงตาตัวเอง
+  const { uid, type, payload = {} } = action;
+  if (!st || st.phase !== 'play') return null;
 
-  const spot = String(action.payload?.spot || '');
-  if (!allSpots().includes(spot)) return null;                 // ช่องไม่มีอยู่จริง
-  if (Object.values(st.pos).includes(spot)) return null;       // มีคนยืนอยู่แล้ว
-  if (!st.seats.includes(action.uid)) return null;             // คนดูขยับไม่ได้
+  /* ส่งไพ่โหวตทำได้นอกตาตัวเอง เป็นทางเดียวที่ไม่ต้องรอถึงตา */
+  if (type === 'voteCard') return submitVote(ctx, uid, payload.card);
+  if (type === 'endGame') return finish(ctx);
 
-  const moved = { ...st, pos: { ...st.pos, [action.uid]: spot } };
-  return { state: nextTurn(moved, ctx) };
+  if (st.turn !== uid || st.vote) return null;
+  if (!isPlaying(st, uid)) return null;
+  if (!actionsFor(st, uid).includes(type)) return null;
+
+  switch (type) {
+    case 'toBoat':     return toBoat(ctx, uid, payload.boat);
+    case 'kick':       return kick(ctx, uid, payload.uid);
+    case 'shiftCargo': return shiftCargo(ctx, uid, payload.from);
+    case 'attack':     return callVote(ctx, uid, 'attack', payload);
+    case 'mutiny':     return callVote(ctx, uid, 'mutiny', payload);
+    case 'islandVote': return callVote(ctx, uid, 'islandVote', payload);
+
+    /* สามอันนี้เป็นเรื่องของการ์ด Event ยังไม่ได้ทำ กินสิทธิ์ Action ไปก่อน
+       ใส่ไว้เพื่อให้ลำดับตาเดินได้จริงตอนทดสอบ */
+    case 'activate':
+    case 'peek':
+    case 'force':
+      return { state: passTurn(pushLog(st, 'wreck.log.' + type, { name: st.names?.[uid] })) };
+
+    default: return null;
+  }
 }
 
-/* ── ลำดับตา ────────────────────────────────────────────────
-   หนึ่งตาทำได้ 1 Action ทำเสร็จแล้วส่งต่อคนถัดไปตามลำดับที่นั่งบนกระดาน */
-function nextTurn(st, ctx) {
-  const order = st.seats;
-  const here = order.indexOf(st.turn);
-  const next = order[(here + 1) % order.length] || order[0];
+/* ลงเรือเล็ก — จองที่ไว้ กันคนที่เล่นต่อจากเราใช้ลำนั้น */
+function toBoat(ctx, uid, boat) {
+  const st = ctx.state;
+  if (!boatsOpen(st, st.pos[uid]).includes(boat)) return null;
+
+  const came = placeOf(st.pos[uid]);
+  const moved = joinPlace(st.pos, uid, boat);
+  if (!moved) return null;
+
+  const next = pushLog({
+    ...st, pos: moved,
+    boatFrom: { ...(st.boatFrom || {}), [uid]: came }
+  }, 'wreck.log.toBoat', { name: st.names?.[uid] });
+
+  return { state: passTurn(next) };
+}
+
+/* กัปตันไล่คนลงจากเรือ — เด้งลงเกาะเลย ไม่ผ่านเรือเล็ก และไล่ตัวเองไม่ได้ */
+function kick(ctx, uid, targetUid) {
+  const st = ctx.state;
+  const place = placeOf(st.pos[uid]);
+  if (!targetUid || targetUid === uid) return null;
+  if (placeOf(st.pos[targetUid]) !== place) return null;
+
+  const hands = handsOf(ctx);
+  const done = maroon(st, targetUid, hands);
+  const next = pushLog(done.state, 'wreck.log.kick',
+                       { name: st.names?.[uid], who: st.names?.[targetUid] });
+
+  return { state: passTurn(next), secrets: secretsFrom(ctx, done.hands) };
+}
+
+/* ลูกเรือย้ายกล่องบนเรือตัวเอง ข้ามฝั่งประเทศไปอีกฝั่งหนึ่งกล่อง */
+function shiftCargo(ctx, uid, from) {
+  const st = ctx.state;
+  const ship = placeOf(st.pos[uid]);
+  const side = from === 'F' ? 'F' : 'B';
+  const cargo = moveBox(st.cargo, ship, side, ship, side === 'B' ? 'F' : 'B');
+  if (!cargo) return null;
+
   return {
-    ...st,
-    turn: next,
-    deadline: Date.now() + st.turnSeconds * 1000,
-    graced: false
+    state: passTurn(pushLog({ ...st, cargo }, 'wreck.log.shift',
+                            { name: st.names?.[uid], side }))
   };
 }
 
+/* ── สั่งโหวต ──────────────────────────────────────────────
+   สั่งแล้วเกมค้างรอทุกคนในสถานที่นั้นส่งไพ่ ไม่ผ่านตาไปจนกว่าจะเปิดผล */
+function callVote(ctx, uid, kind, payload) {
+  const st = ctx.state;
+  const place = placeOf(st.pos[uid]);
+
+  if (kind === 'attack') {
+    const others = ['merchant', ...SHIP_IDS.filter(s => s !== place)];
+    if (!others.includes(payload.target)) return null;
+  }
+
+  const opened = startVote(st, {
+    kind, place, caller: uid,
+    target: payload.target || null,
+    side: payload.side === 'F' ? 'F' : 'B'
+  });
+  opened.vote.from = payload.from === 'F' ? 'F' : 'B';
+
+  return {
+    state: pushLog({ ...opened, deadline: Date.now() + st.turnSeconds * 1000 },
+                   'wreck.log.call.' + kind, { name: st.names?.[uid] }),
+    secrets: secretsFrom(ctx, handsOf(ctx))       /* ล้างไพ่ที่เลือกค้างจากโหวตครั้งก่อน */
+  };
+}
+
+/* ส่งไพ่เข้าหม้อ — เก็บไว้ในข้อมูลลับของเจ้าตัว คนอื่นเห็นแค่ว่าส่งแล้ว */
+function submitVote(ctx, uid, cardId) {
+  const st = ctx.state;
+  if (!st.vote || !st.vote.voters.includes(uid)) return null;
+  if (st.vote.done.includes(uid)) return null;
+
+  const hands = handsOf(ctx);
+  if (!(hands[uid] || []).includes(cardId)) return null;
+
+  const picks = pickMap(ctx);
+  picks[uid] = cardId;
+  const left = { ...hands, [uid]: hands[uid].filter(c => c !== cardId) };
+
+  const next = {
+    ...st,
+    votes: countHands(left),
+    vote: { ...st.vote, done: [...st.vote.done, uid] }
+  };
+
+  if (!voteReady(next)) return { state: next, secrets: secretsFrom(ctx, left, picks) };
+  return reveal(ctx, next, left, picks);
+}
+
+/* ── เปิดหม้อ ──────────────────────────────────────────────
+   ไพ่ในหม้อ = ไพ่ที่ทุกคนส่ง บวกไพ่จากกองกลางอีกหนึ่งใบเสมอ
+   ใบจากกองกลางคือเหตุผลที่กัปตันสั่งโจมตีคนเดียวได้ ผลจึงไม่แน่นอนทุกครั้ง
+
+   เปิดผลแล้วไพ่ทั้งหมดกลับเข้ากอง สับใหม่ทั้งสำรับ
+   แล้วแจกคืนทุกคนตามเพดานของแต่ละคน */
+export function reveal(ctx, st, hands, picks, rng = Math.random) {
+  const v = st.vote;
+  const submitted = v.voters.map(u => picks[u]).filter(Boolean);
+  const bonus = shuffle(pileOf(hands, submitted), rng).slice(0, v.extra || 1);
+  const pot = shuffle([...submitted, ...bonus], rng);
+
+  const counts = tallyRow(pot, VOTE_ROW[v.kind]);
+  let next = { ...st, vote: { ...v, pot, counts } };
+  let handsOut = hands;
+
+  if (v.kind === 'attack') next = resolveAttack(next, counts);
+  else if (v.kind === 'mutiny') {
+    const done = resolveMutiny(next, counts, handsOut);
+    next = done.state; handsOut = done.hands;
+  } else if (v.kind === 'islandVote') next = resolveBrawl(next, counts);
+
+  /* สับใหม่ทั้งสำรับแล้วแจกคืน — ทุกคนได้มือใหม่หมดหลังโหวตทุกครั้ง */
+  const fresh = redeal(next.seats, next.maxVote, rng);
+  next = {
+    ...next,
+    votes: countHands(fresh.hands),
+    voteDeck: fresh.pile.length,
+    /* เก็บผลไว้ให้หน้าจอโชว์ต่อ เพราะ passTurn จะล้าง vote ทิ้ง */
+    lastVote: { kind: v.kind, place: v.place, caller: v.caller, target: v.target,
+                pot, counts, at: (next.logSeq || 0) }
+  };
+
+  return { state: passTurn(next), secrets: secretsFrom(ctx, fresh.hands) };
+}
+
+export function resolveAttack(st, n) {
+  const v = st.vote;
+  if (!attackPasses(n)) return pushLog(st, 'wreck.log.attackFail', {});
+
+  const cargo = moveBox(st.cargo, v.target, v.from || 'B', v.place, v.side || 'B');
+  if (!cargo) return pushLog(st, 'wreck.log.attackNoRoom', {});
+
+  return pushLog({ ...st, cargo }, 'wreck.log.attackWin',
+                 { target: v.target, side: v.side || 'B' });
+}
+
+export function resolveMutiny(st, n, hands) {
+  if (!mutinyPasses(n)) return { state: pushLog(st, 'wreck.log.mutinyFail', {}), hands };
+
+  const cap = occupants(st.pos, st.vote.place)[0];        /* หัวแถวคือกัปตันเสมอ */
+  if (!cap) return { state: pushLog(st, 'wreck.log.mutinyFail', {}), hands };
+
+  const done = maroon(st, cap, hands);
+  return {
+    state: pushLog(done.state, 'wreck.log.mutinyWin', { who: st.names?.[cap] }),
+    hands: done.hands
+  };
+}
+
+export function resolveBrawl(st, n) {
+  const total = st.cargo.island.B + st.cargo.island.F;
+  const split = brawlSplit(n, total);
+  return pushLog({ ...st, cargo: { ...st.cargo, island: split } },
+                 'wreck.log.brawl', { B: split.B, F: split.F });
+}
+
+/* ── นาฬิกา ───────────────────────────────────────────────
+   สองกรณีคนละเรื่องกัน — หมดเวลาตอนโหวต กับหมดเวลาตอนถึงตาตัวเอง */
 export async function tick(ctx) {
   const st = ctx.state;
-  if (!st.turn || !st.deadline || Date.now() < st.deadline - 250) return null;
+  if (!st || st.phase !== 'play') return null;
+  if (!st.deadline || Date.now() < st.deadline - 250) return null;
 
-  // คนถึงตาหลุดอยู่ ให้เวลาผ่อนผันครั้งเดียวก่อนข้าม
+  /* โหวตค้าง — ส่งไพ่แทนคนที่ยังไม่ส่งแบบสุ่ม แล้วเปิดผลเลย
+     ไม่งั้นคนหลุดคนเดียวค้างทั้งวง */
+  if (st.vote) {
+    const hands = handsOf(ctx);
+    const picks = pickMap(ctx);
+    let left = hands;
+    let next = st;
+
+    for (const uid of st.vote.voters) {
+      if (next.vote.done.includes(uid)) continue;
+      const hand = left[uid] || [];
+      const card = hand[Math.floor(Math.random() * hand.length)];
+      if (card) {
+        picks[uid] = card;
+        left = { ...left, [uid]: hand.filter(c => c !== card) };
+      }
+      next = { ...next, vote: { ...next.vote, done: [...next.vote.done, uid] } };
+    }
+    return reveal(ctx, { ...next, votes: countHands(left) }, left, picks);
+  }
+
   const mine = ctx.members.find(m => m.uid === st.turn);
   if (mine && !mine.online && !st.graced) {
     return { state: { ...st, graced: true, deadline: Date.now() + graceMs(st.turnSeconds) } };
   }
-  return { state: nextTurn(st, ctx) };
+  return { state: passTurn(pushLog(st, 'wreck.log.timeout', { name: st.names?.[st.turn] })) };
 }
 
-/* สับลำดับแบบ Fisher-Yates */
-function shuffle(list) {
-  const a = [...list];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
+/* ── จบเกม ────────────────────────────────────────────────
+   ตอนนี้ยังไม่มีการ์ด Spanish Armada จึงเปิดให้เรียกตรง ๆ ไว้ทดสอบก่อน
+   พอทำชั้นการ์ดแล้ว ใบนั้นจะมาเรียกฟังก์ชันนี้แทน */
+export function finish(ctx) {
+  const st = ctx.state;
+  const nations = nationsOf(ctx);
+  return {
+    state: {
+      ...st,
+      phase: 'over',
+      vote: null,
+      deadline: null,
+      result: {
+        score: score(st.cargo),
+        side: winningSide(st.cargo),
+        winners: winners(st.cargo, nations),
+        nations
+      }
+    }
+  };
 }

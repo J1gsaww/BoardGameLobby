@@ -7,7 +7,9 @@ const files = [
   'js/games/core/engine.test.mjs',
   'js/games/core/score.test.mjs',
   'js/games/core/flow.test.mjs',
-  'js/games/core/tycoon.test.mjs'
+  'js/games/core/tycoon.test.mjs',
+  'js/games/wreckers/die.test.mjs',
+  'js/games/wreckers/rules.test.mjs'
 ];
 
 let bad = 0;
@@ -16,7 +18,7 @@ for (const f of files) {
   try { process.stdout.write(execFileSync(process.execPath, [f], { encoding: 'utf8' })); }
   catch (e) { bad++; process.stdout.write(e.stdout || String(e)); }
 }
-for (const f of ['check-files.mjs', 'check-exports.mjs', 'check-shell.mjs', 'check-i18n.mjs']) {
+for (const f of ['check-build.mjs', 'check-files.mjs', 'check-exports.mjs', 'check-shell.mjs', 'check-i18n.mjs']) {
   process.stdout.write('\n\u2500\u2500 ' + f + ' \u2500\u2500\n');
   try { process.stdout.write(execFileSync(process.execPath, [f], { encoding: 'utf8' })); }
   catch (e) { bad++; process.stdout.write(e.stdout || String(e)); }

@@ -15,6 +15,8 @@ import { t } from '../../i18n.js';
 import { face as avatarFace } from '../../avatar.js';
 import { mountSea, stopSea } from './sea.js';
 import { cardById as voteById, voteCard } from './vote.js';
+import { dieSvg, rollPose, HERO, ROLL_MS } from './die.js';
+import { actionsFor, occupants, placeOf, SHIP_IDS } from './rules.js';
 import { lang } from '../../i18n.js';
 import {
   ART, PIECES, STAGE_RATIO, SHIP_SLOTS, ISLAND_SLOTS, BOAT_SLOT, roleOf, EVENT_SLOTS,
@@ -34,6 +36,7 @@ const BOB = { ship: [1, 4], merchant: [1.3, 3.5], boat: [2.6, 2.6], island: [0, 
 let menu = null;        // { kind, uid, spot, place, x, y }
 let picks = [];         // การ์ดเหตุการณ์ที่เลือกไว้ สูงสุด 2 ใบ
 let forcing = null;     // uid ของคนที่กำลังจะบังคับให้เปิดการ์ด
+let plan = null;        // ตัวเลือกที่ยังไม่ยืนยัน เช่นจะยิงลำไหน เก็บฝั่งไหน
 
 const closeMenu = () => { menu = null; };
 
@@ -97,9 +100,12 @@ function shell(el, ctx) {
           <h4>${esc(t('wreck.actions'))}</h4>
           <div class="wr-act-group" data-group="common"></div>
           <div class="wr-act-group" data-group="role"></div>
-          <p class="wr-empty wr-act-note">${esc(t('wreck.notWired'))}</p>
+          <div class="wr-plan" hidden></div>
+          <div class="wr-vote-panel" hidden></div>
         </div>
       </div>
+
+      <ul class="wr-log" hidden></ul>
 
       <div class="wr-legend"></div>
       <div class="wr-devbar" hidden></div>
@@ -119,7 +125,7 @@ function shell(el, ctx) {
       openMenu(el, b, { kind: 'pawn', uid: b.dataset.who, spot: b.dataset.spot });
       return;
     }
-    if (!b.disabled) { closeMenu(); ctx.send('move', { spot: b.dataset.spot }); }
+    closeMenu(); paint(el);          /* ย้ายเองไม่ได้แล้ว ต้องลงเรือเล็กหรือโดนไล่เท่านั้น */
   });
 
   el.querySelector('.wr-stage').addEventListener('click', e => {
@@ -177,7 +183,13 @@ export function render(el, ctx) {
   const mine = st.pos?.[ctx.me.uid] || null;
   const canMove = (st.seats || []).includes(ctx.me.uid);
 
-  el.querySelector('.wr-hint').textContent = t(canMove ? 'wreck.tapToMove' : 'wreck.watchingOnly');
+  const hint = el.querySelector('.wr-hint');
+  hint.textContent = !canMove ? t('wreck.watchingOnly')
+    : st.phase === 'over' ? t('wreck.over.done')
+    : st.vote ? t('wreck.vote.open')
+    : st.turn === ctx.me.uid ? t('wreck.yourTurn')
+    : t('wreck.waitFor', { name: st.names?.[st.turn] || '?' });
+  hint.classList.toggle('mine', st.turn === ctx.me.uid && !st.vote);
 
   el.querySelectorAll('.wr-slot').forEach(b => {
     const spot = b.dataset.spot;
@@ -209,6 +221,8 @@ export function render(el, ctx) {
   paintHand(el, st, ctx);
   paintRoster(el, st, ctx);
   paintActions(el, st, ctx);
+  paintVote(el, st, ctx);
+  paintLog(el, st);
   paintDecks(el, st);
   paintEvents(el);
 
@@ -228,20 +242,30 @@ export function render(el, ctx) {
 }
 
 /* ── ไพ่บนมือ ──────────────────────────────────────────────
-   ยังไม่มีกติกาโหวต จึงวาดเป็นไพ่คว่ำตามจำนวนที่ถืออยู่ไปก่อน */
+   ปกติเป็นไพ่โชว์เฉย ๆ แต่ระหว่างโหวตจะกดได้ กดแล้วคือส่งใบนั้นเข้าหม้อ */
 function paintHand(el, st, ctx) {
   const me = ctx.me.uid;
   const mine = ctx.secret?.vote || [];
   const held = st.held?.[me] ?? 0;
+  const asking = !!st.vote && st.vote.voters.includes(me) && !st.vote.done.includes(me);
 
   const html =
-    mine.map(id => voteCard(voteById(id), lang)).join('') +
+    mine.map(id => (asking
+      ? `<button class="wr-pick" data-card="${esc(id)}">${voteCard(voteById(id), lang)}</button>`
+      : voteCard(voteById(id), lang))).join('') +
     Array.from({ length: held }, () =>
       `<div class="wr-card wr-held"><span class="wr-card-face">${esc(t('wreck.event'))}</span></div>`).join('') +
     (mine.length + held ? '' : `<p class="wr-empty">${esc(t('wreck.noCards'))}</p>`);
 
   const box = el.querySelector('.wr-hand-cards');
-  if (box.dataset.sig !== html) { box.dataset.sig = html; box.innerHTML = html; }
+  box.classList.toggle('asking', asking);
+  if (box.dataset.sig !== html) {
+    box.dataset.sig = html;
+    box.innerHTML = html;
+    box.querySelectorAll('[data-card]').forEach(b => {
+      b.onclick = () => ctx.send('voteCard', { card: b.dataset.card });
+    });
+  }
 }
 
 /* ── การ์ดเหตุการณ์ ────────────────────────────────────────
@@ -279,7 +303,10 @@ function paintDevBar(el, ctx) {
 
   bar.dataset.built = '1';
   bar.innerHTML = `<span class="wr-dev-label">${esc(t('wreck.devRoll'))}</span>` +
-    [4, 6, 12].map(n => `<button class="btn btn-slim" data-die="${n}">D${n}</button>`).join('');
+    [4, 6, 12].map(n => `<button class="btn btn-slim" data-die="${n}">D${n}</button>`).join('') +
+    `<button class="btn btn-slim" data-finish="1">${esc(t('wreck.dev.finish'))}</button>`;
+
+  bar.querySelector('[data-finish]').onclick = () => live?.send('endGame', {});
 
   bar.querySelectorAll('[data-die]').forEach(b => {
     b.onclick = () => {
@@ -329,31 +356,40 @@ function paintTurn(el, st, ctx) {
    เลขโผล่ตอนนิ่งแล้วเท่านั้น เหมือนทอยลูกเต๋าจริงที่อ่านค่าไม่ได้ตอนกำลังกลิ้ง */
 let dieShown = '';
 
-const DIE_SHAPE = { 4: 'tri', 6: 'cube', 12: 'dodeca' };
-
 export function showDice(el, sides, face, note) {
   const box = el.querySelector('.wr-dice');
   if (!box) return;
 
   box.hidden = false;
   box.innerHTML = `
-    <div class="wr-die wr-die-${DIE_SHAPE[sides] || 'cube'} rolling">
-      <span class="wr-die-face"></span>
-    </div>
+    <div class="wr-die rolling">${dieSvg(sides, rollPose(0))}</div>
     <p class="wr-die-note">${esc(t('wreck.rolling'))}</p>`;
 
   const dieEl = box.querySelector('.wr-die');
-  const faceEl = box.querySelector('.wr-die-face');
   const noteEl = box.querySelector('.wr-die-note');
 
-  setTimeout(() => {
-    faceEl.textContent = face;                 // เลขโผล่ตอนนิ่งแล้วเท่านั้น
+  const land = () => {
+    dieEl.innerHTML = dieSvg(sides, HERO, face);   // เลขโผล่ตอนนิ่งแล้วเท่านั้น
     dieEl.classList.remove('rolling');
     dieEl.classList.add('landed');
     if (note) noteEl.textContent = note;
-  }, 1600);
+  };
 
-  setTimeout(() => { box.hidden = true; box.innerHTML = ''; }, 4200);
+  /* ปิดแอนิเมชันไว้ก็ยังต้องเห็นผลทอย ข้ามการกลิ้งไปที่ผลเลย */
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    land();
+  } else {
+    const t0 = performance.now();
+    const step = (now) => {
+      const k = (now - t0) / ROLL_MS;
+      if (k >= 1 || !dieEl.isConnected) { if (dieEl.isConnected) land(); return; }
+      dieEl.innerHTML = dieSvg(sides, rollPose(k));   // ระหว่างกลิ้งยังไม่ส่งเลขเข้าไป
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  setTimeout(() => { box.hidden = true; box.innerHTML = ''; }, ROLL_MS + 2600);
 }
 
 function paintDice(el, st) {
@@ -459,9 +495,10 @@ const btnRow = (act, label, on, arg = '', tip = '') =>
     ${on ? '' : 'disabled'}${tip ? ` title="${esc(tip)}"` : ''}>${esc(label)}</button>`;
 
 function runMenu(el, ctx, act, arg) {
-  if (act === 'move') { closeMenu(); ctx.send('move', { spot: arg }); return; }
-  if (act === 'force') { forcing = arg; picks = []; closeMenu(); paint(el); return; }
-  closeMenu();                 // ที่เหลือยังไม่ต่อกติกา ปิดเมนูไปก่อน
+  closeMenu();
+  if (act === 'move')  { ctx.send('toBoat', { boat: String(arg).split(':')[0] }); return; }
+  if (act === 'kick')  { ctx.send('kick', { uid: arg }); return; }
+  if (act === 'force') { forcing = arg; picks = []; paint(el); return; }
   paint(el);
 }
 
@@ -483,29 +520,31 @@ function paintDecks(el, st) {
 /* ── Action ที่กดได้ในตานี้ ────────────────────────────────
    ชุดล่างเปลี่ยนตามตำแหน่งที่ยืน ย้ายที่แล้วปุ่มเปลี่ยนทันที */
 function paintActions(el, st, ctx) {
-  const spot = st.pos?.[ctx.me.uid];
+  const me = ctx.me.uid;
+  const spot = st.pos?.[me];
   const role = roleOf(spot);
-  const btn = (k) => `<button class="wr-act" data-do="${k}" disabled>${esc(t('wreck.act.' + k))}</button>`;
+  const can = actionsFor(st, me);                       /* กฎเป็นคนตัดสิน ไม่ใช่หน้าจอ */
+
+  const btn = (k, on = can.includes(k)) =>
+    `<button class="wr-act" data-do="${k}"${on ? '' : ' disabled'}>${esc(t('wreck.act.' + k))}</button>`;
 
   const boats = boatsFrom(spot);
   const boatBtn = (b) => {
-    const free = boatFree(st.pos, b);
+    const free = boatFree(st.pos, b) && can.includes('toBoat');
     const key = boats.length === 1 ? 'wreck.act.toBoat'
               : b === 'boatL' ? 'wreck.act.toBoatL' : 'wreck.act.toBoatR';
     return `<button class="wr-act" data-boat="${b}"${free ? '' : ' disabled'}
-      title="${esc(free ? '' : t('wreck.boatTaken'))}">${esc(t(key))}</button>`;
+      title="${esc(boatFree(st.pos, b) ? '' : t('wreck.boatTaken'))}">${esc(t(key))}</button>`;
   };
   const boatRow = !boats.length ? ''
     : boats.length === 1 ? boatBtn(boats[0])
     : `<div class="wr-act-two">${boats.map(boatBtn).join('')}</div>`;
 
-  const common = COMMON_ACTIONS.map(btn).join('') + boatRow;
+  const common = ['activate', 'peek', 'force'].map(k => btn(k)).join('') + boatRow;
 
-  // ย้ายกล่องไม่ได้ผูกกับชื่อตำแหน่งอย่างเดียว ต้องนับคนบนเรือด้วย
-  const list = [...(ROLE_ACTIONS[role] || [])];
-  if (canShiftCargo(spot, st.pos) && !list.includes('shiftCargo')) list.push('shiftCargo');
+  const list = ['attack', 'kick', 'mutiny', 'islandVote', 'shiftCargo'].filter(k => can.includes(k));
   const byRole = list.length
-    ? `<span class="wr-act-role">${esc(t('wreck.role.' + role))}</span>` + list.map(btn).join('')
+    ? `<span class="wr-act-role">${esc(t('wreck.role.' + role))}</span>` + list.map(k => btn(k)).join('')
     : `<p class="wr-empty">${esc(t('wreck.noRoleAction'))}</p>`;
 
   for (const [key, html] of [['common', common], ['role', byRole]]) {
@@ -514,8 +553,140 @@ function paintActions(el, st, ctx) {
   }
 
   el.querySelectorAll('[data-boat]').forEach(b => {
-    b.onclick = () => { closeMenu(); ctx.send('move', { spot: b.dataset.boat + ':x' }); };
+    b.onclick = () => { closeMenu(); ctx.send('toBoat', { boat: b.dataset.boat }); };
   });
+  el.querySelectorAll('.wr-act[data-do]').forEach(b => {
+    b.onclick = () => { if (!b.disabled) startAction(el, st, ctx, b.dataset.do); };
+  });
+
+  paintPlan(el, st, ctx);
+}
+
+/* ── ตัวเลือกก่อนยืนยัน ───────────────────────────────────
+   บาง Action ต้องรู้รายละเอียดก่อนถึงจะส่งได้ เช่นจะยิงลำไหน เก็บกล่องไว้ฝั่งไหน
+   จึงเปิดแผงเล็ก ๆ ให้เลือกก่อน แล้วค่อยส่งทีเดียว ไม่ยิงคำขอครึ่ง ๆ กลาง ๆ ขึ้นไป */
+function startAction(el, st, ctx, act) {
+  if (act === 'attack') {
+    const mine = placeOf(st.pos[ctx.me.uid]);
+    plan = { act, target: 'merchant', side: 'B', from: 'B', other: SHIP_IDS.find(x => x !== mine) };
+  } else if (act === 'shiftCargo') {
+    plan = { act, from: 'B' };
+  } else if (act === 'kick') {
+    plan = { act, uid: null };
+  } else {
+    ctx.send(act, {});
+    return;
+  }
+  paint(el);
+}
+
+function paintPlan(el, st, ctx) {
+  const box = el.querySelector('.wr-plan');
+  if (!box) return;
+
+  if (!plan) {
+    if (box.dataset.sig !== '') { box.dataset.sig = ''; box.innerHTML = ''; }
+    box.hidden = true;
+    return;
+  }
+
+  const pick = (field, value, label) =>
+    `<button class="wr-chip${plan[field] === value ? ' on' : ''}"
+       data-set="${field}" data-val="${esc(value)}">${esc(label)}</button>`;
+
+  let rows = '';
+  if (plan.act === 'attack') {
+    rows += `<div class="wr-plan-row"><span>${esc(t('wreck.plan.target'))}</span>
+      ${pick('target', 'merchant', t('wreck.merchant'))}
+      ${pick('target', plan.other, t('wreck.plan.otherShip'))}</div>`;
+    if (plan.target !== 'merchant') {
+      rows += `<div class="wr-plan-row"><span>${esc(t('wreck.plan.take'))}</span>
+        ${pick('from', 'B', t('wreck.british'))}${pick('from', 'F', t('wreck.france'))}</div>`;
+    }
+    rows += `<div class="wr-plan-row"><span>${esc(t('wreck.plan.store'))}</span>
+      ${pick('side', 'B', t('wreck.british'))}${pick('side', 'F', t('wreck.france'))}</div>`;
+  } else if (plan.act === 'shiftCargo') {
+    rows += `<div class="wr-plan-row"><span>${esc(t('wreck.plan.move'))}</span>
+      ${pick('from', 'B', t('wreck.plan.bToF'))}${pick('from', 'F', t('wreck.plan.fToB'))}</div>`;
+  } else if (plan.act === 'kick') {
+    const here = occupants(st.pos, placeOf(st.pos[ctx.me.uid])).filter(u => u !== ctx.me.uid);
+    rows += `<div class="wr-plan-row"><span>${esc(t('wreck.plan.who'))}</span>
+      ${here.map(u => pick('uid', u, st.names?.[u] || '?')).join('')}</div>`;
+  }
+
+  const html = `<div class="wr-plan-head">${esc(t('wreck.act.' + plan.act))}</div>${rows}
+    <div class="wr-plan-go">
+      <button class="wr-act" data-plan="go"${plan.act === 'kick' && !plan.uid ? ' disabled' : ''}>
+        ${esc(t('wreck.plan.confirm'))}</button>
+      <button class="wr-act ghost" data-plan="off">${esc(t('wreck.cancel'))}</button>
+    </div>`;
+
+  box.hidden = false;
+  if (box.dataset.sig === html) return;
+  box.dataset.sig = html;
+  box.innerHTML = html;
+
+  box.querySelectorAll('[data-set]').forEach(b => {
+    b.onclick = () => { plan = { ...plan, [b.dataset.set]: b.dataset.val }; paint(el); };
+  });
+  box.querySelector('[data-plan="off"]').onclick = () => { plan = null; paint(el); };
+  box.querySelector('[data-plan="go"]').onclick = () => {
+    const { act, ...rest } = plan;
+    plan = null;
+    ctx.send(act, rest);
+  };
+}
+
+/* ── แผงโหวต ──────────────────────────────────────────────
+   ระหว่างโหวตทุกคนในสถานที่นั้นต้องส่งไพ่ ใครส่งแล้วเห็นได้ทั้งวง
+   แต่ส่งใบไหนไม่มีใครเห็นจนกว่าจะเปิดหม้อพร้อมกัน */
+function paintVote(el, st, ctx) {
+  const box = el.querySelector('.wr-vote-panel');
+  if (!box) return;
+  const me = ctx.me.uid;
+  let html = '';
+
+  if (st.phase === 'over' && st.result) {
+    const r = st.result;
+    html = `<div class="wr-vote-head">${esc(t('wreck.over.win.' + r.side))}</div>
+      <p class="wr-vote-note">${esc(t('wreck.over.score', { B: r.score.B, F: r.score.F }))}</p>
+      <div class="wr-vote-dots">` + (st.seats || []).map(u =>
+        `<span class="wr-dot${r.winners.includes(u) ? ' on' : ''}">${
+          esc((st.names?.[u] || '?') + ' \u00b7 ' + t('wreck.nation.' + (r.nations?.[u] || 'D')))}</span>`
+      ).join('') + `</div>`;
+  } else if (st.vote) {
+    const v = st.vote;
+    const left = v.voters.filter(u => !v.done.includes(u));
+    const head = t('wreck.vote.calling.' + v.kind, { name: st.names?.[v.caller] || '?' });
+    html = `<div class="wr-vote-head">${esc(head)}</div>`;
+    html += v.voters.includes(me)
+      ? `<p class="wr-vote-note">${esc(v.done.includes(me)
+          ? t('wreck.vote.sent') : t('wreck.vote.pick'))}</p>`
+      : `<p class="wr-vote-note">${esc(t('wreck.vote.elsewhere'))}</p>`;
+    html += `<p class="wr-vote-note">${esc(t('wreck.vote.waiting', { n: left.length }))}</p>`;
+    html += `<div class="wr-vote-dots">` + v.voters.map(u =>
+      `<span class="wr-dot${v.done.includes(u) ? ' on' : ''}">${esc(st.names?.[u] || '?')}</span>`
+    ).join('') + `</div>`;
+  } else if (st.lastVote) {
+    const v = st.lastVote;
+    html = `<div class="wr-vote-head">${esc(t('wreck.vote.result.' + v.kind))}</div>`;
+    html += `<div class="wr-vote-pot">` +
+      v.pot.map(id => voteCard(voteById(id), lang)).join('') + `</div>`;
+  }
+
+  box.hidden = !html;
+  if (box.dataset.sig !== html) { box.dataset.sig = html; box.innerHTML = html; }
+}
+
+/* ── บันทึกเหตุการณ์ ──────────────────────────────────────
+   เก็บมาเป็นคีย์ภาษา แปลตอนวาด คนละเครื่องตั้งภาษาต่างกันจึงอ่านได้ทั้งคู่ */
+function paintLog(el, st) {
+  const box = el.querySelector('.wr-log');
+  if (!box) return;
+  const rows = (st.log || []).slice(-5).reverse();
+  const html = rows.map(e => `<li>${esc(t(e.key, e.args || {}))}</li>`).join('');
+  box.hidden = !html;
+  if (box.dataset.sig !== html) { box.dataset.sig = html; box.innerHTML = html; }
 }
 
 /* ── รายชื่อผู้เล่นพร้อมบทบาท ─────────────────────────────── */
