@@ -305,8 +305,8 @@ function peek(ctx, uid, { slot }) {
 
   if (slots.length < need) {
     return {
-      state: pushLog({ ...st, peek: { uid, slots, left: need - slots.length },
-                       lastPeek: { by: uid, slots, at: (st.logSeq || 0) + 1 } },
+      /* ยังไม่ประกาศตอนดูใบแรก รอให้ครบสองใบก่อน ไม่งั้นประกาศสองรอบติดกัน */
+      state: pushLog({ ...st, peek: { uid, slots, left: need - slots.length } },
                      'wreck.log.peekOne', { name: st.names?.[uid], n: need - slots.length }),
       secrets
     };
@@ -347,7 +347,10 @@ function kick(ctx, uid, targetUid) {
   const next = pushLog(done.state, 'wreck.log.kick',
                        { name: st.names?.[uid], who: st.names?.[targetUid] });
 
-  return { state: passTurn(next), secrets: secretsFrom(ctx, done.hands) };
+  /* ประกาศกลางจอให้ทุกคนเห็นพร้อมกัน ไม่ใช่แค่บรรทัดในบันทึกที่คนมองข้าม */
+  const shout = { kind: 'kick', by: uid, who: targetUid, at: (next.logSeq || 0) };
+
+  return { state: passTurn({ ...next, shout }), secrets: secretsFrom(ctx, done.hands) };
 }
 
 /* ลูกเรือย้ายกล่องบนเรือตัวเอง ข้ามฝั่งประเทศไปอีกฝั่งหนึ่งกล่อง */
@@ -435,7 +438,8 @@ export function reveal(ctx, st, hands, picks, rng = Math.random) {
     voteDeck: fresh.pile.length,
     /* เก็บผลไว้ให้หน้าจอโชว์ต่อ เพราะ passTurn จะล้าง vote ทิ้ง */
     lastVote: { kind: v.kind, place: v.place, caller: v.caller,
-                pot, counts, won: passed(v.kind, counts), at: (next.logSeq || 0) }
+                pot, counts, won: passed(v.kind, counts),
+                split: next.lastSplit || null, at: (next.logSeq || 0) }
   };
 
   /* ยิงติดแล้วยังไม่ผ่านตา ค้างไว้ให้กัปตันเลือกเป้ากับฝั่งก่อน
@@ -529,7 +533,8 @@ export function resolveMutiny(st, n, hands) {
 export function resolveBrawl(st, n) {
   const total = st.cargo.island.B + st.cargo.island.F;
   const split = brawlSplit(n, total);
-  return pushLog({ ...st, cargo: { ...st.cargo, island: split } },
+  /* เก็บผลการแบ่งไว้ในสถานะ เพราะหน้าจอต้องประกาศตัวเลขนี้ตอนสรุป */
+  return pushLog({ ...st, cargo: { ...st.cargo, island: split }, lastSplit: split },
                  'wreck.log.brawl', { B: split.B, F: split.F });
 }
 

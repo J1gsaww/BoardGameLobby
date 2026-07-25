@@ -28,7 +28,7 @@ register({
   allowSpectatorChat: true,
 
   settings: [
-    { key: 'turnSeconds', default: 60, options: TURN_OPTIONS },
+    { key: 'turnSeconds', default: 0, options: TURN_OPTIONS },
     /* enabled กับ hint เป็นข้อมูลที่เกมประกาศเอง หน้าตั้งค่าแค่วาดตาม
        ปุ่มดัตช์กดได้เฉพาะจำนวนคนที่แบ่งฝั่งแล้วยังลงตัว */
     { key: 'dutch', default: 'auto', options: DUTCH_OPTIONS, hint: true,
@@ -55,7 +55,6 @@ register({
       'wreck.waitFor': 'รอ {name}',
       'wreck.left': 'เหลือ {n} วิ',
       'wreck.offline': '{name} หลุดอยู่ รออีกสักครู่',
-      'wreck.act.toBoat': 'ลงเรือเล็ก',
       'wreck.act.toBoatL': 'ลงเรือเล็กซ้าย',
       'wreck.act.toBoatR': 'ลงเรือเล็กขวา',
       'wreck.act.forceEvent': 'บังคับให้เปิดการ์ด',
@@ -158,6 +157,14 @@ register({
       'wreck.plan.fToB': 'ฝรั่งเศส → บริติช',
       'wreck.plan.who': 'ไล่ใคร',
       'wreck.plan.confirm': 'ยืนยัน',
+      'wreck.act.aimAt': 'เลือกลำที่จะยิง',
+      'wreck.act.takeFrom': 'เลือกฝั่งที่จะขโมย',
+      'wreck.act.storeAt': 'เลือกฝั่งที่จะเก็บ',
+      'wreck.act.toBoat': 'ลงเรือเล็ก',
+      'wreck.scene.mutinyWin': 'ก่อกบฏสำเร็จ กัปตันถูกปลด',
+      'wreck.scene.mutinyFail': 'ก่อกบฏล้มเหลว กัปตันอยู่ต่อ',
+      'wreck.scene.brawlDone': 'กล่องบนเกาะ บริติช {B} · ฝรั่งเศส {F}',
+      'wreck.scene.kicked': 'กัปตัน {name} ไล่ {who} ลงจากเรือ',
 
       'wreck.vote.open': 'กำลังโหวตอยู่',
       'wreck.vote.pick': 'เลือกไพ่หนึ่งใบส่งเข้าหม้อ',
@@ -217,7 +224,6 @@ register({
       'wreck.waitFor': 'Waiting for {name}',
       'wreck.left': '{n}s left',
       'wreck.offline': '{name} is offline \u2014 holding the turn',
-      'wreck.act.toBoat': 'Board the rowboat',
       'wreck.act.toBoatL': 'Left rowboat',
       'wreck.act.toBoatR': 'Right rowboat',
       'wreck.act.forceEvent': 'Force them to flip',
@@ -320,6 +326,14 @@ register({
       'wreck.plan.fToB': 'France \u2192 British',
       'wreck.plan.who': 'Throw off',
       'wreck.plan.confirm': 'Confirm',
+      'wreck.act.aimAt': 'Choose the ship to fire on',
+      'wreck.act.takeFrom': 'Choose the side to take from',
+      'wreck.act.storeAt': 'Choose the side to store on',
+      'wreck.act.toBoat': 'Board the rowboat',
+      'wreck.scene.mutinyWin': 'The mutiny carries \u2014 the Captain falls',
+      'wreck.scene.mutinyFail': 'The mutiny fails \u2014 the Captain stays',
+      'wreck.scene.brawlDone': 'Island cargo \u2014 British {B} \u00b7 France {F}',
+      'wreck.scene.kicked': 'Captain {name} throws {who} off the ship',
 
       'wreck.vote.open': 'A vote is underway',
       'wreck.vote.pick': 'Pick one card for the pot',

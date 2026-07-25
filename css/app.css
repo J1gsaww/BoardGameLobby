@@ -1454,8 +1454,7 @@ button{ cursor:pointer; border:0; background:none; }
 .wr-side-head{
   margin:0; font-family:var(--display); font-size:18px; font-weight:700; color:currentColor;
 }
-.wr-sidepick-take .wr-side-head::before{ content:'\2196  '; }
-.wr-sidepick-keep .wr-side-head::before{ content:'\2199  '; }
+.wr-side-arrow{ margin-right:6px; font-size:22px; vertical-align:-2px; }
 .wr-side-btns{ display:flex; gap:12px; }
 .wr-side-btn{
   display:grid; gap:3px; justify-items:center; min-width:132px;
@@ -1469,3 +1468,34 @@ button{ cursor:pointer; border:0; background:none; }
 .wr-side-btn.n-F .wr-side-name{ color:#ff8f9c; }
 .wr-side-n{ font-family:var(--mono); font-size:12px; color:var(--ink); }
 .wr-side-why{ font-size:10.5px; color:var(--muted); }
+
+/* วงไฟรอบคนที่ถึงตา — เห็นบนกระดานเลย ไม่ต้องไปไล่หาในรายชื่อ */
+.wr-slot.turn{ z-index:8; }
+.wr-slot.turn .wr-pawn{
+  box-shadow:0 0 0 3px var(--lamp), 0 0 18px rgba(244,169,73,.7);
+  border-radius:50%;
+  animation:wr-turn-ring 1.9s ease-in-out infinite;
+}
+@keyframes wr-turn-ring{
+  0%,100%{ box-shadow:0 0 0 3px var(--lamp), 0 0 14px rgba(244,169,73,.5); }
+  50%    { box-shadow:0 0 0 4px var(--lamp), 0 0 26px rgba(244,169,73,.9); }
+}
+
+/* ทิศทางการย้ายกล่อง — บอกจำนวนก่อนและหลัง จะได้รู้ว่ากำลังทำอะไร */
+.wr-plan-dirs{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.wr-dir{
+  display:grid; gap:3px; justify-items:center; padding:9px 10px; border-radius:10px;
+  background:var(--sunk); border:1px solid var(--line); color:var(--ink);
+}
+.wr-dir:not(:disabled):hover{ border-color:var(--lamp); }
+.wr-dir.on{ border-color:var(--lamp); background:rgba(244,169,73,.14); }
+.wr-dir.off{ opacity:.34; cursor:not-allowed; }
+.wr-dir-line{ font-size:12px; }
+.wr-dir-n{ font-family:var(--mono); font-size:11px; color:var(--muted); }
+
+/* ธงบอกฝั่งประเทศบนเรือและบนเกาะ */
+.wr-flag{
+  position:absolute; transform:translate(-50%,-50%);
+  height:auto; pointer-events:none; opacity:.92;
+  filter:drop-shadow(0 2px 5px rgba(0,0,0,.75));
+}

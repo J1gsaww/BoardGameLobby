@@ -34,11 +34,24 @@ const T = {
   linger: 3200     // ค้างผลไว้ให้อ่านก่อนปิดฉากเอง
 };
 
-const ATTACK_ORDER = [
-  { ch: 'C', file: 'cannon', key: 'wreck.sym.C' },
-  { ch: 'F', file: 'torch',  key: 'wreck.sym.F' },
-  { ch: 'W', file: 'water',  key: 'wreck.sym.W' }
-];
+/* สัญลักษณ์ที่นับ ขึ้นกับชนิดการโหวต — โหวตกบฏกับโหวตแบ่งกล่องก็ต้องได้ไอคอนไหลเหมือนกัน
+   ของเดิมนับแต่แถวโจมตี ทำให้อีกสองชนิดขึ้นผลว่างเปล่าแล้วสรุปด้วยข้อความของการยิง */
+const ROWS = {
+  attack: [
+    { ch: 'C', file: 'cannon' },
+    { ch: 'F', file: 'torch' },
+    { ch: 'W', file: 'water' }
+  ],
+  mutiny: [
+    { ch: 'A', file: 'agree' },
+    { ch: 'D', file: 'disagree' }
+  ],
+  islandVote: [
+    { ch: 'B', file: 'british' },
+    { ch: 'R', file: 'france' }
+  ]
+};
+const rowsOf = (kind) => ROWS[kind] || ROWS.attack;
 
 let key = '';        // ฉาก (หนึ่งการโหวตทั้งกระบวน)
 let at = 0;          // เริ่มฉากตอนกี่โมง
@@ -65,6 +78,7 @@ function sceneKey(st) {
   if (st.vote) return `ep:${st.vote.caller}:${st.vote.place}`;
   /* ประกาศการแอบดูเป็นฉากสั้น ๆ ของตัวเอง ไม่ปนกับฉากโหวต */
   if (st.lastPeek && !dismissed.has('peek:' + st.lastPeek.at)) return `peek:${st.lastPeek.at}`;
+  if (st.shout && !dismissed.has('shout:' + st.shout.at)) return `shout:${st.shout.at}`;
   if (st.aim) return `ep:${st.aim.by}:${st.aim.place}`;
   if (st.lastVote && !dismissed.has(st.lastVote.at))
     return `ep:${st.lastVote.caller}:${st.lastVote.place}`;
@@ -150,6 +164,7 @@ export function paintScene(el, st, ctx) {
    คืนค่า true เมื่อยังมีอะไรขยับ เพื่อขอเฟรมถัดไป */
 function step(body, st, ctx) {
   if (key.startsWith('peek:')) return peekNote(body, st);
+  if (key.startsWith('shout:')) return shoutNote(body, st);
   if (st.vote) { goto('collect'); return collect(body, st); }
 
   /* เข้ามาตอนกัปตันกำลังเลือกอยู่แล้ว ก็ข้ามการเล่าย้อนหลังไปเลย */
@@ -218,7 +233,23 @@ function peekNote(body, st) {
   return false;
 }
 
+/* ประกาศเหตุการณ์สั้น ๆ อย่างการไล่คนลงจากเรือ */
+function shoutNote(body, st) {
+  if (goto('collect')) {
+    body.innerHTML = `<p class="wr-scene-note">${esc(t('wreck.scene.kicked', {
+      name: st.names?.[st.shout.by] || '?',
+      who: st.names?.[st.shout.who] || '?'
+    }))}</p>`;
+  }
+  if (now() - stageAt < T.linger) return true;
+  dismissed.add('shout:' + st.shout.at);
+  closing = true;
+  return false;
+}
+
 function titleOf(st, ph) {
+  if (st.shout && key.startsWith('shout:'))
+    return { who: t('wreck.role.captain'), big: st.names?.[st.shout.by] || '?' };
   if (st.lastPeek && key.startsWith('peek:'))
     return { who: t('wreck.act.peek'), big: st.names?.[st.lastPeek.by] || '?' };
   const v = st.vote || st.lastVote;
@@ -259,6 +290,21 @@ function collect(body, st) {
 let namesRef = {};
 const nameOf = (uid) => namesRef[uid] || '?';
 
+/* วัดระยะห่างจริงระหว่างใบแล้วบอกให้ CSS ใช้รวมกอง
+   ต้องวัดใหม่ทุกครั้งที่จำนวนใบเปลี่ยน ไม่งั้นพอเติมใบจากกองเข้ามา
+   ค่าที่ใช้จะเป็นของตอนที่ยังไม่มีใบนั้น กองเลยไปกระจุกผิดที่ ไม่ตรงกลางแถว */
+function measure(row) {
+  const n = row.children.length;
+  if (n < 2) return;
+  const a = row.children[0].getBoundingClientRect();
+  const b = row.children[1].getBoundingClientRect();
+  row.style.setProperty('--step', (Math.round(b.left - a.left) || 72) + 'px');
+  [...row.children].forEach((c, i) => {
+    c.style.setProperty('--i', i);
+    c.style.setProperty('--n', n);
+  });
+}
+
 function voteBack(name) {
   const c = document.createElement('span');
   c.className = 'wr-vb';
@@ -281,9 +327,9 @@ function pot(body, v) {
       cards.slice(0, -1).forEach(() => row.appendChild(voteBack('')));
     }
 
-    /* คนที่ส่งไพ่เป็นคนสุดท้ายจะไม่เคยโผล่ในช่วงรอไพ่เลย
-       เพราะพอเขาส่ง เกมเปิดหม้อทันทีในจังหวะเดียวกัน หน้าจอจึงไม่เคยเห็น done ที่มีชื่อเขา
-       ต้องไล่เติมให้ครบตามจำนวนไพ่ในหม้อก่อน แล้วค่อยวางใบจากกองกลางเป็นใบสุดท้าย */
+    /* คนที่ส่งไพ่เป็นคนสุดท้ายไม่เคยโผล่ในช่วงรอไพ่เลย
+       เพราะพอเขาส่ง เกมเปิดหม้อทันทีในจังหวะเดียวกัน หน้าจอจึงไม่เคยเห็นรายชื่อที่มีเขา
+       ต้องไล่เติมให้ครบตามจำนวนไพ่ในหม้อก่อน เว้นที่ไว้ให้ใบจากกองอีกหนึ่ง */
     for (const uid of voterList) {
       if (seen.has(uid) || row.children.length >= cards.length - 1) continue;
       seen.add(uid);
@@ -291,38 +337,29 @@ function pot(body, v) {
     }
     while (row.children.length < cards.length - 1) row.appendChild(voteBack(''));
     row.classList.remove('wiggle');
-    /* ติดป้ายให้เห็นว่าใบนี้มาจากกองกลาง ไม่ใช่ของใครสักคน
-       จำนวนสัญลักษณ์ที่ออกมาไม่เท่ากับจำนวนไพ่ (ใบเปล่าไม่มีสัญลักษณ์เลยสักแถว)
-       ถ้าไม่ติดป้ายจะแยกไม่ออกว่าใบจากกองมาจริงหรือเปล่า */
-    const extra = voteBack(t('wreck.scene.fromDeck'));
-    extra.classList.add('from-deck');
-    row.appendChild(extra);
-    [...row.children].forEach((c, i) => {
-      c.style.setProperty('--i', i);
-      c.style.setProperty('--n', row.children.length);
-    });
+    measure(row);
+
     const note = body.querySelector('.wr-scene-note');
     if (note) note.textContent = t('wreck.scene.shuffling');
   }
 
-  /* วัดระยะห่างจริงระหว่างใบจากตัว DOM แล้วส่งให้ CSS ใช้
-     ฝังเลขไว้ในซีเอสเอสแล้วพอขนาดไพ่เปลี่ยน การรวมกองจะเพี้ยนทันที */
-  const rowEl = body.querySelector('.wr-vb-row');
-  if (rowEl && rowEl.children.length > 1 && !rowEl.dataset.step) {
-    const a = rowEl.children[0].getBoundingClientRect();
-    const b = rowEl.children[1].getBoundingClientRect();
-    const step = Math.round(b.left - a.left) || 72;
-    rowEl.dataset.step = String(step);
-    rowEl.style.setProperty('--step', step + 'px');
-  }
-
   const ms = now() - stageAt;
   const row = body.querySelector('.wr-vb-row');
-  if (row) {
-    row.classList.toggle('merge', ms > T.deckCard);
-    row.classList.toggle('gone', ms > T.deckCard + T.merge);
+  if (!row) return false;
+
+  /* ใบจากกองเด้งเข้ามาหลังไพ่ของทุกคนลงครบแล้วพักหนึ่ง
+     ถ้ามาพร้อมกันจะดูเหมือนไพ่โผล่พรวดเดียวทั้งกอง แยกไม่ออกว่าใบไหนมาจากไหน
+     ติดป้ายไว้ด้วย เพราะจำนวนสัญลักษณ์ที่ออกมาไม่เท่ากับจำนวนไพ่ (ใบเปล่าไม่มีสัญลักษณ์) */
+  if (ms > T.deckWait && !row.querySelector('.from-deck')) {
+    const extra = voteBack(t('wreck.scene.fromDeck'));
+    extra.classList.add('from-deck');
+    row.appendChild(extra);
+    measure(row);
   }
-  return ms < T.deckCard + T.merge + T.vanish;
+
+  row.classList.toggle('merge', ms > T.deckWait + T.deckCard);
+  row.classList.toggle('gone', ms > T.deckWait + T.deckCard + T.merge);
+  return ms < T.deckWait + T.deckCard + T.merge + T.vanish;
 }
 
 function tally(body, v) {
@@ -331,7 +368,7 @@ function tally(body, v) {
     stageAt = stageAt || now();
     body.innerHTML = `<div class="wr-tallies"></div>`;
     const wrap = body.querySelector('.wr-tallies');
-    for (const sym of ATTACK_ORDER) {
+    for (const sym of rowsOf(v.kind)) {
       const n = v.counts?.[sym.ch] || 0;
       if (!n) continue;
       const row = document.createElement('div');
@@ -349,7 +386,7 @@ function tally(body, v) {
   const step = Math.floor((ms - T.lead) / T.tick);
   let before = 0, total = 0;
 
-  for (const sym of ATTACK_ORDER) {
+  for (const sym of rowsOf(v.kind)) {
     const n = v.counts?.[sym.ch] || 0;
     total += n;
     if (!n) continue;
@@ -365,7 +402,7 @@ function tally(body, v) {
   if (ms > endAt && !body.querySelector('.wr-scene-verdict')) {
     const p = document.createElement('p');
     p.className = 'wr-scene-verdict ' + (v.won ? 'win' : 'fail');
-    p.textContent = t(v.won ? 'wreck.scene.hit' : 'wreck.scene.miss');
+    p.textContent = verdictText(v);
     body.appendChild(p);
   }
   /* ค้างต่ออีกพักหลังไอคอนครบ ไม่งั้นไอคอนขึ้นแล้วฉากวิ่งต่อทันทีจนดูไม่ทัน */
@@ -373,6 +410,16 @@ function tally(body, v) {
 }
 
 /* ── กัปตันเลือก ───────────────────────────────────────── */
+/* คำตัดสินต้องพูดเรื่องของการโหวตชนิดนั้น
+   ยิงปืนบอกว่าเข้าหรือพลาด · ก่อกบฏบอกว่ากัปตันอยู่หรือไป · แบ่งกล่องบอกว่าแบ่งได้เท่าไหร่ */
+function verdictText(v) {
+  if (v.kind === 'mutiny') return t(v.won ? 'wreck.scene.mutinyWin' : 'wreck.scene.mutinyFail');
+  if (v.kind === 'islandVote') {
+    return t('wreck.scene.brawlDone', { B: v.split?.B ?? '-', F: v.split?.F ?? '-' });
+  }
+  return t(v.won ? 'wreck.scene.hit' : 'wreck.scene.miss');
+}
+
 function aim(body, st, ctx) {
   const a = st.aim;
   const mine = a.by === ctx.me.uid;
@@ -395,13 +442,15 @@ function aim(body, st, ctx) {
        ถ้าเหมือนกันจะกดผิดแน่นอน */
     const can = takeSides(st.cargo, a.target);
     body.innerHTML = sidePick('take', 'wreck.scene.takeFrom',
-      t('wreck.place.' + a.target), st.cargo[a.target], can, 'takeFrom');
+      t('wreck.place.' + a.target), st.cargo[a.target], can, 'takeFrom',
+      arrowTo(a.place, a.target));
     wireSides(body, 'takeFrom');
   } else {
     /* ขั้นเก็บ — โทนเขียว ชี้ไปที่เรือตัวเอง บอกว่าฝั่งไหนเต็มแล้ว */
     const can = keepSides(st.cargo, a.place);
     body.innerHTML = sidePick('keep', 'wreck.scene.keepOn',
-      t('wreck.place.' + a.place), st.cargo[a.place], can, 'storeAt');
+      t('wreck.place.' + a.place), st.cargo[a.place], can, 'storeAt',
+      arrowTo(a.target, a.place));
     wireSides(body, 'storeAt');
   }
   return false;
@@ -409,7 +458,17 @@ function aim(body, st, ctx) {
 
 /* แผงเลือกฝั่งประเทศ ใช้ทั้งขั้นขโมยและขั้นเก็บ แต่แต่งคนละโทน
    ฝั่งที่เลือกไม่ได้เป็นปุ่มทึบกดไม่ลง พร้อมบอกเหตุผลด้วยจำนวนกล่อง */
-function sidePick(kind, headKey, where, box, can, action) {
+/* ลูกศรชี้ทิศจริงจากที่หนึ่งไปอีกที่หนึ่ง
+   ของเดิมฝังลูกศรค่าเดียวไว้ในซีเอสเอส ยิงจากเรือขวาเลยชี้ผิดทางทุกครั้ง */
+const AT = { shipL: -1, shipR: 1, merchant: 0, island: 0 };
+function arrowTo(from, to) {
+  const d = (AT[to] ?? 0) - (AT[from] ?? 0);
+  if (d < 0) return '\u2190';
+  if (d > 0) return '\u2192';
+  return '\u2193';
+}
+
+function sidePick(kind, headKey, where, box, can, action, arrow) {
   const btn = (s) => {
     const n = box?.[s] || 0;
     const off = !can.includes(s);
@@ -423,7 +482,8 @@ function sidePick(kind, headKey, where, box, can, action) {
       </button>`;
   };
   return `<div class="wr-sidepick wr-sidepick-${kind}">
-      <p class="wr-side-head">${esc(t(headKey, { where }))}</p>
+      <p class="wr-side-head"><span class="wr-side-arrow">${esc(arrow || '')}</span>
+        ${esc(t(headKey, { where }))}</p>
       <div class="wr-side-btns">${btn('B')}${btn('F')}</div>
     </div>`;
 }

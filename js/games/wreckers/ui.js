@@ -16,7 +16,7 @@ import { face as avatarFace } from '../../avatar.js';
 import { mountSea, stopSea } from './sea.js';
 import { cardById as voteById, voteCard, iconSrc } from './vote.js';
 import { dieSvg, rollPose, HERO, ROLL_MS } from './die.js';
-import { actionsFor, occupants, placeOf } from './rules.js';
+import { actionsFor, occupants, placeOf, BOAT_IDS } from './rules.js';
 import { BASE_CARDS, cardArt, cardArtAlt, CARD_BACK, CARD_BACK_ALT } from './events.js';
 import { paintScene, stopScene, setPlanView, setPlanWire, VOTE_BACK } from './scene.js';
 import { EXTRA_CARDS } from './cards.js';
@@ -26,6 +26,7 @@ import {
   COMMON_ACTIONS, ROLE_ACTIONS, canShiftCargo, boatsFrom, boatFree, canTouchCargo,
   SHIP_SLOT_SIZE, ISLAND_SLOT_SIZE,
   SHIP_CARGO, SHIP_CARGO_SIZE, ISLAND_CARGO, ISLAND_CARGO_SIZE,
+  SHIP_FLAGS, ISLAND_FLAGS, FLAG_SIZE,
   MERCHANT_CARGO, MERCHANT_CARGO_SIZE
 } from './board.js';
 
@@ -136,7 +137,23 @@ function shell(el, ctx) {
       openMenu(el, b, { kind: 'pawn', uid: b.dataset.who, spot: b.dataset.spot });
       return;
     }
-    closeMenu(); paint(el);          /* ย้ายเองไม่ได้แล้ว ต้องลงเรือเล็กหรือโดนไล่เท่านั้น */
+    /* คลิกที่นั่งว่างของเรือเล็ก = ขอลงเรือลำนั้น ถ้ากติกาอนุญาต
+       ที่นั่งอื่นบนกระดานยังย้ายเองไม่ได้ ต้องผ่านเรือเล็กหรือโดนไล่เท่านั้น */
+    /* ใช้สถานะล่าสุดจาก live เพราะตัวจัดการนี้ผูกครั้งเดียวตอนสร้างโครง
+       ค่า st กับ ctx ตอนนั้นจะเก่าค้างอยู่ตลอด ต้องอ่านสด ๆ ทุกครั้งที่คลิก */
+    const now = live?.state;
+    const meUid = live?.me?.uid;
+    const boat = String(b.dataset.spot || '').split(':')[0];
+    if (now && meUid && BOAT_IDS.includes(boat)
+        && actionsFor(now, meUid).includes('toBoat')
+        && boatsFrom(now.pos?.[meUid]).includes(boat)) {
+      plan = { act: 'toBoat', boat, from: 'menu' };
+      openMenu(el, b, { kind: 'aim' });
+      paint(el);
+      return;
+    }
+    if (!plan) closeMenu();
+    paint(el);
   });
 
   el.querySelector('.wr-stage').addEventListener('click', e => {
@@ -273,6 +290,9 @@ export function render(el, ctx) {
     b.classList.toggle('free', free);
     b.classList.toggle('taken', !free);
     b.classList.toggle('me', spot === mine);
+    /* วงไฟรอบคนที่ถึงตา เห็นเหมือนกันทุกเครื่อง
+       ของเดิมดูได้จากรายชื่อฝั่งขวาอย่างเดียว ซึ่งไกลจากจุดที่สายตาจับอยู่ */
+    b.classList.toggle('turn', !!uid && uid === st.turn && st.phase === 'play');
 
     // เขียนทับเฉพาะตอนคนในช่องเปลี่ยนจริง ไม่งั้นรูปประจำตัวจะโหลดใหม่ทุกรอบ
     if (uid) b.dataset.who = uid; else b.removeAttribute('data-who');
@@ -644,9 +664,12 @@ export function showDice(el, sides, face, note) {
   setTimeout(() => { box.hidden = true; box.innerHTML = ''; }, ROLL_MS + 2600);
 }
 
-const DIE_WINDOW = 5200;   /* ช่วงที่ยังโชว์ลูกเต๋าอยู่ นับจากเวลาที่สถานะบอก */
+const DIE_WINDOW = 12000;  /* ช่วงที่ยังโชว์ลูกเต๋าอยู่ — เผื่อเวลาโหลดภาพด้วย */
 
 function paintDice(el, st) {
+  /* ยังโหลดภาพไม่เสร็จก็อย่าเพิ่งทอย ไม่งั้นลูกเต๋าจะไปซ้อนอยู่ใต้หน้าโหลด
+     พอโหลดเสร็จแล้วยังอยู่ในช่วงเวลาทอย ก็จะโผล่ให้เห็นเองตอนนั้น */
+  if (!assetsReady) return;
   if (!st.die || st.phase !== 'play' || !st.dieAt) return;
   /* เข้ามาช้ากว่าช่วงโชว์ก็ไม่ต้องโชว์ย้อนหลัง แต่ถ้ายังอยู่ในช่วงก็เห็นเหมือนกันทุกคน */
   if (Date.now() - st.dieAt > DIE_WINDOW) return;
@@ -717,9 +740,9 @@ function pawnMenu(st, ctx) {
   const rows = [];
 
   if (mine) {
-    const role = roleOf(spot);
-    const acts = [...(ROLE_ACTIONS[role] || [])];
-    if (canShiftCargo(spot, st.pos) && !acts.includes('shiftCargo')) acts.push('shiftCargo');
+    /* ถามกติกาว่าทำอะไรได้จริงตอนนี้ ไม่ใช่ลอกรายการตามบทบาทดิบ ๆ
+       ของเดิมกัปตันอยู่คนเดียวก็ยังเห็นปุ่มไล่คนลงเรือ ทั้งที่ไม่มีใครให้ไล่ */
+    const acts = actionsFor(st, meUid).filter(k => !['voteCard', 'toBoat'].includes(k));
     acts.forEach(k => rows.push(btnRow(k, t('wreck.act.' + k), true)));
 
     const boats = boatsFrom(spot);
@@ -736,6 +759,13 @@ function pawnMenu(st, ctx) {
       }).join('') + `</div>`);
     }
   } else {
+    /* กดที่กัปตันของเรือลำเดียวกันตอนเราเป็นต้นหน = ทางลัดสั่งก่อกบฏ
+       เป็นที่ที่คนมองหาโดยสัญชาตญาณ เพราะกำลังชี้ไปที่คนที่จะโดนปลด */
+    if (actionsFor(st, meUid).includes('mutiny')
+        && roleOf(st.pos?.[menu.uid]) === 'captain'
+        && placeOf(st.pos?.[menu.uid]) === placeOf(st.pos?.[meUid])) {
+      rows.push(btnRow('mutiny', t('wreck.act.mutiny'), true));
+    }
     rows.push(btnRow('force', t('wreck.act.forceEvent'), true, menu.uid));
 
     // กัปตันไล่คนบนเรือลำเดียวกันลงได้
@@ -868,8 +898,21 @@ export function planBody(st, ctx) {
     rows = `<div class="wr-plan-row"><span>${esc(t('wreck.plan.target'))}</span>
       <span class="wr-chip on">${esc(t('wreck.place.' + plan.target))}</span></div>`;
   } else if (plan.act === 'shiftCargo') {
-    rows = `<div class="wr-plan-row"><span>${esc(t('wreck.plan.move'))}</span>
-      ${pick('from', 'B', t('wreck.plan.bToF'))}${pick('from', 'F', t('wreck.plan.fToB'))}</div>`;
+    /* บอกจำนวนกล่องจริงของทั้งสองฝั่ง และปิดทิศที่ทำไม่ได้
+       ของเดิมมีแค่ปุ่มสองปุ่มที่ไม่บอกอะไรเลยว่ากำลังย้ายอะไรไปไหน */
+    const here = placeOf(st.pos[ctx.me.uid]);
+    const box = st.cargo?.[here] || { B: 0, F: 0 };
+    const cap = 3;
+    const dir = (from, to, label) => {
+      const off = !box[from] || box[to] >= cap;
+      return `<button class="wr-dir${plan.from === from ? ' on' : ''}${off ? ' off' : ''}"
+        data-set="from" data-val="${from}"${off ? ' disabled' : ''}>
+          <span class="wr-dir-line">${esc(label)}</span>
+          <span class="wr-dir-n">${box[from]} \u2192 ${box[to] + 1}</span>
+        </button>`;
+    };
+    rows = `<div class="wr-plan-row wr-plan-dirs">
+      ${dir('B', 'F', t('wreck.plan.bToF'))}${dir('F', 'B', t('wreck.plan.fToB'))}</div>`;
   } else if (plan.act === 'kick') {
     const here = occupants(st.pos, placeOf(st.pos[ctx.me.uid])).filter(u => u !== ctx.me.uid);
     rows = plan.uid
@@ -993,6 +1036,11 @@ function paintRoster(el, st, ctx) {
 function cargoOf(p, st, meUid) {
   const c = st.cargo || {};
   const hot = canTouchCargo(st.pos?.[meUid], st.pos, p.id);
+  /* ธงประจำฝั่ง ใช้ไฟล์เดียวกับไอคอนบนไพ่โหวต จะได้เป็นภาษาเดียวกันทั้งเกม */
+  const flag = (f) =>
+    `<img class="wr-flag" src="${iconSrc(f.side === 'B' ? 'B' : 'R')}" alt=""
+      draggable="false" style="left:${f.x}%; top:${f.y}%; width:${FLAG_SIZE}%">`;
+
   const box = (s, size, side, i) =>
     `<img class="wr-box wr-box-${side}${hot ? ' hot' : ''}" src="${ART}Cargo.png" alt=""
       ${hot ? `data-cargo="${p.id}:${side}:${i}"` : ''}
@@ -1001,6 +1049,7 @@ function cargoOf(p, st, meUid) {
   if (p.kind === 'ship') {
     const d = c[p.id] || { B: 0, F: 0 };
     return [
+      ...SHIP_FLAGS.map(flag),
       ...SHIP_CARGO.B.slice(0, d.B).map((s, i) => box(s, SHIP_CARGO_SIZE, 'b', i)),
       ...SHIP_CARGO.F.slice(0, d.F).map((s, i) => box(s, SHIP_CARGO_SIZE, 'f', i))
     ].join('');
@@ -1008,6 +1057,7 @@ function cargoOf(p, st, meUid) {
   if (p.kind === 'island') {
     const d = c.island || { B: 0, F: 0 };
     return [
+      ...ISLAND_FLAGS.map(flag),
       ...ISLAND_CARGO.B.slice(0, d.B).map((s, i) => box(s, ISLAND_CARGO_SIZE, 'b', i)),
       ...ISLAND_CARGO.F.slice(0, d.F).map((s, i) => box(s, ISLAND_CARGO_SIZE, 'f', i))
     ].join('');
