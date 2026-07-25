@@ -473,7 +473,13 @@ function storeAt(ctx, uid, { side }) {
     ? pushLog({ ...st, cargo }, 'wreck.log.attackTook', { target: aim.target, side: keep })
     : pushLog(st, 'wreck.log.attackNoRoom', {});
 
-  return { state: passTurn({ ...next, aim: null }) };
+  /* เก็บผลไว้ให้หน้าจอประกาศ ว่าใครชิงกล่องจากไหนไปให้ประเทศอะไร
+     ต้องอยู่ในสถานะสาธารณะ เพราะทุกคนต้องเห็นประกาศเดียวกันพร้อมกัน */
+  const took = cargo
+    ? { by: uid, target: aim.target, side: keep, at: (next.logSeq || 0) }
+    : null;
+
+  return { state: passTurn({ ...next, aim: null, lastTake: took }) };
 }
 
 export function resolveMutiny(st, n, hands) {

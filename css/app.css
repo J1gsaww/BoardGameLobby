@@ -649,8 +649,6 @@ button{ cursor:pointer; border:0; background:none; }
   height:auto; pointer-events:none;
   filter:drop-shadow(0 2px 5px rgba(0,0,0,.6));
 }
-/* กล่องที่บังคับสัดส่วนเอง — ตั้งขึ้นเสมอ ไม่ว่าไฟล์ภาพจะเป็นสัดส่วนไหน */
-.wr-box.fit{ object-fit:contain; }
 .wr-box-b{ filter:drop-shadow(0 0 3px #7ab4ff) drop-shadow(0 2px 5px rgba(0,0,0,.6)); }
 .wr-box-f{ filter:drop-shadow(0 0 3px #f2647e) drop-shadow(0 2px 5px rgba(0,0,0,.6)); }
 
@@ -1414,3 +1412,31 @@ button{ cursor:pointer; border:0; background:none; }
 .wr-menu .wr-plan-go{ display:flex; gap:9px; margin-top:0; }
 .wr-menu .wr-plan-go .wr-act{ flex:1; padding:9px 12px; font-size:13px; }
 @media (prefers-reduced-motion:reduce){ .wr-hand.asking{ animation:none; } }
+
+/* ประกาศผลการชิงกล่องก่อนฉากปิด */
+.wr-scene-took{
+  margin:4px 0 0; font-family:var(--display); font-size:19px; font-weight:600;
+  color:#fdf6e6; text-align:center; max-width:min(520px, 84vw);
+  text-shadow:0 2px 6px rgba(0,0,0,.85), 0 6px 20px rgba(0,0,0,.5);
+  animation:wr-boom .42s cubic-bezier(.2,1.4,.4,1) both;
+}
+
+/* ── หน้ารอโหลดภาพก่อนเริ่มเล่น ─────────────────────────
+   ทับกระดานไว้จนกว่าภาพจะครบ กันไม่ให้แอนิเมชันเริ่มก่อนที่ของจะมาถึง */
+.wr-loading{
+  position:absolute; inset:0; z-index:55; display:grid; place-items:center;
+  background:rgba(8,6,20,.92);
+}
+.wr-loading-box{ display:grid; gap:10px; justify-items:center; min-width:min(280px, 70vw); }
+.wr-loading-label{
+  font-family:var(--display); font-size:16px; font-weight:600; color:#fdf6e6;
+}
+.wr-loading-bar{
+  width:100%; height:6px; border-radius:999px; overflow:hidden;
+  background:rgba(255,255,255,.12);
+}
+.wr-loading-bar i{
+  display:block; height:100%; border-radius:999px; background:var(--lamp);
+  transition:width .25s ease-out;
+}
+.wr-loading-n{ font-family:var(--mono); font-size:11px; color:var(--muted); }

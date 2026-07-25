@@ -3,8 +3,8 @@
    ลำดับในไฟล์นี้ = ลำดับที่โผล่ในหน้าเลือกเกม
    ต้องโหลดหลัง games.js เสมอ (ES module ยกคำสั่ง import ขึ้นก่อน) */
 
-import './wreckers/index.js';
 import './slave/index.js';
 import './tycoon/index.js';
 import './curtain_rivalry/index.js';
 import './whothefuq/index.js';
+import './wreckers/index.js';

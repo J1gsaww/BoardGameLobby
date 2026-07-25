@@ -27,7 +27,9 @@ const T = {
   merge: 700,      // วิ่งมาซ้อนกัน
   vanish: 480,     // หุบหาย
   tick: 430,       // ระยะห่างของไอคอนแต่ละตัว — ช้าพอให้ลุ้นทีละอัน
-  verdict: 700,
+  lead: 500,       // เว้นก่อนไอคอนแรกโผล่ ให้สายตาตั้งหลักก่อน
+  verdict: 900,    // เว้นก่อนขึ้นคำตัดสิน
+  afterIcons: 1400, // ค้างหลังไอคอนครบ ก่อนไปช่วงถัดไป
   linger: 3200     // ค้างผลไว้ให้อ่านก่อนปิดฉากเอง
 };
 
@@ -51,6 +53,7 @@ let raf = 0;
    ถ้าไม่จำไว้ ฉากจะกลับมาเปิดทุกครั้งที่วาดใหม่ แล้วผู้เล่นทำอะไรต่อไม่ได้เลย */
 const dismissed = new Set();
 let seen = new Set();
+let voterList = [];  // รายชื่อผู้ร่วมโหวตล่าสุด ใช้เติมไพ่ที่ตกหล่น
 let sendFn = null;
 
 const now = () => performance.now();
@@ -109,18 +112,22 @@ export function paintScene(el, st, ctx) {
       <div class="wr-scene-body" hidden></div>`;
   }
 
+  namesRef = st.names || {};
   const ms = now() - at;
   const title = box.querySelector('.wr-scene-title');
   const body = box.querySelector('.wr-scene-body');
 
   /* ชื่อเปลี่ยนข้อความได้โดยไม่ต้องสร้างใหม่ แอนิเมชันจึงไม่เริ่มใหม่ */
-  const head = titleOf(st);
+  const head = titleOf(st, phase);
   const who = box.querySelector('.wr-scene-who');
   const big = box.querySelector('.wr-scene-big');
   if (who.textContent !== head.who) who.textContent = head.who;
   if (big.textContent !== head.big) big.textContent = head.big;
 
-  box.classList.toggle('clear', !!(st.aim && st.aim.by === ctx.me.uid && !st.aim.target));
+  /* จอเปิดโล่งให้คลิกเรือได้ เฉพาะตอนถึงช่วงเล็งจริง ๆ
+     ของเดิมเช็กแค่ว่ามี st.aim ซึ่งเกิดขึ้นตั้งแต่ตอนเปิดผล ผลเลยถูกดันไปอยู่ล่างสุดของกระดาน */
+  box.classList.toggle('clear',
+    phase === 'aim' && !!st.aim && st.aim.by === ctx.me.uid && !st.aim.target);
   title.classList.toggle('up', ms > T.intro);
   body.hidden = ms < T.intro;
 
@@ -171,6 +178,17 @@ function step(body, st, ctx) {
        ของเดิมปิดเฉพาะเครื่องกัปตัน คนอื่นค้างอยู่ที่หน้า "รอกัปตันเลือก" ตลอดกาล
        เพราะ lastVote ยังอยู่ในสถานะ ฉากจึงไม่มีเหตุผลให้ปิดเอง */
     if (!restAt) restAt = now();
+    /* ประกาศผลการชิงกล่องก่อนปิด ทุกคนเห็นพร้อมกัน */
+    if (st.lastTake && !body.querySelector('.wr-scene-took')) {
+      const p = document.createElement('p');
+      p.className = 'wr-scene-took';
+      p.textContent = t('wreck.scene.took', {
+        name: st.names?.[st.lastTake.by] || '?',
+        from: t('wreck.place.' + st.lastTake.target),
+        side: t('wreck.nation.' + st.lastTake.side)
+      });
+      body.appendChild(p);
+    }
     if (now() - restAt < T.linger) return true;
     if (st.lastVote) dismissed.add(st.lastVote.at);
     closing = true;
@@ -179,13 +197,17 @@ function step(body, st, ctx) {
   return false;
 }
 
-function titleOf(st) {
+/* ชื่อฉากเดินหน้าอย่างเดียวเหมือนช่วงย่อย
+   พอถึงช่วงเล็งแล้ว st.aim หายไปตอนกัปตันเลือกเสร็จ ถ้าคำนวณใหม่จาก st เฉย ๆ
+   ชื่อจะเด้งกลับไปเป็น Call to Shoot ให้เห็นแวบหนึ่งก่อนฉากปิด */
+function titleOf(st, ph) {
   const v = st.vote || st.lastVote;
+  const aiming = !!st.aim || ph === 'aim';
   const who = st.aim ? st.aim.by : v?.caller;
-  const role = st.aim ? 'captain'
+  const role = aiming ? 'captain'
     : v?.kind === 'mutiny' ? 'mate'
     : v?.kind === 'islandVote' ? 'governor' : 'captain';
-  const line = st.aim ? 'wreck.scene.aim'
+  const line = aiming ? 'wreck.scene.aim'
     : v?.kind === 'mutiny' ? 'wreck.scene.mutiny'
     : v?.kind === 'islandVote' ? 'wreck.scene.brawl' : 'wreck.scene.shoot';
   return { who: `${t('wreck.role.' + role)} \u00b7 ${st.names?.[who] || '?'}`, big: t(line) };
@@ -197,6 +219,7 @@ function collect(body, st) {
     body.innerHTML = `<div class="wr-vb-row wiggle"></div><p class="wr-scene-note"></p>`;
   }
   const row = body.querySelector('.wr-vb-row');
+  voterList = st.vote.voters;
 
   for (const uid of st.vote.done) {
     if (seen.has(uid)) continue;
@@ -212,6 +235,9 @@ function collect(body, st) {
   if (note.textContent !== text) note.textContent = text;
   return false;    // รอคนกด ไม่ต้องขอเฟรมถี่ ๆ
 }
+
+let namesRef = {};
+const nameOf = (uid) => namesRef[uid] || '?';
 
 function voteBack(name) {
   const c = document.createElement('span');
@@ -234,6 +260,16 @@ function pot(body, v) {
       row = body.querySelector('.wr-vb-row');
       cards.slice(0, -1).forEach(() => row.appendChild(voteBack('')));
     }
+
+    /* คนที่ส่งไพ่เป็นคนสุดท้ายจะไม่เคยโผล่ในช่วงรอไพ่เลย
+       เพราะพอเขาส่ง เกมเปิดหม้อทันทีในจังหวะเดียวกัน หน้าจอจึงไม่เคยเห็น done ที่มีชื่อเขา
+       ต้องไล่เติมให้ครบตามจำนวนไพ่ในหม้อก่อน แล้วค่อยวางใบจากกองกลางเป็นใบสุดท้าย */
+    for (const uid of voterList) {
+      if (seen.has(uid) || row.children.length >= cards.length - 1) continue;
+      seen.add(uid);
+      row.appendChild(voteBack(nameOf(uid)));
+    }
+    while (row.children.length < cards.length - 1) row.appendChild(voteBack(''));
     row.classList.remove('wiggle');
     /* ติดป้ายให้เห็นว่าใบนี้มาจากกองกลาง ไม่ใช่ของใครสักคน
        จำนวนสัญลักษณ์ที่ออกมาไม่เท่ากับจำนวนไพ่ (ใบเปล่าไม่มีสัญลักษณ์เลยสักแถว)
@@ -290,7 +326,7 @@ function tally(body, v) {
   }
 
   const ms = now() - stageAt;
-  const step = Math.floor(ms / T.tick);
+  const step = Math.floor((ms - T.lead) / T.tick);
   let before = 0, total = 0;
 
   for (const sym of ATTACK_ORDER) {
@@ -305,14 +341,15 @@ function tally(body, v) {
     row.querySelectorAll('.wr-pip').forEach((p, i) => p.classList.toggle('in', i < vis));
   }
 
-  const endAt = total * T.tick + T.verdict;
+  const endAt = T.lead + total * T.tick + T.verdict;
   if (ms > endAt && !body.querySelector('.wr-scene-verdict')) {
     const p = document.createElement('p');
     p.className = 'wr-scene-verdict ' + (v.won ? 'win' : 'fail');
     p.textContent = t(v.won ? 'wreck.scene.hit' : 'wreck.scene.miss');
     body.appendChild(p);
   }
-  return ms <= endAt;      // นับครบแล้วหยุดขอเฟรม ค้างไว้เฉย ๆ
+  /* ค้างต่ออีกพักหลังไอคอนครบ ไม่งั้นไอคอนขึ้นแล้วฉากวิ่งต่อทันทีจนดูไม่ทัน */
+  return ms <= endAt + T.afterIcons;
 }
 
 /* ── กัปตันเลือก ───────────────────────────────────────── */

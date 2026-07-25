@@ -14,18 +14,18 @@
 import { t } from '../../i18n.js';
 import { face as avatarFace } from '../../avatar.js';
 import { mountSea, stopSea } from './sea.js';
-import { cardById as voteById, voteCard } from './vote.js';
+import { cardById as voteById, voteCard, iconSrc } from './vote.js';
 import { dieSvg, rollPose, HERO, ROLL_MS } from './die.js';
 import { actionsFor, occupants, placeOf } from './rules.js';
 import { BASE_CARDS, cardArt, cardArtAlt, CARD_BACK, CARD_BACK_ALT } from './events.js';
-import { paintScene, stopScene, setPlanView, setPlanWire } from './scene.js';
+import { paintScene, stopScene, setPlanView, setPlanWire, VOTE_BACK } from './scene.js';
 import { EXTRA_CARDS } from './cards.js';
 import { lang } from '../../i18n.js';
 import {
   ART, PIECES, STAGE_RATIO, SHIP_SLOTS, ISLAND_SLOTS, BOAT_SLOT, roleOf, EVENT_SLOTS,
   COMMON_ACTIONS, ROLE_ACTIONS, canShiftCargo, boatsFrom, boatFree, canTouchCargo,
   SHIP_SLOT_SIZE, ISLAND_SLOT_SIZE,
-  SHIP_CARGO, SHIP_CARGO_SIZE, SHIP_CARGO_TALL, ISLAND_CARGO, ISLAND_CARGO_SIZE,
+  SHIP_CARGO, SHIP_CARGO_SIZE, ISLAND_CARGO, ISLAND_CARGO_SIZE,
   MERCHANT_CARGO, MERCHANT_CARGO_SIZE
 } from './board.js';
 
@@ -78,6 +78,7 @@ function shell(el, ctx) {
           <div class="wr-menu" hidden></div>
           <div class="wr-dice" hidden></div>
           <div class="wr-scene" hidden></div>
+          <div class="wr-loading" hidden></div>
         </div>
 
         <aside class="wr-side wr-roster">
@@ -190,12 +191,66 @@ function pieceShell(p, i) {
 let live = null;                  // ctx ล่าสุด ใช้ตอนวาดซ้ำจากการกดปุ่มในเมนู
 const paint = (el) => { if (live) render(el, live); };
 
+/* ── โหลดภาพให้ครบก่อนเริ่มเล่น ────────────────────────────
+   หลายอาการที่ดูเหมือนบั๊ก (ผลวาบเดียว ไพ่ไม่ขึ้น ของวางผิดที่)
+   จริง ๆ คือภาพยังโหลดไม่เสร็จตอนที่แอนิเมชันเริ่มไปแล้ว
+   เบราว์เซอร์คำนวณขนาดจากภาพที่ยังไม่มา จึงได้ผังผิดชั่วขณะ
+
+   โหลดครบก่อนค่อยปล่อยให้เห็นกระดาน ตัดปัญหาทั้งกลุ่มทีเดียว
+   ถ้าโหลดไม่ขึ้นก็ปล่อยผ่านหลังจากรอถึงเพดาน ไม่ปล่อยให้ค้างตลอดกาล */
+const WAIT_CAP = 8000;
+let assetsReady = false;
+let assetJob = null;
+let assetDone = 0;
+let assetTotal = 0;
+
+function assetList() {
+  const board = ['Carrack', 'Island', 'Cargo_ship', 'Rowboat', 'Cargo'].map(n => `${ART}${n}.png`);
+  const icons = ['C', 'F', 'W', 'B', 'R', 'A', 'D'].map(iconSrc).filter(Boolean);
+  return [...board, ...icons, VOTE_BACK, CARD_BACK];
+}
+
+function preload(el) {
+  if (assetJob) return;
+  const urls = [...new Set(assetList())];
+  assetTotal = urls.length;
+  assetDone = 0;
+
+  const one = (u) => new Promise(res => {
+    const im = new Image();
+    const tick = () => { assetDone++; paint(el); res(); };
+    im.onload = tick; im.onerror = tick;
+    im.src = u;
+  });
+
+  assetJob = Promise.race([
+    Promise.all(urls.map(one)),
+    new Promise(res => setTimeout(res, WAIT_CAP))
+  ]).then(() => { assetsReady = true; paint(el); });
+}
+
+function paintLoading(el) {
+  const box = el.querySelector('.wr-loading');
+  if (!box) return;
+  box.hidden = assetsReady;
+  if (assetsReady) return;
+  const pct = assetTotal ? Math.round(assetDone * 100 / assetTotal) : 0;
+  const html = `<div class="wr-loading-box">
+      <span class="wr-loading-label">${esc(t('wreck.loading'))}</span>
+      <span class="wr-loading-bar"><i style="width:${pct}%"></i></span>
+      <span class="wr-loading-n">${assetDone} / ${assetTotal}</span>
+    </div>`;
+  if (box.dataset.sig !== html) { box.dataset.sig = html; box.innerHTML = html; }
+}
+
 export function render(el, ctx) {
   const st = ctx.state;
   if (!st || !st.phase) { el.innerHTML = ''; stopSea(); stopScene(); closeMenu(); return; }
 
   live = ctx;
   shell(el, ctx);
+  preload(el);
+  paintLoading(el);
 
   const who = Object.fromEntries(Object.entries(st.pos || {}).map(([uid, spot]) => [spot, uid]));
   const mine = st.pos?.[ctx.me.uid] || null;
@@ -933,18 +988,16 @@ function paintRoster(el, st, ctx) {
 function cargoOf(p, st, meUid) {
   const c = st.cargo || {};
   const hot = canTouchCargo(st.pos?.[meUid], st.pos, p.id);
-  /* tall ที่ส่งมาคือความสูงที่บังคับเอง ไม่ส่งก็ปล่อยให้สูงตามสัดส่วนไฟล์ */
-  const box = (s, size, side, i, tall) =>
-    `<img class="wr-box wr-box-${side}${hot ? ' hot' : ''}${tall ? ' fit' : ''}"
-      src="${ART}Cargo.png" alt=""
+  const box = (s, size, side, i) =>
+    `<img class="wr-box wr-box-${side}${hot ? ' hot' : ''}" src="${ART}Cargo.png" alt=""
       ${hot ? `data-cargo="${p.id}:${side}:${i}"` : ''}
-      style="left:${s.x}%; top:${s.y}%; width:${size}%${tall ? `; height:${tall}%` : ''}; --boxrot:${s.r || 0}deg">`;
+      style="left:${s.x}%; top:${s.y}%; width:${size}%; --boxrot:${s.r || 0}deg">`;
 
   if (p.kind === 'ship') {
     const d = c[p.id] || { B: 0, F: 0 };
     return [
-      ...SHIP_CARGO.B.slice(0, d.B).map((s, i) => box(s, SHIP_CARGO_SIZE, 'b', i, SHIP_CARGO_TALL)),
-      ...SHIP_CARGO.F.slice(0, d.F).map((s, i) => box(s, SHIP_CARGO_SIZE, 'f', i, SHIP_CARGO_TALL))
+      ...SHIP_CARGO.B.slice(0, d.B).map((s, i) => box(s, SHIP_CARGO_SIZE, 'b', i)),
+      ...SHIP_CARGO.F.slice(0, d.F).map((s, i) => box(s, SHIP_CARGO_SIZE, 'f', i))
     ].join('');
   }
   if (p.kind === 'island') {
