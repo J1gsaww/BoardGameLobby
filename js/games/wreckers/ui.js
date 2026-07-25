@@ -894,12 +894,8 @@ function paintVote(el, st, ctx) {
     html += `<div class="wr-vote-dots">` + v.voters.map(u =>
       `<span class="wr-dot${v.done.includes(u) ? ' on' : ''}">${esc(st.names?.[u] || '?')}</span>`
     ).join('') + `</div>`;
-  } else if (st.lastVote) {
-    const v = st.lastVote;
-    html = `<div class="wr-vote-head">${esc(t('wreck.vote.result.' + v.kind))}</div>`;
-    html += `<div class="wr-vote-pot">` +
-      v.pot.map(id => voteCard(voteById(id), lang)).join('') + `</div>`;
   }
+  /* ผลการโหวตไปโชว์ในฉากกลางกระดานแล้ว ไม่ต้องมีแผงซ้ำที่มุมล่าง */
 
   box.hidden = !html;
   if (box.dataset.sig !== html) { box.dataset.sig = html; box.innerHTML = html; }

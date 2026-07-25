@@ -883,6 +883,14 @@ button{ cursor:pointer; border:0; background:none; }
   filter:drop-shadow(0 1px 2px rgba(0,0,0,.55)); }
 .vc-row .vc-slot + .vc-slot .vc-icon{ max-width:19px; }
 .vc-none{ font-family:var(--mono); font-size:11px; color:var(--muted); }
+/* ใบเปล่าเป็นไพ่จริงในสำรับ (ใบที่ 25) ไม่ใช่ภาพที่วาดไม่สำเร็จ
+   ทำให้เห็นชัดว่าตั้งใจ ด้วยลายทแยงจาง ๆ กับกรอบเส้นประ */
+.vote-card.blank{
+  border-style:dashed; opacity:.75;
+  background:
+    repeating-linear-gradient(-45deg, rgba(255,255,255,.05) 0 6px, transparent 6px 12px),
+    linear-gradient(150deg,#2a2446 0%,#171230 55%,#221a3c 100%);
+}
 
 .wr-hand-cards .vote-card{ min-width:0; }
 
@@ -1311,9 +1319,18 @@ button{ cursor:pointer; border:0; background:none; }
 }
 .wr-tally.on{ opacity:1; }
 .wr-tally-pips{ display:flex; gap:6px; flex-wrap:wrap; justify-content:center; }
-.wr-pip{ width:40px; height:40px; object-fit:contain; opacity:0; transform:scale(.5); }
-.wr-pip.in{ animation:wr-pip-in .22s cubic-bezier(.2,1.5,.4,1) forwards; }
-@keyframes wr-pip-in{ to{ opacity:1; transform:none; } }
+.wr-pip{
+  width:46px; height:46px; object-fit:contain;
+  opacity:0; transform:scale(1.9) translateY(-14px);
+}
+/* ไหลลงมาจากบนแล้วกระแทกลง พร้อมแฟลชสว่างวาบ ให้รู้สึกว่าแต่ละอันมีน้ำหนัก
+   ช่วงนี้คือจังหวะที่คนลุ้น ถ้าโผล่มาเฉย ๆ จะเสียโอกาสไปเปล่า ๆ */
+.wr-pip.in{ animation:wr-pip-in .34s cubic-bezier(.15,1.5,.35,1) forwards; }
+@keyframes wr-pip-in{
+  0%  { opacity:0; transform:scale(1.9) translateY(-14px); filter:brightness(2.4); }
+  55% { opacity:1; transform:scale(.88) translateY(3px); filter:brightness(1.5); }
+  100%{ opacity:1; transform:none; filter:none; }
+}
 .wr-tally-n{
   font-family:var(--display); font-size:24px; font-weight:700; color:#fdf6e6;
   min-width:22px; text-shadow:0 2px 6px rgba(0,0,0,.8);

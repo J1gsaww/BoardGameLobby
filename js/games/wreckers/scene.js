@@ -26,8 +26,9 @@ const T = {
   deckCard: 900,   // ใบจากกองกลางสไลด์เข้ามาแล้วค้างให้ทัน
   merge: 700,      // วิ่งมาซ้อนกัน
   vanish: 480,     // หุบหาย
-  tick: 200,       // ระยะห่างของไอคอนแต่ละตัว
-  verdict: 320
+  tick: 210,       // ระยะห่างของไอคอนแต่ละตัว
+  verdict: 320,
+  linger: 2200     // ค้างผลไว้ให้อ่านก่อนปิดฉากเอง
 };
 
 const ATTACK_ORDER = [
@@ -41,7 +42,13 @@ let at = 0;          // เริ่มฉากตอนกี่โมง
 let phase = '';      // ช่วงย่อยที่ไปถึงแล้ว
 let stageAt = 0;     // ช่วงย่อยเริ่มตอนกี่โมง
 let aimView = '';    // มุมมองย่อยของช่วงกัปตันเลือก
+let restAt = 0;      // เวลาที่ผลขึ้นครบ ใช้นับถอยหลังก่อนปิดฉาก
 let raf = 0;
+
+/* ฉากที่เล่าจบและปิดไปแล้ว จะไม่เปิดขึ้นมาอีก
+   จำเป็นเพราะ lastVote ค้างอยู่ในสถานะจนกว่าจะมีการโหวตครั้งถัดไป
+   ถ้าไม่จำไว้ ฉากจะกลับมาเปิดทุกครั้งที่วาดใหม่ แล้วผู้เล่นทำอะไรต่อไม่ได้เลย */
+const dismissed = new Set();
 let seen = new Set();
 let sendFn = null;
 
@@ -52,7 +59,8 @@ const now = () => performance.now();
 function sceneKey(st) {
   if (st.vote) return `ep:${st.vote.caller}:${st.vote.place}`;
   if (st.aim) return `ep:${st.aim.by}:${st.aim.place}`;
-  if (st.lastVote) return `ep:${st.lastVote.caller}:${st.lastVote.place}`;
+  if (st.lastVote && !dismissed.has(st.lastVote.at))
+    return `ep:${st.lastVote.caller}:${st.lastVote.place}`;
   return '';
 }
 
@@ -88,7 +96,7 @@ export function paintScene(el, st, ctx) {
   }
 
   if (key !== want) {
-    key = want; at = now(); phase = ''; aimView = ''; seen = new Set();
+    key = want; at = now(); phase = ''; aimView = ''; restAt = 0; seen = new Set();
     box.hidden = false;
     box.innerHTML = `
       <div class="wr-scene-title">
@@ -136,8 +144,16 @@ function step(body, st, ctx) {
 
   if (phase === 'tally') {
     if (tally(body, st.lastVote)) return true;
-    if (!st.aim) return false;          /* ยิงไม่ติดก็จบแค่นี้ ค้างผลไว้ */
-    goto('aim');
+
+    if (st.aim) goto('aim');
+    else {
+      /* ยิงไม่ติด — ค้างผลไว้ให้อ่านแล้วปิดฉากเอง
+         ตาผ่านไปตั้งแต่ตอนเปิดผลแล้ว ถ้าฉากไม่ปิดคนเล่นจะทำอะไรต่อไม่ได้ */
+      if (!restAt) restAt = now();
+      if (now() - restAt < T.linger) return true;
+      dismissed.add(st.lastVote.at);
+      return false;
+    }
   }
 
   if (phase === 'aim' && st.aim) return aim(body, st, ctx);
@@ -200,7 +216,10 @@ function pot(body, v) {
       cards.slice(0, -1).forEach(() => row.appendChild(voteBack('')));
     }
     row.classList.remove('wiggle');
-    const extra = voteBack('');
+    /* ติดป้ายให้เห็นว่าใบนี้มาจากกองกลาง ไม่ใช่ของใครสักคน
+       จำนวนสัญลักษณ์ที่ออกมาไม่เท่ากับจำนวนไพ่ (ใบเปล่าไม่มีสัญลักษณ์เลยสักแถว)
+       ถ้าไม่ติดป้ายจะแยกไม่ออกว่าใบจากกองมาจริงหรือเปล่า */
+    const extra = voteBack(t('wreck.scene.fromDeck'));
     extra.classList.add('from-deck');
     row.appendChild(extra);
     [...row.children].forEach((c, i) => {
@@ -246,7 +265,7 @@ function tally(body, v) {
       row.innerHTML = `<span class="wr-tally-pips">${
         Array.from({ length: n }, () =>
           `<img class="wr-pip" src="${esc(VOTE_ART)}${sym.file}${ICON_EXT}" alt="" draggable="false">`
-        ).join('')}</span><span class="wr-tally-n">0</span>`;
+        ).join('')}</span>`;
       wrap.appendChild(row);
     }
   }
@@ -264,8 +283,6 @@ function tally(body, v) {
     const vis = Math.max(0, Math.min(n, step - before));
     before += n;
     row.classList.toggle('on', vis > 0);
-    const num = row.querySelector('.wr-tally-n');
-    if (num.textContent !== String(vis)) num.textContent = String(vis);
     row.querySelectorAll('.wr-pip').forEach((p, i) => p.classList.toggle('in', i < vis));
   }
 
