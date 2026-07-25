@@ -30,9 +30,16 @@ import * as Games from './games.js';
 import * as Avatar from './avatar.js';
 
 const ALPHA = 'ACDEFGHJKLMNPQRTUVWXY34679';   // ตัดตัวที่อ่านสับสนออก
-const HEARTBEAT = 5000;
-const OFFLINE   = 20000;   // เงียบเกินนี้ = ถือว่าหลุด
-const HOST_GONE = 25000;   // เจ้าของห้องเงียบเกินนี้ = ยึดตำแหน่งได้
+/* จังหวะสัญญาณชีพ — ตัวเลขนี้คือตัวกินโควตา Firestore อันดับหนึ่ง
+   ทุกครั้งที่เขียน สมาชิกทุกคนที่ฟังอยู่จะได้อ่านหนึ่งครั้งด้วย
+   ค่าเสียหายจึงเป็น (จำนวนแท็บ)² ไม่ใช่เชิงเส้น
+
+   ที่ 5 วินาที: 4 แท็บ 8 ชั่วโมง = เขียน 23,040 · อ่าน 92,160
+   แผนฟรีให้วันละ เขียน 20,000 · อ่าน 50,000 — เกินตั้งแต่ยังไม่ทันเล่นจบวัน
+   ที่ 20 วินาทีและหยุดเขียนตอนแท็บถูกซ่อน เหลือราวหนึ่งในแปด */
+const HEARTBEAT = 20000;
+const OFFLINE   = 55000;   // เงียบเกินนี้ = ถือว่าหลุด (ต้องมากกว่าจังหวะสัญญาณชีพหลายเท่า)
+const HOST_GONE = 70000;   // เจ้าของห้องเงียบเกินนี้ = ยึดตำแหน่งได้
 const CHAT_KEEP = 60;      // เก็บข้อความล่าสุดเท่านี้ ที่เกินเจ้าของห้องลบทิ้ง
 const STALE_MS  = 12 * 3600 * 1000;   // ห้องที่ไม่มีใครแตะเกินนี้ = ห้องร้าง
 
@@ -55,6 +62,8 @@ let watchers = [];
 let unsubs = [];
 let beat = null;
 let beatWarned = false;
+let quotaWarned = false;
+let beatOff = null;
 let profileName = 'ผู้เล่น';
 let skew = 0;            // ต่างระหว่างนาฬิกาเครื่องนี้กับของเซิร์ฟเวอร์
 let lastBeatAt = 0;
@@ -230,20 +239,40 @@ function attach(code) {
 
   lastBeatAt = Date.now();
   beatWarned = false;
+  /* แท็บที่ถูกซ่อนอยู่ไม่ต้องเต้น ไม่มีใครดูอยู่และคนอื่นก็ไม่ได้รอเราเล่น
+     พอกลับมาดูค่อยเขียนทันทีหนึ่งครั้ง จะได้ไม่ถูกนับว่าหลุด
+     ตอนเทสหลายแท็บพร้อมกัน มีแท็บเดียวที่โฟกัสอยู่ ตรงนี้จึงลดภาระได้มาก */
+  const wake = () => { if (!document.hidden) sendBeat(); };
+  document.addEventListener('visibilitychange', wake);
+  beatOff = () => document.removeEventListener('visibilitychange', wake);
+
   beat = setInterval(() => {
+    if (document.hidden) return;
     lastBeatAt = Date.now();
     /* เคยกลืน error ทิ้งทั้งหมด ทำให้ปัญหาสิทธิ์กลายเป็นอาการ "อยู่ดี ๆ ก็หลุด"
        ซึ่งไล่หาสาเหตุยากมาก ตอนนี้เตือนครั้งเดียวแล้วเงียบต่อ */
-    fb.updateDoc(memberRef(me.uid), { lastSeen: fb.serverTimestamp() }).catch(e => {
-      if (!beatWarned && String(e.code || '').includes('permission-denied')) {
-        beatWarned = true;
-        console.error('[room] เขียนสัญญาณชีพไม่ได้ — uid ในเครื่องไม่ตรงกับ token จริง'
-          + ' คนอื่นจะเห็นว่าเราหลุด ทั้งที่หน้าจอยังปกติ');
-      }
-    });
+    sendBeat();
   }, HEARTBEAT);
 
   window.addEventListener('beforeunload', bail);
+}
+
+/* เขียนสัญญาณชีพหนึ่งครั้ง แยกออกมาเพราะเรียกจากสองที่ — ตัวจับเวลา และตอนกลับมาโฟกัส */
+function sendBeat() {
+  if (!room.code) return;
+  lastBeatAt = Date.now();
+  fb.updateDoc(memberRef(me.uid), { lastSeen: fb.serverTimestamp() }).catch(e => {
+    if (!beatWarned && String(e.code || '').includes('permission-denied')) {
+      beatWarned = true;
+      console.error('[room] เขียนสัญญาณชีพไม่ได้ — uid ในเครื่องไม่ตรงกับ token จริง'
+        + ' คนอื่นจะเห็นว่าเราหลุด ทั้งที่หน้าจอยังปกติ');
+    }
+    if (!quotaWarned && String(e.code || '').includes('resource-exhausted')) {
+      quotaWarned = true;
+      console.error('[room] โควตา Firestore รายวันหมดแล้ว — ทุกคำสั่งจะถูกปฏิเสธจนกว่าจะรีเซ็ต'
+        + ' (เที่ยงคืนเวลาแปซิฟิก ราวบ่ายสองบ้านเรา)');
+    }
+  });
 }
 
 /* อัปรูปของตัวเองขึ้นห้อง — เรียกตอนเข้าห้อง และตอนเปลี่ยนรูประหว่างอยู่ในห้อง
@@ -266,6 +295,7 @@ export function pushAvatar(code = room.code) {
 function detach() {
   window.removeEventListener('beforeunload', bail);
   clearInterval(beat); beat = null;
+  if (beatOff) { beatOff(); beatOff = null; }
   unsubs.forEach(u => u()); unsubs = [];
   stopHostDuties();
   room.code = null; room.doc = null; room.members = [];

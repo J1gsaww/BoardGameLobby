@@ -13,15 +13,44 @@
       messagingSenderId: '927504507212',
       appId:             '1:927504507212:web:ae5407ddfddfa9cd3defe9'
     },
+    /* โปรเจกต์สำรองไว้เทส — โควตา Firestore นับแยกกันคนละโปรเจกต์
+       วันไหนโควตาของ dev หมดก่อนบ่ายสอง ก็สลับมาใช้ตัวนี้เล่นต่อได้
+       เอาคอนฟิกจาก Firebase Console ของโปรเจกต์ใหม่มาวางแทน null */
+    alt: {
+      apiKey:            'AIzaSyAtbOJ7PGQuouTQUeZF3ZAjaElctAsRhqQ',
+      authDomain:        'boardgamelobbytemp.firebaseapp.com',
+      projectId:         'boardgamelobbytemp',
+      storageBucket:     'boardgamelobbytemp.firebasestorage.app',
+      messagingSenderId: '148115770924',
+      appId:             '1:148115770924:web:c614ec25ec476152eb4b89'
+      /* measurementId ไม่ต้องใส่ มันใช้กับ Analytics ซึ่งเกมนี้ไม่ได้เปิด */
+    },
+
     prod: null            // วางคอนฟิกของโปรดักชันทีหลังได้ ไม่ต้องแก้ที่อื่น
   };
 
   const h = location.hostname;
   const local = h === 'localhost' || h === '127.0.0.1' || h.startsWith('192.168.') ||
                 location.protocol === 'file:';
-  const env = local ? 'dev' : (PROJECTS.prod ? 'prod' : 'dev');
 
-  window.BUILD = '2026-07-26.19';
+  /* สลับโปรเจกต์ด้วย ?db=alt ท้าย URL — จำไว้ในเครื่องด้วย จะได้ไม่ต้องพิมพ์ทุกแท็บ
+     ใส่ ?db=dev เพื่อกลับมาใช้ตัวหลัก */
+  const KEY = 'wr.db';
+  const asked = new URLSearchParams(location.search).get('db');
+  if (asked) { try { localStorage.setItem(KEY, asked); } catch {} }
+  let pick = asked;
+  if (!pick) { try { pick = localStorage.getItem(KEY); } catch {} }
+
+  const env = (pick && PROJECTS[pick]) ? pick
+            : local ? 'dev'
+            : (PROJECTS.prod ? 'prod' : 'dev');
+
+  if (pick && !PROJECTS[pick]) {
+    console.warn('[env] ยังไม่ได้วางคอนฟิกของ', pick, '— ใช้', env, 'ไปก่อน');
+  }
+  console.info('[env] ใช้โปรเจกต์', env, '·', PROJECTS[env].projectId);
+
+  window.BUILD = '2026-07-26.22';
   window.APP_ENV = env;
   window.FIREBASE_CONFIG = PROJECTS[env];
   window.MAX_IN_ROOM = 15;
