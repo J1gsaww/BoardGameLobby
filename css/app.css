@@ -1275,10 +1275,13 @@ button{ cursor:pointer; border:0; background:none; }
 @keyframes wr-vb-deck{ from{ opacity:0; transform:translateX(120px) rotate(14deg); } }
 
 /* ดุ๊กดิ๊กเป็นระยะระหว่างรอ ไม่ให้จอนิ่งจนดูค้าง */
-.wr-vb-row.wiggle .wr-vb{ animation:wr-vb-in .34s both, wr-wig 2.6s 1s infinite; }
-.wr-vb-row.wiggle .wr-vb:nth-child(2){ animation-delay:0s, 1.15s; }
-.wr-vb-row.wiggle .wr-vb:nth-child(3){ animation-delay:0s, 1.3s; }
-.wr-vb-row.wiggle .wr-vb:nth-child(4){ animation-delay:0s, 1.45s; }
+/* ดุ๊กดิ๊กใส่ที่ตัวรูป ไม่ใช่ที่กล่อง
+   ถ้าใส่ที่กล่องแล้วถอดคลาสออก แอนิเมชันตอนไพ่โผล่จะถูกรีเซ็ตแล้วเล่นใหม่
+   เห็นเป็นไพ่เด้งไปเด้งมาตอนเปลี่ยนช่วง ซึ่งไม่ควรเกิด */
+.wr-vb-row.wiggle .wr-vb img{ animation:wr-wig 2.6s 1s infinite; }
+.wr-vb-row.wiggle .wr-vb:nth-child(2) img{ animation-delay:1.15s; }
+.wr-vb-row.wiggle .wr-vb:nth-child(3) img{ animation-delay:1.3s; }
+.wr-vb-row.wiggle .wr-vb:nth-child(4) img{ animation-delay:1.45s; }
 @keyframes wr-wig{
   0%,88%,100%{ transform:none; }
   91%{ transform:rotate(-4deg) translateY(-4px); }
@@ -1286,8 +1289,13 @@ button{ cursor:pointer; border:0; background:none; }
 }
 
 /* ทุกใบวิ่งมาซ้อนกันเป็นกองเดียว แล้วย่อหาย */
+/* ทุกใบวิ่งเข้าหากึ่งกลางแถว = ลบระยะห่างจากกึ่งกลางของตัวเองออกให้หมด
+   ใบกว้าง 62 + ช่องไฟ 10 = ระยะระหว่างใบ 72
+   ของเดิมคำนวณกลับด้าน เลยยิ่งดันออกจากกันแทนที่จะซ้อนกัน */
+.wr-vb-row{ --step:72px; }
 .wr-vb-row.merge .wr-vb{
-  transform:translateX(calc((var(--n) / 2 - var(--i) - .5) * -72px)) rotate(calc(var(--i) * 2deg - 4deg));
+  transform:translateX(calc((((var(--n) - 1) / 2) - var(--i)) * var(--step)))
+            rotate(calc(var(--i) * 3deg - 4deg));
 }
 .wr-vb-row.merge .wr-vb-name{ opacity:0; }
 .wr-vb-row.gone{ transform:scale(.1); opacity:0; transition:transform .42s, opacity .42s; }
@@ -1369,6 +1377,13 @@ button{ cursor:pointer; border:0; background:none; }
 }
 
 /* เมนูข้างหมากตอนกลายเป็นแผนรอยืนยัน ให้กว้างพอวางปุ่มสองปุ่ม */
-.wr-menu .wr-plan-go{ display:flex; gap:7px; margin-top:9px; }
-.wr-menu .wr-plan-go .wr-act{ flex:1; }
+/* แผนรอยืนยันในเมนูข้างหมาก — ต้องเว้นระยะเอง เพราะเมนูตั้ง padding ไว้แค่ 7px
+   ซึ่งพอดีสำหรับปุ่มรายการ แต่แน่นเกินไปสำหรับกล่องคำถามที่มีหัวข้อกับปุ่มสองปุ่ม */
+.wr-menu:has(.wr-plan-head){ padding:14px 16px 13px; min-width:210px; }
+.wr-menu .wr-plan-head{
+  margin:0 0 12px; font-size:14px; line-height:1.35; white-space:normal;
+}
+.wr-menu .wr-plan-row{ margin-bottom:10px; }
+.wr-menu .wr-plan-go{ display:flex; gap:9px; margin-top:0; }
+.wr-menu .wr-plan-go .wr-act{ flex:1; padding:9px 12px; font-size:13px; }
 @media (prefers-reduced-motion:reduce){ .wr-hand.asking{ animation:none; } }

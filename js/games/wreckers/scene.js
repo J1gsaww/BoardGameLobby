@@ -193,6 +193,17 @@ function reveal(body, st) {
     if (note) note.textContent = t('wreck.scene.shuffling');
   }
 
+  /* วัดระยะห่างจริงระหว่างใบจากตัว DOM แล้วส่งให้ CSS ใช้
+     ฝังเลขไว้ในซีเอสเอสแล้วพอขนาดไพ่เปลี่ยน การรวมกองจะเพี้ยนทันที */
+  const rowEl = body.querySelector('.wr-vb-row');
+  if (rowEl && rowEl.children.length > 1 && !rowEl.dataset.step) {
+    const a = rowEl.children[0].getBoundingClientRect();
+    const b = rowEl.children[1].getBoundingClientRect();
+    const step = Math.round(b.left - a.left) || 72;
+    rowEl.dataset.step = String(step);
+    rowEl.style.setProperty('--step', step + 'px');
+  }
+
   const ms = now() - stageAt;
   const row = body.querySelector('.wr-vb-row');
   if (row) {
