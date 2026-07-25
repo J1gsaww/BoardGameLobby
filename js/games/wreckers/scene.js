@@ -26,8 +26,8 @@ const T = {
   deckCard: 900,   // ใบจากกองกลางสไลด์เข้ามาแล้วค้างให้ทัน
   merge: 700,      // วิ่งมาซ้อนกัน
   vanish: 480,     // หุบหาย
-  tick: 210,       // ระยะห่างของไอคอนแต่ละตัว
-  verdict: 320,
+  tick: 340,       // ระยะห่างของไอคอนแต่ละตัว — ช้าพอให้ลุ้นทีละอัน
+  verdict: 520,
   linger: 2200     // ค้างผลไว้ให้อ่านก่อนปิดฉากเอง
 };
 
@@ -156,7 +156,17 @@ function step(body, st, ctx) {
     }
   }
 
-  if (phase === 'aim' && st.aim) return aim(body, st, ctx);
+  if (phase === 'aim') {
+    if (st.aim) return aim(body, st, ctx);
+
+    /* กัปตันเลือกเสร็จแล้ว st.aim หายไป — ทุกคนต้องปิดฉากพร้อมกัน
+       ของเดิมปิดเฉพาะเครื่องกัปตัน คนอื่นค้างอยู่ที่หน้า "รอกัปตันเลือก" ตลอดกาล
+       เพราะ lastVote ยังอยู่ในสถานะ ฉากจึงไม่มีเหตุผลให้ปิดเอง */
+    if (!restAt) restAt = now();
+    if (now() - restAt < T.linger) return true;
+    if (st.lastVote) dismissed.add(st.lastVote.at);
+    return false;
+  }
   return false;
 }
 

@@ -599,6 +599,11 @@ async function runTick() {
   if (!room.isHost) return;
   const game = currentGame();
   if (!game || typeof game.tick !== 'function') return;
+
+  /* คำขอที่ค้างอยู่ต้องถูกประมวลผลก่อนนาฬิกาเสมอ
+     ไม่งั้นจะเกิดกรณีที่ผู้เล่นกดปุ่มพอดีกับวินาทีที่เวลาหมด แล้วนาฬิกาชิงข้ามตาไปก่อน
+     คำสั่งที่กดไปเลยหายเปล่า ทั้งที่กดทันจริง ๆ */
+  if (queue.length) { await drain(); }
   try {
     const out = await game.tick(context());
     await commit(out, null);

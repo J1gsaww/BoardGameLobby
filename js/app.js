@@ -187,7 +187,11 @@ function paintGames(room) {
   const count = room.members.filter(m => m.role === 'player').length;
 
   // เกมที่เลือกไว้แล้วโชว์เสมอ แม้จะไม่ตรงตัวกรอง ไม่งั้นจะงงว่าเลือกอะไรอยู่
-  const list = Games.all().filter(g => g.id === chosen || matches(g));
+  /* เกมที่ยังไม่เปิดให้เล่นไปอยู่ท้ายรายการเสมอ
+     ของที่กดไม่ได้ไม่ควรกินที่ด้านบนซึ่งเป็นที่ที่สายตาไปถึงก่อน */
+  const list = Games.all()
+    .filter(g => g.id === chosen || matches(g))
+    .sort((a, b) => (a.comingSoon ? 1 : 0) - (b.comingSoon ? 1 : 0));
 
   host.innerHTML = '';
   if (!list.length) {
