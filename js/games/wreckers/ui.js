@@ -300,8 +300,11 @@ export function render(el, ctx) {
      เราจึงเก็บภาพกระดานไว้ตอนที่ยังไม่มีฉากผล แล้วเอามาวาดแทนจนกว่าจะเล่าจบ */
   const view = boardView(st);
 
-  const who = Object.fromEntries(Object.entries(st.pos || {}).map(([uid, spot]) => [spot, uid]));
-  const mine = st.pos?.[ctx.me.uid] || null;
+  /* ทุกอย่างที่เป็น "ภาพบนกระดาน" ต้องอ่านจาก view ไม่ใช่ st
+     ที่ผ่านมาแก้ครบทุกที่ยกเว้นวงวางหมาก ซึ่งเป็นที่ที่เห็นการเปลี่ยนแปลงชัดที่สุด
+     กัปตันโดนปลดแล้วย้ายที่ทันทีตั้งแต่ก่อนฉากเริ่มเล่า */
+  const who = Object.fromEntries(Object.entries(view.pos || {}).map(([uid, spot]) => [spot, uid]));
+  const mine = view.pos?.[ctx.me.uid] || null;
   const canMove = (st.seats || []).includes(ctx.me.uid);
 
   const hint = el.querySelector('.wr-hint');
@@ -323,7 +326,7 @@ export function render(el, ctx) {
     b.classList.toggle('me', spot === mine);
     /* วงไฟรอบคนที่ถึงตา เห็นเหมือนกันทุกเครื่อง
        ของเดิมดูได้จากรายชื่อฝั่งขวาอย่างเดียว ซึ่งไกลจากจุดที่สายตาจับอยู่ */
-    b.classList.toggle('turn', !!uid && uid === st.turn && st.phase === 'play');
+    b.classList.toggle('turn', !!uid && uid === view.turn && view.phase === 'play');
 
     // เขียนทับเฉพาะตอนคนในช่องเปลี่ยนจริง ไม่งั้นรูปประจำตัวจะโหลดใหม่ทุกรอบ
     if (uid) b.dataset.who = uid; else b.removeAttribute('data-who');
@@ -344,6 +347,7 @@ export function render(el, ctx) {
   el.querySelectorAll('[data-cargo]').forEach(b => {
     b.classList.toggle('picked', plan?.act === 'shiftCargo' && plan.box === b.dataset.cargo);
   });
+
 
   el.querySelectorAll('[data-piece]').forEach(node => {
     const hot = aimMine && st.aim.options.includes(node.dataset.piece);
