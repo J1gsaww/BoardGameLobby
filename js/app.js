@@ -426,7 +426,10 @@ function paintRoom() {
 
   $('lobbyNote').textContent = note;
   $('lobbyNote').classList.remove('warn');
-  $('btnCloseRoom').hidden = !room.isHost;
+  if (!leaveArmed) {
+    $('btnLeave').textContent = t(room.isHost ? 'lobby.closeRoom' : 'lobby.leave');
+    $('btnLeave').classList.toggle('danger', room.isHost);
+  }
 }
 
 Room.watch((room) => {
@@ -831,25 +834,33 @@ $('btnSettingBack').onclick = () => { show(cameFrom === 'view-setting' ? 'view-h
 $('btnReady').onclick = () => Room.setReady(!Room.room.mine?.ready);
 $('btnStart').onclick = () => Room.start();
 $('btnBack').onclick  = () => Room.backToLobby();
-/* ปิดห้อง — กดสองครั้งถึงจะทำงาน กันเผลอกดตอนเกมกำลังเล่นอยู่ */
-let closeArmed = false;
-$('btnCloseRoom').onclick = async () => {
-  const b = $('btnCloseRoom');
-  if (!closeArmed) {
-    closeArmed = true;
+/* ออกจากห้อง — เจ้าของห้องกดแล้วห้องปิดทั้งห้อง คนอื่นกดแล้วออกคนเดียว
+   รวมสองปุ่มเป็นปุ่มเดียวเพราะเจ้าของห้องออกไปแล้วห้องไม่ควรเหลือค้างหลังบ้าน
+   ของเจ้าของห้องต้องกดสองครั้ง เพราะมันเตะทุกคนออกพร้อมกัน */
+let leaveArmed = false;
+
+function resetLeave() {
+  leaveArmed = false;
+  const b = $('btnLeave');
+  b.classList.remove('armed');
+  b.textContent = t(Room.room.isHost ? 'lobby.closeRoom' : 'lobby.leave');
+}
+
+$('btnLeave').onclick = async () => {
+  const b = $('btnLeave');
+  const host = Room.room.isHost;
+
+  if (host && !leaveArmed) {
+    leaveArmed = true;
     b.textContent = t('lobby.closeRoomSure');
     b.classList.add('armed');
-    setTimeout(() => {
-      closeArmed = false;
-      b.textContent = t('lobby.closeRoom');
-      b.classList.remove('armed');
-    }, 4000);
+    setTimeout(() => { if (leaveArmed) resetLeave(); }, 4000);
     return;
   }
-  closeArmed = false;
+
+  leaveArmed = false;
   b.classList.remove('armed');
-  b.textContent = t('lobby.closeRoom');
-  await Room.closeRoom();
+  await (host ? Room.closeRoom() : Room.leaveRoom());
   lastRoom = null;
   Music.setTrack(Music.defaultTrack());
   stopAmbience();
@@ -857,14 +868,6 @@ $('btnCloseRoom').onclick = async () => {
   err(null);
 };
 
-$('btnLeave').onclick = async () => {
-  await Room.leaveRoom();
-  lastRoom = null;
-  Music.setTrack(Music.defaultTrack());
-  stopAmbience();
-  show('view-home');
-  err(null);
-};
 
 $('chatToggle').onclick = () => { chatOpen = !chatOpen; paintChat(lastRoom); };
 $('chatSend').onclick = submitChat;
