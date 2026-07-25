@@ -18,7 +18,8 @@ import { cardById as voteById, voteCard, iconSrc } from './vote.js';
 import { dieSvg, rollPose, HERO, ROLL_MS } from './die.js';
 import { actionsFor, occupants, placeOf, BOAT_IDS } from './rules.js';
 import { BASE_CARDS, cardArt, cardArtAlt, CARD_BACK, CARD_BACK_ALT } from './events.js';
-import { paintScene, stopScene, setPlanView, setPlanWire, VOTE_BACK, sceneAtAim } from './scene.js';
+import { paintScene, stopScene, setPlanView, setPlanWire, VOTE_BACK,
+         sceneAtAim, sceneHolding } from './scene.js';
 import { EXTRA_CARDS } from './cards.js';
 import { lang } from '../../i18n.js';
 import {
@@ -260,6 +261,17 @@ function preload(el) {
   ]).then(() => { assetsReady = true; paint(el); });
 }
 
+/* ภาพกระดานที่ค้างไว้ระหว่างฉากเล่าผล
+   เก็บสำเนาไว้ทุกครั้งที่ยังไม่มีฉากผล พอฉากเริ่มเล่าก็เอาสำเนานั้นมาวาดแทน
+   ปล่อยกลับเป็นสถานะจริงเมื่อฉากเล่าจบ */
+let frozen = null;
+
+function boardView(st) {
+  if (sceneHolding() && frozen) return { ...st, pos: frozen.pos, cargo: frozen.cargo };
+  frozen = { pos: st.pos, cargo: st.cargo };
+  return st;
+}
+
 function paintLoading(el) {
   const box = el.querySelector('.wr-loading');
   if (!box) return;
@@ -282,6 +294,11 @@ export function render(el, ctx) {
   shell(el, ctx);
   preload(el);
   paintLoading(el);
+
+  /* ระหว่างที่ฉากกำลังเล่าผล กระดานต้องค้างอยู่ที่ภาพก่อนผลออก
+     เกมคำนวณผลแล้วเขียนลงสถานะทันทีที่ไพ่ครบ กัปตันจึงย้ายที่ไปแล้วตั้งแต่ก่อนฉากเริ่มเล่า
+     เราจึงเก็บภาพกระดานไว้ตอนที่ยังไม่มีฉากผล แล้วเอามาวาดแทนจนกว่าจะเล่าจบ */
+  const view = boardView(st);
 
   const who = Object.fromEntries(Object.entries(st.pos || {}).map(([uid, spot]) => [spot, uid]));
   const mine = st.pos?.[ctx.me.uid] || null;
@@ -347,7 +364,7 @@ export function render(el, ctx) {
   el.querySelectorAll('[data-piece]').forEach(node => {
     const p = PIECES.find(x => x.id === node.dataset.piece);
     const box = node.querySelector('.wr-cargo');
-    const html = cargoOf(p, st, ctx.me.uid);
+    const html = cargoOf(p, view, ctx.me.uid);
     if (box.dataset.sig !== html) { box.dataset.sig = html; box.innerHTML = html; }
   });
 
@@ -358,19 +375,19 @@ export function render(el, ctx) {
   setPlanWire(box => wirePlan(box, el, ctx));
   paintScene(el, st, ctx);
   paintHand(el, st, ctx);
-  paintRoster(el, st, ctx);
-  paintActions(el, st, ctx);
+  paintRoster(el, view, ctx);
+  paintActions(el, view, ctx);
   paintVote(el, st, ctx);
   paintLog(el, st);
   paintDecks(el, st);
   paintEvents(el, st, ctx);
 
-  const scoreHtml = legend(st);
+  const scoreHtml = legend(view);
   const sb = el.querySelector('.wr-score-bar');
   if (sb.dataset.sig !== scoreHtml) { sb.dataset.sig = scoreHtml; sb.innerHTML = scoreHtml; }
 
-  paintMenu(el, st, ctx);
-  paintTurn(el, st, ctx);
+  paintMenu(el, view, ctx);
+  paintTurn(el, view, ctx);
   paintDice(el, st);
 
   const legendHtml =
@@ -723,7 +740,11 @@ function paintMenu(el, st, ctx) {
   if (!box) { console.warn('[wreckers] ไม่พบกล่องเมนูในโครง'); return; }
   if (!menu) { box.hidden = true; box.innerHTML = ''; return; }
 
-  const html = menu.kind === 'aim' ? planBody(st, ctx)
+  /* มีแผนรอยืนยันอยู่ = เมนูต้องกลายเป็นกล่องยืนยันทันที ไม่ว่าเปิดมาจากอะไร
+     ของเดิมเช็กชนิดเมนูก่อน เมนูกล่องสมบัติเลยยังโชว์ปุ่มเดิมค้างอยู่
+     ต้องไปกดที่อื่นอีกทีเมนูถึงจะรู้ตัวว่ามีแผนรออยู่ */
+  const html = plan?.via === 'menu' ? planBody(st, ctx)
+             : menu.kind === 'aim' ? planBody(st, ctx)
              : menu.kind === 'cargo' ? cargoMenu()
              : pawnMenu(st, ctx);
   if (!html) { box.hidden = true; box.innerHTML = ''; menu = null; return; }
@@ -854,6 +875,9 @@ function paintDecks(el, st) {
 /* ── Action ที่กดได้ในตานี้ ────────────────────────────────
    ชุดล่างเปลี่ยนตามตำแหน่งที่ยืน ย้ายที่แล้วปุ่มเปลี่ยนทันที */
 function paintActions(el, st, ctx) {
+  /* ฉากกำลังเล่าผลอยู่ = ยังไม่ให้กดอะไร เพราะกระดานที่เห็นเป็นภาพก่อนผลออก
+     ถ้าปล่อยให้กด คำสั่งจะอิงจากภาพที่ไม่ตรงกับสถานะจริงบนเซิร์ฟเวอร์ */
+  const frozenNow = sceneHolding();
   const me = ctx.me.uid;
   const spot = st.pos?.[me];
   const role = roleOf(spot);
@@ -893,6 +917,9 @@ function paintActions(el, st, ctx) {
     b.onclick = () => { if (!b.disabled) startAction(el, st, ctx, b.dataset.do); };
   });
 
+  if (frozenNow) {
+    el.querySelectorAll('.wr-act').forEach(b => { b.disabled = true; });
+  }
   paintPlan(el, st, ctx);
 }
 

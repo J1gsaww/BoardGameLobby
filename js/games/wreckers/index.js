@@ -168,6 +168,7 @@ register({
       'wreck.scene.mutinyFail': 'ก่อกบฏล้มเหลว กัปตันอยู่ต่อ',
       'wreck.scene.brawlDone': 'กล่องบนเกาะ บริติช {B} · ฝรั่งเศส {F}',
       'wreck.scene.kicked': 'กัปตัน {name} ไล่ {who} ลงจากเรือ',
+      'wreck.scene.shifted': '{name} ย้ายกล่องจาก{from}ไป{to}',
 
       'wreck.vote.open': 'กำลังโหวตอยู่',
       'wreck.vote.pick': 'เลือกไพ่หนึ่งใบส่งเข้าหม้อ',
@@ -340,6 +341,7 @@ register({
       'wreck.scene.mutinyFail': 'The mutiny fails \u2014 the Captain stays',
       'wreck.scene.brawlDone': 'Island cargo \u2014 British {B} \u00b7 France {F}',
       'wreck.scene.kicked': 'Captain {name} throws {who} off the ship',
+      'wreck.scene.shifted': '{name} moves a box from {from} to {to}',
 
       'wreck.vote.open': 'A vote is underway',
       'wreck.vote.pick': 'Pick one card for the pot',

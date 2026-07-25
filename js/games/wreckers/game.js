@@ -361,10 +361,11 @@ function shiftCargo(ctx, uid, from) {
   const cargo = moveBox(st.cargo, ship, side, ship, side === 'B' ? 'F' : 'B');
   if (!cargo) return null;
 
-  return {
-    state: passTurn(pushLog({ ...st, cargo }, 'wreck.log.shift',
-                            { name: st.names?.[uid], side }))
-  };
+  const next = pushLog({ ...st, cargo }, 'wreck.log.shift', { name: st.names?.[uid], side });
+  /* ประกาศกลางจอ เพราะกล่องขยับทีเดียวเงียบ ๆ คนอื่นมักไม่ทันสังเกต */
+  const shout = { kind: 'shift', by: uid, from: side, to: side === 'B' ? 'F' : 'B',
+                  at: (next.logSeq || 0) };
+  return { state: passTurn({ ...next, shout }) };
 }
 
 /* ── สั่งโหวต ──────────────────────────────────────────────

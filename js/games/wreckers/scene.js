@@ -61,6 +61,7 @@ let stageAt = 0;     // ช่วงย่อยเริ่มตอนกี�
 let aimView = '';    // มุมมองย่อยของช่วงกัปตันเลือก
 let restAt = 0;      // เวลาที่ผลขึ้นครบ ใช้นับถอยหลังก่อนปิดฉาก
 let closing = false; // สั่งปิดฉากในเฟรมนี้
+let holding = false; // ระหว่างนี้กระดานต้องค้างไว้ ห้ามขยับตามสถานะจริง
 let raf = 0;
 
 /* ฉากที่เล่าจบและปิดไปแล้ว จะไม่เปิดขึ้นมาอีก
@@ -88,7 +89,7 @@ function sceneKey(st) {
 
 export function stopScene() {
   if (raf) cancelAnimationFrame(raf);
-  raf = 0; key = ''; phase = ''; aimView = ''; seen = new Set();
+  raf = 0; key = ''; phase = ''; aimView = ''; holding = false; seen = new Set();
 }
 
 /* ช่วงย่อยเดินหน้าอย่างเดียว ถอยกลับไม่ได้เด็ดขาด
@@ -119,7 +120,8 @@ export function paintScene(el, st, ctx) {
   closing = false;
 
   if (key !== want) {
-    key = want; at = now(); phase = ''; aimView = ''; restAt = 0; closing = false; seen = new Set();
+    key = want; at = now(); phase = ''; aimView = ''; restAt = 0; closing = false;
+  holding = false; seen = new Set();
     box.hidden = false;
     box.innerHTML = `
       <div class="wr-scene-title">
@@ -136,7 +138,7 @@ export function paintScene(el, st, ctx) {
   const body = box.querySelector('.wr-scene-body');
 
   /* ชื่อเปลี่ยนข้อความได้โดยไม่ต้องสร้างใหม่ แอนิเมชันจึงไม่เริ่มใหม่ */
-  const head = titleOf(st, phase);
+  const head = titleOf(st, phase, ctx.me.uid);
   const who = box.querySelector('.wr-scene-who');
   const big = box.querySelector('.wr-scene-big');
   if (who.textContent !== head.who) who.textContent = head.who;
@@ -172,12 +174,15 @@ function step(body, st, ctx) {
   if (!phase && st.aim) { goto('aim'); return aim(body, st, ctx); }
 
   if (st.lastVote && rank(phase) < rank('tally')) {
+    holding = true;
     if (pot(body, st.lastVote)) return true;
     goto('tally');
   }
 
   if (phase === 'tally') {
+    holding = true;
     if (tally(body, st.lastVote)) return true;
+    holding = false;          /* เล่าจบแล้ว ปล่อยให้กระดานตามสถานะจริงได้ */
 
     /* ผลต้องขึ้นให้ครบก่อน ถึงจะเปิดให้กัปตันเลือกเรือ
        ถ้าปล่อยพร้อมกัน กัปตันจะรู้ผลก่อนคนอื่นและคลิกได้ทั้งที่ผลยังไม่ขึ้น */
@@ -239,10 +244,18 @@ function peekNote(body, st) {
 /* ประกาศเหตุการณ์สั้น ๆ อย่างการไล่คนลงจากเรือ */
 function shoutNote(body, st) {
   if (goto('collect')) {
-    body.innerHTML = `<p class="wr-scene-note">${esc(t('wreck.scene.kicked', {
-      name: st.names?.[st.shout.by] || '?',
-      who: st.names?.[st.shout.who] || '?'
-    }))}</p>`;
+    const sh = st.shout;
+    const msg = sh.kind === 'shift'
+      ? t('wreck.scene.shifted', {
+          name: st.names?.[sh.by] || '?',
+          from: t('wreck.' + (sh.from === 'B' ? 'british' : 'france')),
+          to: t('wreck.' + (sh.to === 'B' ? 'british' : 'france'))
+        })
+      : t('wreck.scene.kicked', {
+          name: st.names?.[sh.by] || '?',
+          who: st.names?.[sh.who] || '?'
+        });
+    body.innerHTML = `<p class="wr-scene-note">${esc(msg)}</p>`;
   }
   if (now() - stageAt < T.linger) return true;
   dismissed.add('shout:' + st.shout.at);
@@ -250,9 +263,13 @@ function shoutNote(body, st) {
   return false;
 }
 
-function titleOf(st, ph) {
-  if (st.shout && key.startsWith('shout:'))
-    return { who: t('wreck.role.captain'), big: st.names?.[st.shout.by] || '?' };
+function titleOf(st, ph, me) {
+  if (st.shout && key.startsWith('shout:')) {
+    return {
+      who: t(st.shout.kind === 'shift' ? 'wreck.act.shiftCargo' : 'wreck.role.captain'),
+      big: st.names?.[st.shout.by] || '?'
+    };
+  }
   if (st.lastPeek && key.startsWith('peek:'))
     return { who: t('wreck.act.peek'), big: st.names?.[st.lastPeek.by] || '?' };
   const v = st.vote || st.lastVote;
@@ -261,7 +278,9 @@ function titleOf(st, ph) {
   const role = aiming ? 'captain'
     : v?.kind === 'mutiny' ? 'mate'
     : v?.kind === 'islandVote' ? 'governor' : 'captain';
-  const line = (aiming && ph === 'aim' && st.aim && !st.aim.target) ? 'wreck.scene.pickShipBig'
+  /* เฉพาะคนที่ต้องเลือกเท่านั้นที่เห็นเป็นคำสั่ง คนอื่นเห็นชื่อฉากตามปกติ */
+  const choosing = aiming && ph === 'aim' && st.aim && !st.aim.target && st.aim.by === me;
+  const line = choosing ? 'wreck.scene.pickShipBig'
     : aiming ? 'wreck.scene.aim'
     : v?.kind === 'mutiny' ? 'wreck.scene.mutiny'
     : v?.kind === 'islandVote' ? 'wreck.scene.brawl' : 'wreck.scene.shoot';
@@ -506,6 +525,12 @@ function wireSides(body, action) {
 /* ยังต้องมีให้ ui.js เรียกได้ แม้ตอนนี้จะไม่ได้ใช้แผนในฉากแล้ว */
 /* ฉากเล่าถึงช่วงให้กัปตันเลือกเรือแล้วหรือยัง — กระดานถามก่อนเปิดไฮไลท์ */
 export const sceneAtAim = () => phase === 'aim';
+
+/* กระดานต้องค้างไว้ระหว่างที่ฉากกำลังเล่าผล
+   ผลของการโหวตถูกคำนวณและเขียนลงสถานะทันทีที่ไพ่ครบ กัปตันจึงโดนปลดไปแล้ว
+   ตั้งแต่ก่อนที่ฉากจะได้เล่าอะไรเลย ถ้าไม่ค้างไว้ ทุกคนจะเห็นผลจากตำแหน่งบนกระดาน
+   ก่อนที่เรื่องจะเล่าถึง ซึ่งทำให้ฉากไม่มีความหมาย */
+export const sceneHolding = () => holding;
 
 export const setPlanView = () => {};
 export const setPlanWire = () => {};
