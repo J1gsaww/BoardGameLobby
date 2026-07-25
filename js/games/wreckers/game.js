@@ -161,7 +161,8 @@ export function passTurn(st, now = Date.now()) {
     turn: uid,
     deadline: turnDeadline(state, now),
     graced: false,
-    vote: null
+    vote: null,
+    peek: null            /* แอบดูค้างอยู่แล้วหมดเวลา ก็ทิ้งไปพร้อมตา */
   });
 }
 
@@ -258,24 +259,45 @@ function activate(ctx, uid, { slot }) {
 }
 
 /* ── แอบดู ─────────────────────────────────────────────────
-   ดูได้สองใบแล้ววางกลับที่เดิม สำรับไม่ขยับเลย
-   สิ่งที่เห็นเก็บไว้ในข้อมูลลับของคนดูคนเดียว คนอื่นเห็นแค่ว่ามีคนแอบดู
-   ไม่มีวันหมดอายุ เพราะกติกาคือรู้แล้วรู้เลย */
-function peek(ctx, uid, { slots }) {
+   กติกาคือดูสองใบแล้ววางกลับที่เดิม สำรับไม่ขยับเลยสักใบ
+
+   ดูทีละใบ ใบแรกยังไม่จบตา — เก็บไว้ใน st.peek ว่าค้างอยู่กี่ใบ
+   ระหว่างนั้นเจ้าตัวทำอย่างอื่นไม่ได้เลยนอกจากดูใบที่สอง
+   บนโต๊ะเหลือใบเดียวก็ดูได้ใบเดียวแล้วจบ ไม่ค้างรอของที่ไม่มี
+
+   สิ่งที่เห็นเก็บในข้อมูลลับของคนดูคนเดียว
+   ส่วนช่องที่เปิดดูเป็นข้อมูลสาธารณะ เพราะบนโต๊ะจริงทุกคนก็เห็นว่าหยิบใบไหนขึ้นมาดู */
+function peek(ctx, uid, { slot }) {
   const st = ctx.state;
+  const i = Number(slot);
+  if (!Number.isInteger(i) || i < 0 || i >= EVENT_SLOTS) return null;
+
   const deck = deckOf(ctx);
-  const want = (Array.isArray(slots) ? slots : [])
-    .map(Number).filter(i => Number.isInteger(i) && i >= 0 && i < EVENT_SLOTS).slice(0, 2);
-  if (!want.length) return null;
+  const id = deck.slots?.[i];
+  if (!id) return null;
 
-  const seen = want.map(i => ({ slot: i, id: deck.slots?.[i] || null })).filter(x => x.id);
-  if (!seen.length) return null;
+  const cur = st.peek?.uid === uid ? st.peek : null;
+  if (cur?.slots.includes(i)) return null;          /* ใบเดิมดูซ้ำไม่ได้ */
 
+  const need = Math.min(2, deck.slots.filter(Boolean).length);
+  const slots = [...(cur?.slots || []), i];
   const mine = ctx.secrets?.[uid] || {};
-  return {
-    state: passTurn(pushLog(st, 'wreck.log.peek', { name: st.names?.[uid], n: seen.length })),
-    secrets: { [uid]: { ...mine, peek: { seen, at: (st.logSeq || 0) + 1 } } }
-  };
+
+  /* เริ่มดูรอบใหม่ = ล้างของเก่าทิ้ง · ดูใบที่สองต่อ = ต่อท้ายของรอบนี้ */
+  const seen = [...(cur ? (mine.peek?.seen || []) : []), { slot: i, id }];
+  const secrets = { [uid]: { ...mine, peek: { seen, at: (st.logSeq || 0) + 1 } } };
+
+  if (slots.length < need) {
+    return {
+      state: pushLog({ ...st, peek: { uid, slots, left: need - slots.length } },
+                     'wreck.log.peekOne', { name: st.names?.[uid], n: need - slots.length }),
+      secrets
+    };
+  }
+
+  const done = pushLog({ ...st, peek: null }, 'wreck.log.peek',
+                       { name: st.names?.[uid], n: slots.length });
+  return { state: passTurn(done), secrets };
 }
 
 /* ลงเรือเล็ก — จองที่ไว้ กันคนที่เล่นต่อจากเราใช้ลำนั้น */

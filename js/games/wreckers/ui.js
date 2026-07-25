@@ -39,7 +39,6 @@ let menu = null;        // { kind, uid, spot, place, x, y }
 let picks = [];         // การ์ดเหตุการณ์ที่เลือกไว้ สูงสุด 2 ใบ
 let forcing = null;     // uid ของคนที่กำลังจะบังคับให้เปิดการ์ด
 let plan = null;        // ตัวเลือกที่ยังไม่ยืนยัน เช่นจะยิงลำไหน เก็บฝั่งไหน
-let devSlot = null;     // ช่องการ์ดที่กำลังเลือกใบใส่ในโหมดทดสอบ
 
 /* เครื่องมือทดสอบเปิดด้วย ?dev=cards ท้าย URL เท่านั้น
    ไม่มีสวิตช์ในหน้าจอ จะได้ไม่มีทางเผลอเปิดตอนเล่นจริง */
@@ -100,7 +99,7 @@ function shell(el, ctx) {
           </div>
           <div class="wr-event-open" hidden></div>
           <p class="wr-event-note" hidden></p>
-          <div class="wr-devcards" hidden></div>
+          <div class="wr-devbar-top" hidden></div>
           <div class="wr-decks"></div>
         </div>
 
@@ -115,6 +114,7 @@ function shell(el, ctx) {
 
       <ul class="wr-log" hidden></ul>
 
+      <div class="wr-devpop" hidden></div>
       <div class="wr-reveal" hidden></div>
       <div class="wr-legend"></div>
     </div>`;
@@ -147,9 +147,10 @@ function shell(el, ctx) {
   el.querySelector('.wr-event-row').addEventListener('click', e => {
     const mini = e.target.closest('[data-ev]');
     if (mini && !mini.disabled) {
-      const nums = picks.map(n => Number(n) - 1);          /* หน้าจอนับ 1 แต่โค้ดนับ 0 */
-      if (mini.dataset.ev === 'activate') ctx.send('activate', { slot: nums[0] });
-      else ctx.send('peek', { slots: nums });
+      /* ปุ่มอยู่ในช่องของมันเอง จึงอ่านเลขช่องจากตรงนั้นตรง ๆ
+         แม่นกว่าอ้อมผ่านรายการที่เลือกไว้ และไม่มีทางส่งผิดใบ */
+      const i = Number(mini.closest('.wr-event-slot').dataset.event) - 1;
+      ctx.send(mini.dataset.ev, { slot: i });
       picks = []; forcing = null; paint(el);
       return;
     }
@@ -241,7 +242,6 @@ export function render(el, ctx) {
   paintLog(el, st);
   paintDecks(el, st);
   paintEvents(el, st, ctx);
-  paintDevCards(el, ctx);
 
   const scoreHtml = legend(st);
   const sb = el.querySelector('.wr-score-bar');
@@ -351,9 +351,13 @@ const eventBack = () => `<span class="wr-card-face">${esc(t('wreck.event'))}</sp
     draggable="false" onerror="this.remove()">`;
 
 function paintEvents(el, st, ctx) {
+  const me = ctx.me.uid;
   /* ใบที่ตัวเองแอบดูไว้ เห็นคนเดียว คนอื่นยังเห็นเป็นไพ่คว่ำ */
   const seen = {};
   for (const s of ctx.secret?.peek?.seen || []) seen[s.slot] = s.id;
+
+  const mid = st.peek?.uid === me ? st.peek : null;      /* แอบดูค้างอยู่กลางคัน */
+  const mine = st.turn === me && st.phase === 'play' && !st.vote;
 
   el.querySelectorAll('.wr-event-slot').forEach(slot => {
     const n = slot.dataset.event;
@@ -363,28 +367,101 @@ function paintEvents(el, st, ctx) {
     slot.classList.toggle('on', on);
 
     const card = slot.querySelector('.wr-event');
-    const face = !filled ? '' : (seen[i] ? eventFace(seen[i]) : eventBack());
+    const known = seen[i];
+    const face = !filled ? '' : (known ? eventFace(known) : eventBack());
     const html = face + `<span class="wr-card-no">${n}</span>`;
     if (card.dataset.face !== html) { card.dataset.face = html; card.innerHTML = html; }
-    card.classList.toggle('peeked', !!seen[i]);
+
+    /* รู้ว่าเป็นใบอะไรแล้วก็ให้ชี้เมาส์อ่านคำอธิบายได้ */
+    const info = known ? (eventById(known)?.[lang] || eventById(known)?.th) : null;
+    if (info) card.dataset.tip = info.desc; else card.removeAttribute('data-tip');
+
+    card.classList.toggle('peeked', !!known);
     card.classList.toggle('gone', !filled);
 
+    /* ระหว่างแอบดูค้าง เหลือให้กดได้แค่ปุ่มแอบดูของใบที่ยังไม่ได้ดู */
+    const usedByPeek = mid?.slots.includes(i);
     const acts = slot.querySelector('.wr-event-acts');
-    const mine = st.turn === ctx.me.uid && st.phase === 'play' && !st.vote;
-    acts.classList.toggle('ready', on && mine);
-    slot.querySelector('[data-ev="activate"]').disabled = !(on && mine && picks.length === 1 && filled);
-    slot.querySelector('[data-ev="peek"]').disabled = !(on && mine && filled);
+    acts.classList.toggle('ready', on && mine && !usedByPeek);
+    slot.querySelector('[data-ev="activate"]').disabled = !(on && mine && filled && !mid);
+    slot.querySelector('[data-ev="peek"]').disabled = !(on && mine && filled && !usedByPeek);
+    slot.classList.toggle('used', !!usedByPeek);
   });
 
   const note = el.querySelector('.wr-event-note');
   if (note) {
-    note.textContent = forcing
-      ? t('wreck.forcing', { name: st.names?.[forcing] || '?' })
+    note.textContent =
+        mid ? t('wreck.peekLeft', { n: mid.left })
+      : forcing ? t('wreck.forcing', { name: st.names?.[forcing] || '?' })
       : picks.length === 1 ? t('wreck.pickMore') : '';
     note.hidden = !note.textContent;
   }
 
+  paintDevPick(el, st, ctx);
   paintReveal2(el, st);
+}
+
+/* ── เครื่องมือทดสอบ: หยิบไพ่จากสำรับมาวางแทนใบที่เลือก ────
+   โผล่เฉพาะตอนเปิด ?dev=cards และเป็นเจ้าของห้อง และเลือกช่องไว้แล้ว
+   เป็นป๊อปอัพที่พิมพ์ค้นชื่อได้ เพราะการ์ดมี 32 ชนิด ไล่หาด้วยตาช้าเกินไป */
+let devOpen = false;
+let devFind = '';
+
+function paintDevPick(el, st, ctx) {
+  const bar = el.querySelector('.wr-devbar-top');
+  const pop = el.querySelector('.wr-devpop');
+  if (!bar || !pop) return;
+
+  const can = DEV_CARDS && ctx.isHost && !!ctx.secrets?._deck;
+  bar.hidden = !(can && picks.length === 1);
+  if (!can) { pop.hidden = true; devOpen = false; return; }
+
+  const slot = picks.length === 1 ? Number(picks[0]) - 1 : null;
+  const label = t('wreck.dev.swap', { n: picks[0] || '' });
+  if (bar.dataset.sig !== label) {
+    bar.dataset.sig = label;
+    bar.innerHTML = `<button class="btn btn-slim wr-dev-open">\u26a0 ${esc(label)}</button>`;
+    bar.querySelector('.wr-dev-open').onclick = () => { devOpen = true; devFind = ''; paint(el); };
+  }
+
+  pop.hidden = !(devOpen && slot !== null);
+  if (pop.hidden) { pop.dataset.sig = ''; return; }
+
+  const q = devFind.trim().toLowerCase();
+  const hit = ALL_EVENTS.filter(c => {
+    if (!q) return true;
+    const i = c[lang] || c.th;
+    return c.id.includes(q) || i.name.toLowerCase().includes(q)
+        || (c.th.name || '').toLowerCase().includes(q);
+  });
+
+  const html = `<div class="wr-devpop-box">
+      <div class="wr-devpop-head">${esc(t('wreck.dev.swap', { n: picks[0] }))}</div>
+      <input class="wr-devpop-find" type="search" autocomplete="off"
+        placeholder="${esc(t('wreck.dev.find'))}" value="${esc(devFind)}">
+      <div class="wr-devpop-list">${
+        hit.map(c => `<button class="wr-devpop-item rar-${esc(c.rarity)}" data-id="${esc(c.id)}">
+          <span>${esc((c[lang] || c.th).name)}</span>
+          <span class="wr-devpop-id">${esc(c.id)}</span></button>`).join('')
+        || `<p class="wr-empty">${esc(t('wreck.dev.none'))}</p>`
+      }</div>
+      <button class="btn btn-slim wr-devpop-close">${esc(t('wreck.cancel'))}</button>
+    </div>`;
+
+  if (pop.dataset.sig !== html) {
+    pop.dataset.sig = html;
+    pop.innerHTML = html;
+    const find = pop.querySelector('.wr-devpop-find');
+    find.oninput = () => { devFind = find.value; paint(el); find.focus(); };
+    pop.querySelector('.wr-devpop-close').onclick = () => { devOpen = false; paint(el); };
+    pop.querySelectorAll('[data-id]').forEach(b => {
+      b.onclick = () => {
+        ctx.send('devCard', { slot, id: b.dataset.id });
+        devOpen = false; picks = []; paint(el);
+      };
+    });
+    if (devFind) { find.focus(); find.setSelectionRange(find.value.length, find.value.length); }
+  }
 }
 
 /* ใบที่เพิ่งถูกเปิด — ทุกคนเห็นเหมือนกัน วางไว้ข้างแถวการ์ด */
@@ -592,57 +669,6 @@ function runMenu(el, ctx, act, arg) {
 
    กดช่องไหนแล้วเลือกใบ ใบเดิมในช่องจะถูกดันกลับลงใต้กอง
    จำนวนใบทั้งสำรับจึงไม่เปลี่ยน เล่นต่อได้เลยไม่ต้องเปิดเกมใหม่ */
-const ALL_CARDS = [...BASE_CARDS, ...EXTRA_CARDS];
-
-function paintDevCards(el, ctx) {
-  const box = el.querySelector('.wr-devcards');
-  if (!box) return;
-
-  const deck = ctx.secrets?._deck;
-  if (!DEV_CARDS || !ctx.isHost || !deck) {
-    box.hidden = true;
-    if (box.dataset.sig) { box.dataset.sig = ''; box.innerHTML = ''; }
-    return;
-  }
-
-  const slots = deck.slots || [];
-  const name = (id) => {
-    const c = ALL_CARDS.find(x => x.id === id);
-    return c ? (c[lang] || c.th).name : (id || '\u2014');
-  };
-
-  let html = `<div class="wr-dev-head">\u26a0 ${esc(t('wreck.dev.head'))}</div>
-    <div class="wr-dev-slots">` +
-    slots.map((id, i) => `<button class="wr-dev-slot${devSlot === i ? ' on' : ''}" data-slot="${i}">
-      <span class="wr-dev-n">${i + 1}</span>${esc(name(id))}</button>`).join('') + `</div>`;
-
-  if (devSlot !== null) {
-    const groups = ['common', 'rare', 'map'].map(r => {
-      const list = ALL_CARDS.filter(c => c.rarity === r);
-      if (!list.length) return '';
-      return `<div class="wr-dev-group">${esc(r)}</div>` + list.map(c =>
-        `<button class="wr-dev-pick" data-id="${esc(c.id)}">${esc((c[lang] || c.th).name)}</button>`
-      ).join('');
-    }).join('');
-    html += `<div class="wr-dev-list">${groups}</div>`;
-  }
-
-  box.hidden = false;
-  if (box.dataset.sig === html) return;
-  box.dataset.sig = html;
-  box.innerHTML = html;
-
-  box.querySelectorAll('[data-slot]').forEach(b => {
-    b.onclick = () => { devSlot = devSlot === Number(b.dataset.slot) ? null : Number(b.dataset.slot); paint(el); };
-  });
-  box.querySelectorAll('[data-id]').forEach(b => {
-    b.onclick = () => {
-      ctx.send('devCard', { slot: devSlot, id: b.dataset.id });
-      devSlot = null;
-      paint(el);
-    };
-  });
-}
 
 /* ── จำนวนไพ่ที่เหลือในกอง ─────────────────────────────────── */
 function paintDecks(el, st) {

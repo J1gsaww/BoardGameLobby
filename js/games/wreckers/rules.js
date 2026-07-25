@@ -122,6 +122,10 @@ export function actionsFor(st, uid) {
   const spot = st.pos?.[uid];
   if (!spot) return [];
 
+  /* แอบดูค้างอยู่กลางคัน — ยังไม่จบตา แต่ทำอย่างอื่นไม่ได้จนกว่าจะดูครบ
+     กติกาคือแอบดูสองใบ ดูใบแรกแล้วยังเหลือสิทธิ์ดูใบที่สอง */
+  if (st.peek?.uid === uid) return ['peek'];
+
   const place = placeOf(spot);
   const role = roleOf(spot);
   const out = [];
