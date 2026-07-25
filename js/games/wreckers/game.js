@@ -11,13 +11,16 @@
    ไว้ทำชั้นการ์ดแล้วค่อยมาต่อผลของแต่ละใบ */
 
 import {
-  SHIP_SLOTS, EVENT_SLOTS, MAX_VOTE, eventTotal, graceMs, rollStarter, OFFLINE_WAIT
+  SHIP_SLOTS, EVENT_SLOTS, MAX_VOTE, graceMs, rollStarter, OFFLINE_WAIT
 } from './board.js';
 import { deal } from './vote.js';
+import { BASE_CARDS, ENDER, ENDER_ZONE } from './events.js';
+import { EXTRA_CARDS } from './cards.js';
 import {
   SHIP_IDS, BOAT_IDS, BOAT_LINK, VOTE_ROW,
-  placeOf, occupants, joinPlace, isPlaying, nextSeat,
-  actionsFor, boatsOpen, maroon, pileOf, shuffle, redeal,
+  placeOf, occupants, joinPlace, isPlaying,
+  actionsFor, boatsOpen, maroon, pileOf, shuffle, redeal, advance, burnVoteBans, clearVoteWeights,
+  buildEventDeck, refillSlots, emptyDeck,
   startVote, voteReady, tallyRow, attackPasses, mutinyPasses, brawlSplit,
   moveBox, score, winningSide, winners, dealNations, pushLog
 } from './rules.js';
@@ -50,6 +53,12 @@ export function init(ctx) {
   const { hands, pile } = deal(seats, MAX_VOTE);
   const nations = dealNations(seats, String(ctx.settings?.dutch || 'auto'));
 
+  /* สำรับเหตุการณ์ = ชุดมาตรฐาน บวกชุดพิเศษเฉพาะชนิดที่เลือกไว้ในหน้าตั้งค่า */
+  const picked = new Set(ctx.settings?.extraCards || []);
+  const catalogue = [...BASE_CARDS, ...EXTRA_CARDS.filter(c => picked.has(c.id))];
+  const order = buildEventDeck(catalogue, ENDER, ENDER_ZONE);
+  const deck = refillSlots({ ...emptyDeck(), draw: order }, EVENT_SLOTS);
+
   return {
     state: {
       /* เปิดมาโชว์ไพ่ประเทศก่อน ค้างไว้สามวินาที แล้วค่อยทอยลูกเต๋าหาคนเริ่ม
@@ -68,9 +77,9 @@ export function init(ctx) {
       die,
       pos,
       boatFrom: {},
-      events: EVENT_SLOTS,
+      events: deck.slots.filter(Boolean).length,
       extraCards: [...(ctx.settings?.extraCards || [])],
-      eventDeck: eventTotal(ctx.settings) - EVENT_SLOTS,
+      eventDeck: deck.draw.length,
       voteDeck: pile.length,
       votes: Object.fromEntries(seats.map(u => [u, hands[u].length])),
       maxVote: Object.fromEntries(seats.map(u => [u, MAX_VOTE])),
@@ -87,22 +96,30 @@ export function init(ctx) {
       logSeq: 0,
       result: null
     },
-    secrets: Object.fromEntries(
-      seats.map(u => [u, { vote: hands[u], nation: nations[u], pick: null }])
-    )
+    secrets: {
+      ...Object.fromEntries(seats.map(u => [u, { vote: hands[u], nation: nations[u], pick: null }])),
+      _deck: deck                            /* ไม่มีผู้เล่นคนไหน uid ชื่อนี้ เจ้าของห้องจึงอ่านได้คนเดียว */
+    }
   };
 }
 
 /* ── ตัวช่วยที่ต้องอ่าน secrets ─────────────────────────────
    เจ้าของห้องเท่านั้นที่เรียกฟังก์ชันพวกนี้ เพราะมีแต่เขาที่เห็นมือครบทุกคน */
+/* ช่องที่ขึ้นต้นด้วยขีดล่างไม่ใช่ของผู้เล่น เป็นที่เก็บของกลางที่เจ้าของห้องอ่านได้คนเดียว
+   ต้องกรองออกทุกครั้ง ไม่งั้นจะไปเขียนทับสำรับด้วยข้อมูลมือไพ่ */
+const playerSecrets = (ctx) =>
+  Object.entries(ctx.secrets || {}).filter(([u]) => !u.startsWith('_'));
+
 const handsOf = (ctx) =>
-  Object.fromEntries(Object.entries(ctx.secrets || {}).map(([u, s]) => [u, s?.vote || []]));
+  Object.fromEntries(playerSecrets(ctx).map(([u, s]) => [u, s?.vote || []]));
 
 const nationsOf = (ctx) =>
-  Object.fromEntries(Object.entries(ctx.secrets || {}).map(([u, s]) => [u, s?.nation || null]));
+  Object.fromEntries(playerSecrets(ctx).map(([u, s]) => [u, s?.nation || null]));
+
+const deckOf = (ctx) => ctx.secrets?._deck || emptyDeck();
 
 const secretsFrom = (ctx, hands, picks = {}) =>
-  Object.fromEntries(Object.entries(ctx.secrets || {}).map(([u, s]) => [
+  Object.fromEntries(playerSecrets(ctx).map(([u, s]) => [
     u, { ...s, vote: hands[u] ?? s?.vote ?? [], pick: picks[u] ?? null }
   ]));
 
@@ -110,7 +127,7 @@ const countHands = (hands) =>
   Object.fromEntries(Object.entries(hands).map(([u, h]) => [u, h.length]));
 
 const pickMap = (ctx) =>
-  Object.fromEntries(Object.entries(ctx.secrets || {})
+  Object.fromEntries(playerSecrets(ctx)
     .filter(([, s]) => s?.pick).map(([u, s]) => [u, s.pick]));
 
 /* ── เปิดตาถัดไป ───────────────────────────────────────────
@@ -138,11 +155,11 @@ export const turnDeadline = (st, now = Date.now()) =>
   st.turnSeconds ? now + st.turnSeconds * 1000 : null;
 
 export function passTurn(st, now = Date.now()) {
-  const next = nextSeat(st);
+  const { state, uid } = advance(st);        /* คนที่ติดหนี้ข้ามเทิร์นถูกหักหนี้แล้วข้ามไปในนี้ */
   return openTurn({
-    ...st,
-    turn: next,
-    deadline: turnDeadline(st, now),
+    ...state,
+    turn: uid,
+    deadline: turnDeadline(state, now),
     graced: false,
     vote: null
   });
@@ -153,7 +170,11 @@ export function passTurn(st, now = Date.now()) {
 export async function onAction(ctx, action) {
   const st = ctx.state;
   const { uid, type, payload = {} } = action;
-  if (!st || st.phase !== 'play') return null;
+  if (!st || st.phase === 'over') return null;
+
+  /* เครื่องมือทดสอบสั่งได้ตั้งแต่ช่วงเปิดไพ่ประเทศ จะได้จัดสำรับก่อนเริ่มเล่นจริง */
+  if (type === 'devCard') return devCard(ctx, uid, payload);
+  if (st.phase !== 'play') return null;
 
   /* ส่งไพ่โหวตทำได้นอกตาตัวเอง เป็นทางเดียวที่ไม่ต้องรอถึงตา */
   if (type === 'voteCard') return submitVote(ctx, uid, payload.card);
@@ -180,6 +201,32 @@ export async function onAction(ctx, action) {
 
     default: return null;
   }
+}
+
+/* ── เครื่องมือทดสอบ: วางการ์ดที่ต้องการลงในช่อง ──────────
+   ใบเดิมในช่องถูกดันกลับลงกองล่างสุด แล้วเอาใบที่เลือกมาวางแทน
+   จำนวนใบทั้งสำรับจึงไม่เปลี่ยน เทสแล้วเล่นต่อได้เลยไม่ต้องเปิดเกมใหม่
+
+   เจ้าของห้องเท่านั้นที่สั่งได้ — เขาคุมสถานะทั้งเกมอยู่แล้ว จึงไม่เปิดช่องโหว่ใหม่ */
+function devCard(ctx, uid, { slot, id }) {
+  if (uid !== ctx.hostUid) return null;
+  const st = ctx.state;
+  const i = Number(slot);
+  if (!Number.isInteger(i) || i < 0 || i >= EVENT_SLOTS) return null;
+
+  const deck = deckOf(ctx);
+  const slots = [...deck.slots];
+  const draw = [...deck.draw];
+
+  const at = draw.indexOf(id);
+  if (at >= 0) draw.splice(at, 1);            /* ดึงใบที่ขอมาจากกอง ถ้ายังอยู่ในกอง */
+  if (slots[i]) draw.push(slots[i]);          /* ใบเดิมลงไปนอนใต้กอง */
+  slots[i] = id;
+
+  return {
+    state: pushLog({ ...st, eventDeck: draw.length }, 'wreck.log.devCard', { slot: i + 1 }),
+    secrets: { _deck: { ...deck, slots, draw } }
+  };
 }
 
 /* ลงเรือเล็ก — จองที่ไว้ กันคนที่เล่นต่อจากเราใช้ลำนั้น */
@@ -297,6 +344,10 @@ export function reveal(ctx, st, hands, picks, rng = Math.random) {
     const done = resolveMutiny(next, counts, handsOut);
     next = done.state; handsOut = done.hands;
   } else if (v.kind === 'islandVote') next = resolveBrawl(next, counts);
+
+  /* ตัวนับห้ามโหวตหักตรงนี้ ไม่ใช่ตอนสั่งโหวต — คนที่ถูกกันจึงเสียสิทธิ์ครบตามจำนวนครั้งจริง
+     ส่วนน้ำหนักเสียงพิเศษใช้ได้ครั้งเดียว จบหม้อนี้ก็ล้างทิ้ง */
+  next = clearVoteWeights(burnVoteBans(next, Object.keys(next.voteBan || {})));
 
   /* สับใหม่ทั้งสำรับแล้วแจกคืน — ทุกคนได้มือใหม่หมดหลังโหวตทุกครั้ง */
   const fresh = redeal(next.seats, next.maxVote, rng);

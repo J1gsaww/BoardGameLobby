@@ -113,6 +113,8 @@ register({
       'wreck.nation.F.goal': 'ชนะเมื่อฝั่งฝรั่งเศสมีกล่องมากที่สุด',
       'wreck.nation.D.goal': 'ชนะเมื่อสองฝั่งมีกล่องเท่ากัน',
       'wreck.offlineWait': 'รอ {n} วินาทีเผื่อคนที่หลุดกลับมา',
+      'wreck.dev.head': 'เครื่องมือทดสอบ — เลือกใบที่จะวางในแต่ละช่อง',
+      'wreck.log.devCard': 'เครื่องมือทดสอบ: เปลี่ยนการ์ดในช่อง {slot}',
 
       'wreck.plan.target': 'ยิงลำไหน',
       'wreck.plan.otherShip': 'เรืออีกลำ',
@@ -239,6 +241,8 @@ register({
       'wreck.nation.F.goal': 'Win when France hold the most boxes',
       'wreck.nation.D.goal': 'Win when both sides hold the same',
       'wreck.offlineWait': 'waiting {n}s in case they reconnect',
+      'wreck.dev.head': 'Test tool \u2014 choose what sits in each slot',
+      'wreck.log.devCard': 'Test tool: slot {slot} replaced',
 
       'wreck.plan.target': 'Fire at',
       'wreck.plan.otherShip': 'The other ship',

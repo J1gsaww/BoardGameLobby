@@ -206,8 +206,22 @@ button{ cursor:pointer; border:0; background:none; }
 .game-settings{ margin-top:18px; padding-top:16px; border-top:1px solid var(--line); }
 .game-settings:empty{ display:none; }
 .game-settings .field:last-child{ margin-bottom:0; }
-.game-settings .segmented{ flex-wrap:wrap; }
-.game-settings .seg{ flex:1 1 auto; min-width:88px; font-size:14px; padding:9px 10px; }
+/* ตัวเลือกในหน้าตั้งค่าต้องอยู่แถวเดียวเสมอ ไม่ว่าจะมีกี่ปุ่ม
+   ของเดิมเป็น flex ที่ตั้ง min-width ไว้ พอเพิ่มปุ่มที่หกก็ตกบรรทัด
+   เปลี่ยนเป็น grid ที่แบ่งคอลัมน์เท่า ๆ กันตามจำนวนปุ่มจริง แล้วให้หดได้
+   minmax(0,1fr) คือหัวใจ — ถ้าเป็น 1fr เฉย ๆ ปุ่มจะหดต่ำกว่าความกว้างข้อความไม่ได้ */
+.game-settings .segmented{
+  display:grid; grid-auto-flow:column; grid-auto-columns:minmax(0, 1fr); gap:4px;
+}
+.game-settings .seg{
+  min-width:0; font-size:13.5px; padding:9px 6px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+
+/* จอแคบมากค่อยยอมให้ตกบรรทัด อ่านออกสำคัญกว่าแถวเดียว */
+@media (max-width:430px){
+  .game-settings .segmented{ grid-auto-flow:row; grid-template-columns:repeat(3, minmax(0, 1fr)); }
+}
 
 /* เกมที่ยังไม่เปิดให้เล่น */
 .game-card.soon{ cursor:default; }
@@ -1065,3 +1079,32 @@ button{ cursor:pointer; border:0; background:none; }
 /* ปุ่มปิดห้อง — สีเตือนตั้งแต่แรก และเข้มขึ้นตอนรอกดยืนยัน */
 .link.danger{ color:var(--rose); }
 .link.danger.armed{ font-weight:700; text-decoration:underline; }
+
+/* ── เครื่องมือทดสอบการ์ด (เปิดด้วย ?dev=cards) ─────────── */
+.wr-devcards{
+  margin-top:10px; padding:9px 11px; border-radius:12px;
+  background:rgba(60,20,40,.5); border:1px dashed var(--rose);
+}
+.wr-dev-head{ font-family:var(--mono); font-size:10px; letter-spacing:.1em; color:var(--rose); margin-bottom:7px; }
+.wr-dev-slots{ display:grid; grid-template-columns:repeat(5,1fr); gap:6px; }
+.wr-dev-slot{
+  display:grid; gap:2px; padding:5px 4px; border-radius:9px; font-size:10.5px;
+  background:var(--raised); border:1px solid var(--line); color:var(--ink);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.wr-dev-slot.on{ border-color:var(--rose); color:var(--rose); }
+.wr-dev-n{ font-family:var(--mono); font-size:9px; color:var(--muted); }
+.wr-dev-list{
+  margin-top:8px; max-height:190px; overflow-y:auto;
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); gap:4px;
+}
+.wr-dev-group{
+  grid-column:1/-1; font-family:var(--mono); font-size:9px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--muted); margin-top:5px;
+}
+.wr-dev-pick{
+  font-size:10.5px; padding:4px 6px; border-radius:7px; text-align:left;
+  background:var(--raised); border:1px solid var(--line); color:var(--ink);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.wr-dev-pick:hover{ border-color:var(--rose); }

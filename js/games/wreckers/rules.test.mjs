@@ -13,10 +13,17 @@ import {
   actionsFor, boatsOpen, canShift, maroon, pileOf, redeal, shuffle,
   startVote, voters, voteReady, tallyRow, attackPasses, mutinyPasses, brawlSplit,
   moveBox, countBoxes, score, winningSide, winners, dutchCount, dealNations, dutchAllowed,
+  holdCard, dropHeld, giveCard, addSkip, owesSkip, burnSkip, advance,
+  addVoteBan, isVoteBanned, burnVoteBans, voteWeight, setVoteWeight, clearVoteWeights,
+  addMark, markCount, marksIn, clearMark, swapSpots, shuffleQueue,
+  addShield, hasShield, burnShield, insertBehind, addVoter,
+  buildEventDeck, refillSlots,
   SHIP_CARGO_CAP, TOTAL_BOXES, pushLog, LOG_MAX
 } from './rules.js';
 import { onAction, init, tick, finish, passTurn, openTurn } from './game.js';
 import { DECK } from './vote.js';
+import { BASE_CARDS, BASE_TOTAL, baseById, ENDER } from './events.js';
+import { EXTRA_CARDS } from './cards.js';
 
 let pass = 0, fail = 0;
 const ok = (label, got, want = true) => {
@@ -420,7 +427,12 @@ group('ต่อสาย · เปิดเกม');
      [occupants(st.pos, 'shipL').length, occupants(st.pos, 'shipR').length], [3, 3]);
   ok('เริ่มเกมมีแปดกล่อง', countBoxes(st.cargo), TOTAL_BOXES);
   ok('ทุกคนได้ไพ่โหวตสามใบ', Object.values(st.votes), [3, 3, 3, 3, 3, 3]);
-  ok('ทุกคนได้ไพ่ประเทศ', Object.values(out.secrets).every(s => 'BFD'.includes(s.nation)), true);
+  const mine = Object.entries(out.secrets).filter(([u]) => !u.startsWith('_'));
+  ok('ทุกคนได้ไพ่ประเทศ', mine.every(([, s]) => 'BFD'.includes(s.nation)), true);
+  ok('สำรับเหตุการณ์เก็บแยกไว้ในช่องที่ผู้เล่นอ่านไม่ได้', !!out.secrets._deck, true);
+  ok('เปิดมามีการ์ดคว่ำครบห้าช่อง', out.secrets._deck.slots.filter(Boolean).length, 5);
+  ok('กองที่เหลือ = ทั้งสำรับลบที่วางบนโต๊ะ', out.secrets._deck.draw.length, 24 - 5);
+  ok('จำนวนที่โชว์ตรงกับกองจริง', st.eventDeck, out.secrets._deck.draw.length);
   ok('กองไพ่ที่เหลือถูกต้อง', st.voteDeck, DECK.length - 18);
   ok('ตั้งเวลาต่อตาตามที่เลือกไว้', st.turnSeconds, 45);
   ok('เปิดเกมมาเป็นช่วงโชว์ไพ่ประเทศก่อน', st.phase, 'reveal');
@@ -622,6 +634,210 @@ group('ต่อสาย · จบเกมและสรุปผล');
   ok('บริติชชนะ', r.state.result.side, 'B');
   ok('คนบริติชทุกคนได้ชนะ', r.state.result.winners.sort(), ['a', 'c', 'f']);
   ok('เฉลยประเทศทุกคนตอนจบ', Object.keys(r.state.result.nations).length, 6);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ของกลางสิบอย่างที่การ์ดเรียกใช้
+   ═══════════════════════════════════════════════════════════ */
+
+group('ของกลาง 1–2 · ถือการ์ดกับยกให้คนอื่น');
+{
+  const st = filled();
+  st.held = Object.fromEntries(P.map(u => [u, 0]));
+  const a = holdCard(st, 'a', {}, 'marque');
+  ok('ถือแล้วจำนวนสาธารณะขึ้นตาม', a.state.held.a, 1);
+  ok('ตัวการ์ดเก็บแยกไว้ในข้อมูลลับ', a.held.a, ['marque']);
+
+  const b = giveCard(a.state, 'a', 'b', a.held, 'marque');
+  ok('ยกให้แล้วคนให้เหลือศูนย์', b.state.held.a, 0);
+  ok('คนรับได้ไปหนึ่งใบ', [b.state.held.b, b.held.b], [1, ['marque']]);
+  ok('ยกให้ตัวเองไม่ได้', giveCard(a.state, 'a', 'a', a.held, 'marque'), null);
+  ok('ยกใบที่ไม่ได้ถืออยู่ไม่ได้', giveCard(a.state, 'a', 'b', a.held, 'fountain'), null);
+
+  const c = dropHeld(b.state, 'b', b.held, 'marque');
+  ok('ใช้แล้วหลุดจากมือ', [c.state.held.b, c.held.b], [0, []]);
+}
+
+group('ของกลาง 3 · ข้ามเทิร์น');
+{
+  let st = addSkip(filled(), 'b');
+  ok('ติดหนี้ข้ามเทิร์นแล้ว', owesSkip(st, 'b'), true);
+  const r = advance(st, 'a');
+  ok('ข้าม b ไปหา c', r.uid, 'c');
+  ok('หนี้ถูกหักแล้ว ไม่ค้างไว้ข้ามรอบ', owesSkip(r.state, 'b'), false);
+
+  st = addSkip(addSkip(filled(), 'b', 2), 'c');
+  const r2 = advance(st, 'a');
+  ok('ซ้อนกันหลายใบก็ข้ามต่อเนื่อง', r2.uid, 'd');
+  ok('b ยังเหลือหนี้อีกหนึ่งครั้ง', r2.state.skip.b, 1);
+  ok('c หมดหนี้แล้ว', owesSkip(r2.state, 'c'), false);
+}
+{
+  const st = { ...filled(), skip: Object.fromEntries(P.map(u => [u, 1])) };
+  const r = advance(st, 'a');
+  ok('ทุกคนติดหนี้พร้อมกันก็ยังไม่วนไม่รู้จบ', typeof r.uid, 'string');
+}
+
+group('ของกลาง 4 · ห้ามร่วมโหวต');
+{
+  const st = addVoteBan(filled(), 'b', 2);
+  ok('ถูกกันอยู่', isVoteBanned(st, 'b'), true);
+  ok('หลุดจากรายชื่อผู้ร่วมโหวตทันที', voters(st, 'attack', 'shipL'), ['a', 'c']);
+  const after = burnVoteBans(st, ['b']);
+  ok('โหวตผ่านไปหนึ่งครั้ง ยังเหลืออีกครั้ง', after.voteBan.b, 1);
+  const done = burnVoteBans(after, ['b']);
+  ok('ครบสองครั้งแล้วกลับมาโหวตได้', isVoteBanned(done, 'b'), false);
+}
+
+group('ของกลาง 5 · โหวตหลายเสียง');
+{
+  const st = setVoteWeight(filled(), 'a', 2);
+  ok('ส่งได้สองใบ', voteWeight(st, 'a'), 2);
+  ok('คนอื่นยังใบเดียวตามปกติ', voteWeight(st, 'b'), 1);
+  ok('จบหม้อแล้วล้างทิ้ง', voteWeight(clearVoteWeights(st), 'a'), 1);
+}
+
+group('ของกลาง 6 · ของติดตัว');
+{
+  let st = addMark(filled(), 'a', 'bird');
+  ok('ติดไก่แล้วหนึ่งตัว', markCount(st, 'a', 'bird'), 1);
+  st = addMark(st, 'b', 'bird');
+  ok('นับไก่รวมทั้งเรือได้', marksIn(st, 'shipL', 'bird'), 2);
+  ok('เรืออีกลำไม่เกี่ยว', marksIn(st, 'shipR', 'bird'), 0);
+
+  const moved = { ...st, pos: joinPlace(st.pos, 'a', 'island') };
+  ok('ไก่ติดตัวคน ย้ายที่แล้วตามไปด้วย', markCount(moved, 'a', 'bird'), 1);
+  ok('เรือเหลือไก่ตัวเดียว ไม่ครบเงื่อนไขแล้ว', marksIn(moved, 'shipL', 'bird'), 1);
+  ok('เก็บคืนหมดทั้งกระดานได้', marksIn(clearMark(st, 'bird'), 'shipL', 'bird'), 0);
+}
+
+group('ของกลาง 7 · สลับและสุ่มตำแหน่ง');
+{
+  const st = filled();
+  const sw = swapSpots(st.pos, 'a', 'f');
+  ok('สลับข้ามเรือคนละลำได้', [sw.a, sw.f], ['shipR:C', 'shipL:C']);
+  ok('สลับกับตัวเองไม่ได้', swapSpots(st.pos, 'a', 'a'), null);
+  ok('สลับกับคนที่ไม่ได้อยู่บนกระดานไม่ได้', swapSpots(st.pos, 'a', 'zz'), null);
+
+  const mixed = shuffleQueue(st.pos, 'shipL', fakeRng([0.9, 0.1, 0.5]));
+  ok('คนเดิมครบเท่าเดิม', occupants(mixed, 'shipL').slice().sort(), ['a', 'b', 'c']);
+  ok('ยังชิดหัวแถวไม่มีช่องโหว่',
+     occupants(mixed, 'shipL').map(u => mixed[u]), ['shipL:C', 'shipL:F', 'shipL:3']);
+  ok('คนเดียวในสถานที่ก็ไม่พัง', shuffleQueue(board({ z: 'island:G' }).pos, 'island').z, 'island:G');
+}
+
+group('ของกลาง 8 · โล่กัน Maroon');
+{
+  const st = addShield(filled(), 'a');
+  ok('มีโล่อยู่', hasShield(st, 'a'), true);
+  const r = maroon(st, 'a', {});
+  ok('โล่กันไว้ ไม่ได้ลงเกาะ', r.state.pos.a, 'shipL:C');
+  ok('บอกว่าโดนโล่กันไว้', r.kind, 'shielded');
+  ok('โล่ใช้แล้วหมด', hasShield(r.state, 'a'), false);
+
+  const again = maroon(r.state, 'a', {});
+  ok('ครั้งที่สองไม่มีโล่แล้ว โดนเต็ม ๆ', again.state.pos.a.startsWith('island'), true);
+}
+{
+  /* กรณีอยู่บนเกาะคนเดียว ปกติจะเสียไพ่ถาวร โล่ต้องกันได้ด้วย */
+  const st = addShield(board({ a: 'island:G' }), 'a');
+  const r = maroon(st, 'a', { a: ['v01', 'v02', 'v03'] }, zero);
+  ok('โล่กันกรณีเสียไพ่ถาวรได้ด้วย', [r.kind, r.state.maxVote.a], ['shielded', 3]);
+}
+
+group('ของกลาง 9 · แทรกคิวข้างหลังคนอื่น');
+{
+  const st = filled();
+  const r = insertBehind(st.pos, 'f', 'a');
+  ok('ไปยืนต่อจากเป้าหมายทันที', r.pos.f, 'shipL:F');
+  ok('คนที่อยู่หลังถูกดันถอยลงหนึ่งช่อง', [r.pos.b, r.pos.c], ['shipL:3', 'shipL:4']);
+  ok('ยังไม่มีใครล้น', r.spill, []);
+  ok('แทรกตัวเองไม่ได้', insertBehind(st.pos, 'a', 'a'), null);
+}
+{
+  /* เรือเต็มห้าคนแล้วแทรกเข้าไปอีก คนท้ายแถวต้องล้นออกมา */
+  const full = board({
+    a: 'shipL:C', b: 'shipL:F', c: 'shipL:3', d: 'shipL:4', e: 'shipL:5', f: 'island:G'
+  });
+  const r = insertBehind(full.pos, 'f', 'a');
+  ok('คนท้ายแถวล้นออกมา', r.spill, ['e']);
+  ok('คนล้นหลุดจากผังไปก่อน ให้ผู้เรียกเอาไป Maroon ต่อ', 'e' in r.pos, false);
+  ok('บนเรือยังเต็มห้าคนพอดี', occupants(r.pos, 'shipL'), ['a', 'f', 'b', 'c', 'd']);
+}
+
+group('ของกลาง 10 · ดึงคนนอกเข้ามาโหวต');
+{
+  const st = startVote(filled(), { kind: 'attack', place: 'shipL', caller: 'a' });
+  ok('ตอนแรกมีแค่คนบนเรือ', st.vote.voters, ['a', 'b', 'c']);
+  const more = addVoter(st, 'd');
+  ok('ดึงคนบนเกาะเข้ามาได้', more.vote.voters, ['a', 'b', 'c', 'd']);
+  ok('จำไว้ว่าเป็นแขก จบโหวตแล้วจะได้ไม่ค้าง', more.vote.guests, ['d']);
+  ok('ดึงคนเดิมซ้ำไม่เพิ่มชื่อ', addVoter(more, 'd').vote.voters.length, 4);
+}
+
+group('สำรับการ์ด · การเรียงกอง');
+{
+  const order = buildEventDeck(BASE_CARDS, ENDER, 5, fakeRng([0.3, 0.7, 0.1, 0.9, 0.5, 0.24, 0.66]));
+  ok('จำนวนใบครบทั้งสำรับ', order.length, 24);
+  ok('ใบจบเกมอยู่ในห้าใบล่างสุดเสมอ', order.slice(-5).includes(ENDER), true);
+  ok('ใบจบเกมไม่โผล่ที่อื่นอีก', order.filter(id => id === ENDER).length, 1);
+  ok('ไม่มีใบไหนหายไประหว่างสับ',
+     order.filter(id => id === 'pistol').length, 3);
+}
+{
+  /* ใส่การ์ดพิเศษเข้าไปด้วย ใบจบเกมก็ยังต้องอยู่ท้ายกอง */
+  const cat = [...BASE_CARDS, ...EXTRA_CARDS];
+  const order = buildEventDeck(cat, ENDER, 5, fakeRng([0.11, 0.83, 0.47, 0.2, 0.95]));
+  ok('สำรับเต็มได้ 49 ใบ', order.length, 49);
+  ok('ใบจบเกมยังอยู่ห้าใบล่างสุด', order.slice(-5).includes(ENDER), true);
+}
+{
+  const deck = refillSlots({ slots: [], draw: ['a', 'b', 'c', 'd', 'e', 'f'], discard: [] }, 5);
+  ok('เติมช่องว่างจนครบห้า', deck.slots, ['a', 'b', 'c', 'd', 'e']);
+  ok('กองลดลงตามที่จั่วไป', deck.draw, ['f']);
+
+  const gap = refillSlots({ slots: ['a', null, 'c', null, 'e'], draw: ['x', 'y'], discard: [] }, 5);
+  ok('เติมเฉพาะช่องที่ว่าง ใบเดิมอยู่ที่เดิม', gap.slots, ['a', 'x', 'c', 'y', 'e']);
+  ok('กองหมดก็เติมได้เท่าที่มี',
+     refillSlots({ slots: [], draw: ['z'], discard: [] }, 5).slots, ['z', null, null, null, null]);
+}
+
+group('เครื่องมือทดสอบ · วางการ์ดที่ต้องการ');
+{
+  const out = init({ members, settings: { turnSeconds: 60, extraCards: [] } });
+  const deck = out.secrets._deck;
+  const ctx = { ...ctxOf(out.state), secrets: out.secrets, hostUid: 'a' };
+
+  const before = deck.slots.length + deck.draw.length;
+  const r = await onAction(ctx, { uid: 'a', type: 'devCard', payload: { slot: 2, id: 'armada' } });
+  ok('วางใบที่ขอลงช่องที่เลือก', r.secrets._deck.slots[2], 'armada');
+  ok('จำนวนใบทั้งสำรับไม่เปลี่ยน',
+     r.secrets._deck.slots.length + r.secrets._deck.draw.length, before);
+  ok('ใบเดิมถูกดันลงใต้กอง ไม่หายไป',
+     r.secrets._deck.draw[r.secrets._deck.draw.length - 1], deck.slots[2]);
+  ok('จำนวนที่โชว์อัปเดตตาม', r.state.eventDeck, r.secrets._deck.draw.length);
+
+  const notHost = await onAction({ ...ctx, hostUid: 'zz' },
+    { uid: 'a', type: 'devCard', payload: { slot: 0, id: 'pistol' } });
+  ok('ไม่ใช่เจ้าของห้องสั่งไม่ได้', notHost, null);
+
+  const bad = await onAction(ctx, { uid: 'a', type: 'devCard', payload: { slot: 9, id: 'pistol' } });
+  ok('ช่องนอกช่วงสั่งไม่ได้', bad, null);
+}
+
+group('สำรับการ์ด');
+{
+  ok('สำรับมาตรฐาน 24 ใบพอดี', BASE_TOTAL, 24);
+  ok('ทุกใบมี id ไม่ซ้ำ', new Set(BASE_CARDS.map(c => c.id)).size, BASE_CARDS.length);
+  ok('ทุกใบมีชื่อและคำอธิบายครบสองภาษา',
+     BASE_CARDS.every(c => c.th?.name && c.th?.desc && c.en?.name && c.en?.desc), true);
+  ok('ระดับความหายากอยู่ในสามแบบที่รู้จัก',
+     BASE_CARDS.every(c => ['common', 'rare', 'map'].includes(c.rarity)), true);
+  ok('ใบจบเกมมีอยู่จริงในสำรับ', !!baseById(ENDER), true);
+  ok('id ของชุดมาตรฐานไม่ชนกับชุดพิเศษ',
+     BASE_CARDS.filter(c => EXTRA_CARDS.some(x => x.id === c.id)), []);
+  ok('รวมทั้งสองชุดได้ 49 ใบ',
+     BASE_TOTAL + EXTRA_CARDS.reduce((n, c) => n + c.count, 0), 49);
 }
 
 group('บันทึกเหตุการณ์');

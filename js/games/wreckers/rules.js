@@ -99,6 +99,19 @@ export function nextSeat(st, from = st.turn) {
   return from;
 }
 
+/* หาคนถัดไปที่ได้เล่นจริง — คนที่ยังติดหนี้ข้ามเทิร์นจะถูกหักหนี้แล้วข้ามไป
+   คืนสถานะใหม่มาด้วยเพราะการหักหนี้เป็นการเปลี่ยนสถานะ ไม่ใช่แค่การอ่าน */
+export function advance(st, from = st.turn) {
+  let cur = st;
+  let uid = nextSeat(cur, from);
+  for (let guard = 0; guard < cur.seats.length + 1; guard++) {
+    if (!owesSkip(cur, uid)) return { state: cur, uid };
+    cur = burnSkip(cur, uid);
+    uid = nextSeat(cur, uid);
+  }
+  return { state: cur, uid };
+}
+
 /* ── Action ที่ทำได้ในตานี้ ─────────────────────────────────
    หนึ่งตาทำได้หนึ่งอย่าง ยกเว้นการขึ้นฝั่งจากเรือเล็กที่เป็นของแถม
    ทำอัตโนมัติตอนเปิดตา ไม่กินสิทธิ์ Action */
@@ -161,6 +174,9 @@ export const canCallVote = (st, place) =>
    คืน hands กลับมาด้วยเพราะการเสียไพ่ถาวรต้องทิ้งไพ่จริงจากมือ
    ไม่ใช่แค่ลดตัวเลขเพดาน ไม่งั้นมือจะเกินเพดานค้างอยู่ */
 export function maroon(st, uid, hands = {}, rng = Math.random) {
+  /* โล่กันได้ทุกกรณี รวมถึงกรณีที่ปกติจะกลายเป็นเสียไพ่ถาวร */
+  if (hasShield(st, uid)) return { state: burnShield(st, uid), hands, kind: 'shielded' };
+
   const pos = st.pos || {};
   const onIsland = placeOf(pos[uid]) === 'island';
   const alone = onIsland && occupants(pos, 'island').length === 1;
@@ -217,7 +233,8 @@ export function redeal(seats, maxVote, rng = Math.random) {
 export const VOTE_ROW = { attack: 'attack', mutiny: 'mutiny', islandVote: 'brawl' };
 
 export function voters(st, kind, place) {
-  const line = occupants(st.pos, place);
+  const line = occupants(st.pos, place)
+    .filter(uid => !isVoteBanned(st, uid));          /* โดนสั่งห้ามโหวตอยู่ ไม่นับเป็นผู้ร่วม */
   if (kind !== 'mutiny') return line;
   return line.filter(uid => roleAt(st.pos, uid) !== 'captain');
 }
@@ -359,6 +376,213 @@ export function dealNations(seats, setting = 'auto', rng = Math.random) {
     ...Array(b).fill('B'), ...Array(rest - b).fill('F'), ...Array(d).fill('D')
   ], rng);
   return Object.fromEntries(seats.map((uid, i) => [uid, bag[i]]));
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ของกลางสิบอย่างที่การ์ดเรียกใช้
+   ─────────────────────────────────────────────────────────
+   การ์ด 49 ใบไม่ได้แปลว่าโค้ด 49 ชิ้น ส่วนใหญ่คือการหยิบของข้างล่างนี้
+   มาผสมกัน เขียนไว้ตรงนี้ที่เดียวแล้วทุกใบเรียกใช้ร่วมกัน
+   ผลข้างเคียงจึงเหมือนกันเสมอ ไม่ว่าจะมาจากการ์ดใบไหน
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── 1. ถือการ์ดไว้ใช้ทีหลัง ────────────────────────────────
+   จำนวนใบเป็นข้อมูลสาธารณะ แต่ถือใบไหนอยู่เป็นความลับของเจ้าตัว
+   ตัว id จึงเก็บใน secrets ส่วนที่นี่เก็บแค่ตัวเลข */
+export function holdCard(st, uid, held = {}, cardId) {
+  const mine = [...(held[uid] || []), cardId];
+  return {
+    state: { ...st, held: { ...st.held, [uid]: mine.length } },
+    held: { ...held, [uid]: mine }
+  };
+}
+
+export function dropHeld(st, uid, held = {}, cardId) {
+  const mine = (held[uid] || []).filter(c => c !== cardId);
+  return {
+    state: { ...st, held: { ...st.held, [uid]: mine.length } },
+    held: { ...held, [uid]: mine }
+  };
+}
+
+/* ── 2. ยกการ์ดให้คนอื่น ───────────────────────────────────
+   การ์ด Map บังคับให้ยก เก็บเองไม่ได้ ยกให้ตัวเองก็ไม่ได้ */
+export function giveCard(st, from, to, held = {}, cardId) {
+  if (from === to) return null;
+  if (!(held[from] || []).includes(cardId)) return null;
+  const out = dropHeld(st, from, held, cardId);
+  return holdCard(out.state, to, out.held, cardId);
+}
+
+/* ── 3. ข้ามเทิร์น ─────────────────────────────────────────
+   เก็บเป็นจำนวนครั้งที่ค้างอยู่ ไม่ใช่ธงเปิดปิด เพราะการ์ดซ้อนกันได้
+   ตัวนับถูกหักตอนถึงตาเขาจริง ๆ เท่านั้น */
+export const addSkip = (st, uid, n = 1) => ({
+  ...st, skip: { ...st.skip, [uid]: (st.skip?.[uid] || 0) + n }
+});
+
+export const owesSkip = (st, uid) => (st.skip?.[uid] || 0) > 0;
+
+export function burnSkip(st, uid) {
+  const left = (st.skip?.[uid] || 0) - 1;
+  const skip = { ...st.skip };
+  if (left > 0) skip[uid] = left; else delete skip[uid];
+  return { ...st, skip };
+}
+
+/* ── 4. ห้ามร่วมโหวต ───────────────────────────────────────
+   เหมือนข้ามเทิร์นแต่คนละตัวนับ โดนห้ามโหวตยังเดินหมากได้ตามปกติ */
+export const addVoteBan = (st, uid, n = 1) => ({
+  ...st, voteBan: { ...st.voteBan, [uid]: (st.voteBan?.[uid] || 0) + n }
+});
+
+export const isVoteBanned = (st, uid) => (st.voteBan?.[uid] || 0) > 0;
+
+/* หักตัวนับของทุกคนที่ถูกกันออกจากการโหวตครั้งนี้ — เรียกตอนเปิดหม้อ */
+export function burnVoteBans(st, list) {
+  const ban = { ...st.voteBan };
+  for (const uid of list) {
+    const left = (ban[uid] || 0) - 1;
+    if (left > 0) ban[uid] = left; else delete ban[uid];
+  }
+  return { ...st, voteBan: ban };
+}
+
+/* ── 5. โหวตหลายเสียง ──────────────────────────────────────
+   ปกติคนละหนึ่งใบ เอลโดราโดทำให้ส่งได้สองใบในครั้งเดียว */
+export const voteWeight = (st, uid) => Math.max(1, st.voteWeight?.[uid] || 1);
+
+export const setVoteWeight = (st, uid, n) => ({
+  ...st, voteWeight: { ...st.voteWeight, [uid]: Math.max(1, n) }
+});
+
+export function clearVoteWeights(st) {
+  const out = { ...st };
+  delete out.voteWeight;
+  return out;
+}
+
+/* ── 6. ของติดตัวถาวร ──────────────────────────────────────
+   ตอนนี้มีแค่ไก่จากนกอัลบาทรอส แต่เขียนเป็นระบบไว้เผื่อการ์ดใบอื่น
+   ติดกับตัวคน ไม่ใช่ติดกับที่ยืน ย้ายที่แล้วไก่ตามไปด้วย */
+export const addMark = (st, uid, kind, n = 1) => ({
+  ...st, marks: { ...st.marks, [uid]: { ...(st.marks?.[uid] || {}),
+    [kind]: ((st.marks?.[uid] || {})[kind] || 0) + n } }
+});
+
+export const markCount = (st, uid, kind) => (st.marks?.[uid] || {})[kind] || 0;
+
+export const marksIn = (st, place, kind) =>
+  occupants(st.pos, place).reduce((n, uid) => n + markCount(st, uid, kind), 0);
+
+/* เก็บของชนิดนั้นคืนจากทุกคนบนกระดาน — มังสวิรัสใช้ตัวนี้ */
+export function clearMark(st, kind) {
+  const marks = {};
+  for (const [uid, m] of Object.entries(st.marks || {})) {
+    const rest = { ...m };
+    delete rest[kind];
+    if (Object.keys(rest).length) marks[uid] = rest;
+  }
+  return { ...st, marks };
+}
+
+/* ── 7. สลับและสุ่มตำแหน่งในคิว ────────────────────────────
+   สลับสองคนได้แม้อยู่คนละสถานที่ ใช้กับหน้ากากที่สลับข้ามกระดานได้ */
+export function swapSpots(pos, a, b) {
+  if (!pos?.[a] || !pos?.[b] || a === b) return null;
+  return compact({ ...pos, [a]: pos[b], [b]: pos[a] });
+}
+
+/* สุ่มลำดับใหม่ของทุกคนในสถานที่หนึ่ง คนเดิมครบเท่าเดิม แค่สลับที่ยืน */
+export function shuffleQueue(pos, place, rng = Math.random) {
+  const line = occupants(pos, place);
+  if (line.length < 2) return pos;
+  const mixed = shuffle(line, rng);
+  const out = { ...pos };
+  mixed.forEach((uid, i) => { out[uid] = `${place}:${QUEUE[place][i]}`; });
+  return compact(out);
+}
+
+/* ── 8. โล่กัน Maroon ──────────────────────────────────────
+   น้ำพุอมตะกันได้หนึ่งครั้งทุกกรณี ใช้แล้วหายไป */
+export const addShield = (st, uid, n = 1) => ({
+  ...st, shield: { ...st.shield, [uid]: (st.shield?.[uid] || 0) + n }
+});
+
+export const hasShield = (st, uid) => (st.shield?.[uid] || 0) > 0;
+
+export function burnShield(st, uid) {
+  const left = (st.shield?.[uid] || 0) - 1;
+  const shield = { ...st.shield };
+  if (left > 0) shield[uid] = left; else delete shield[uid];
+  return { ...st, shield };
+}
+
+/* ── 9. แทรกคิวข้างหลังคนอื่น ──────────────────────────────
+   ดันทุกคนที่อยู่หลังเป้าหมายถอยลงหนึ่งช่อง คนที่ตกท้ายแถวจนล้นโดน Maroon
+   คืนรายชื่อคนที่ล้นออกมาด้วย ผู้เรียกจะได้เอาไป Maroon ต่อเอง */
+export function insertBehind(pos, uid, target) {
+  const place = placeOf(pos?.[target]);
+  if (!place || uid === target) return null;
+
+  const without = compact(Object.fromEntries(
+    Object.entries(pos).filter(([u]) => u !== uid)));
+  const line = occupants(without, place);
+  const at = line.indexOf(target);
+  if (at < 0) return null;
+
+  const order = [...line.slice(0, at + 1), uid, ...line.slice(at + 1)];
+  const cap = capacityOf(place);
+  const stay = order.slice(0, cap);
+  const spill = order.slice(cap);
+
+  const out = { ...without };
+  delete out[uid];
+  stay.forEach((u, i) => { out[u] = `${place}:${QUEUE[place][i]}`; });
+  for (const u of spill) delete out[u];
+
+  return { pos: compact(out), spill };
+}
+
+/* ── 10. ดึงคนนอกสถานที่เข้ามาร่วมโหวต ─────────────────────
+   ปกติโหวตจำกัดอยู่แค่คนในสถานที่เดียวกัน ใบ Map บางใบข้ามข้อนี้ได้
+   คนที่ถูกดึงเข้ามาร่วมได้ครั้งเดียว จบโหวตแล้วกลับไปเป็นคนนอกเหมือนเดิม */
+export function addVoter(st, uid) {
+  if (!st.vote || st.vote.voters.includes(uid)) return st;
+  return { ...st, vote: { ...st.vote, voters: [...st.vote.voters, uid], guests: [...(st.vote.guests || []), uid] } };
+}
+
+/* ── สำรับการ์ดเหตุการณ์ ───────────────────────────────────
+   เก็บลำดับกองไว้ที่ข้อมูลลับชื่อ `_deck` ซึ่งไม่มีผู้เล่นคนไหน uid ตรงกับชื่อนี้
+   กฎความปลอดภัยเดิมจึงกันให้เองว่าอ่านได้เฉพาะเจ้าของห้อง ไม่ต้องแก้กฎเพิ่ม
+
+   ต่างจากกองไพ่โหวตตรงที่ลำดับของกองนี้มีความหมาย — ใบจบเกมต้องอยู่ห้าใบล่างสุด
+   คำนวณย้อนจากมือทุกคนแบบกองโหวตไม่ได้ จึงต้องเก็บลำดับไว้จริง ๆ */
+export const emptyDeck = () => ({ slots: [], draw: [], discard: [] });
+
+/* กระจายใบตามจำนวนที่กำหนดในแค็ตตาล็อก แล้วสับ
+   ปิดท้ายด้วยการดันใบจบเกมลงไปอยู่ในห้าใบล่างสุด
+   สับเฉพาะห้าใบนั้นอีกที ไม่มีใครรู้ว่าจะจบตาไหน รู้แค่ว่าใกล้แล้ว */
+export function buildEventDeck(catalogue, ender, zone = 5, rng = Math.random) {
+  const all = catalogue.flatMap(c => Array(c.count).fill(c.id));
+  const rest = shuffle(all.filter(id => id !== ender), rng);
+  const enders = all.filter(id => id === ender);
+  if (!enders.length) return rest;
+
+  const tailSize = Math.max(0, zone - enders.length);
+  const tail = shuffle([...rest.slice(rest.length - tailSize), ...enders], rng);
+  return [...rest.slice(0, rest.length - tailSize), ...tail];
+}
+
+/* จั่วขึ้นมาเติมช่องที่ว่างจนครบ — เรียกทุกครั้งหลังมีใบถูกเปิด */
+export function refillSlots(deck, count) {
+  const slots = [...deck.slots];
+  const draw = [...deck.draw];
+  for (let i = 0; i < count; i++) {
+    if (slots[i]) continue;
+    slots[i] = draw.shift() || null;
+  }
+  return { ...deck, slots: slots.slice(0, count), draw };
 }
 
 /* ── บันทึกเหตุการณ์ ───────────────────────────────────────

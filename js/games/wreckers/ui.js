@@ -17,6 +17,8 @@ import { mountSea, stopSea } from './sea.js';
 import { cardById as voteById, voteCard } from './vote.js';
 import { dieSvg, rollPose, HERO, ROLL_MS } from './die.js';
 import { actionsFor, occupants, placeOf, SHIP_IDS } from './rules.js';
+import { BASE_CARDS } from './events.js';
+import { EXTRA_CARDS } from './cards.js';
 import { lang } from '../../i18n.js';
 import {
   ART, PIECES, STAGE_RATIO, SHIP_SLOTS, ISLAND_SLOTS, BOAT_SLOT, roleOf, EVENT_SLOTS,
@@ -37,6 +39,12 @@ let menu = null;        // { kind, uid, spot, place, x, y }
 let picks = [];         // การ์ดเหตุการณ์ที่เลือกไว้ สูงสุด 2 ใบ
 let forcing = null;     // uid ของคนที่กำลังจะบังคับให้เปิดการ์ด
 let plan = null;        // ตัวเลือกที่ยังไม่ยืนยัน เช่นจะยิงลำไหน เก็บฝั่งไหน
+let devSlot = null;     // ช่องการ์ดที่กำลังเลือกใบใส่ในโหมดทดสอบ
+
+/* เครื่องมือทดสอบเปิดด้วย ?dev=cards ท้าย URL เท่านั้น
+   ไม่มีสวิตช์ในหน้าจอ จะได้ไม่มีทางเผลอเปิดตอนเล่นจริง */
+const DEV_CARDS = new URLSearchParams(location.search).get('dev')
+  ?.split(',').map(v => v.trim()).includes('cards') || false;
 
 const closeMenu = () => { menu = null; };
 
@@ -94,6 +102,7 @@ function shell(el, ctx) {
                </div>`).join('')}
           </div>
           <p class="wr-event-note" hidden></p>
+          <div class="wr-devcards" hidden></div>
           <div class="wr-decks"></div>
         </div>
 
@@ -228,6 +237,7 @@ export function render(el, ctx) {
   paintLog(el, st);
   paintDecks(el, st);
   paintEvents(el);
+  paintDevCards(el, ctx);
 
   const scoreHtml = legend(st);
   const sb = el.querySelector('.wr-score-bar');
@@ -517,6 +527,64 @@ function runMenu(el, ctx, act, arg) {
   if (act === 'kick')  { ctx.send('kick', { uid: arg }); return; }
   if (act === 'force') { forcing = arg; picks = []; paint(el); return; }
   paint(el);
+}
+
+/* ── เครื่องมือทดสอบการ์ด ──────────────────────────────────
+   เปิดด้วย ?dev=cards และเห็นเฉพาะเจ้าของห้อง เพราะสำรับเก็บไว้ในข้อมูลลับ
+   ที่มีแต่เจ้าของห้องอ่านได้ คนอื่นเปิดพารามิเตอร์นี้ก็ไม่เห็นอะไร
+
+   กดช่องไหนแล้วเลือกใบ ใบเดิมในช่องจะถูกดันกลับลงใต้กอง
+   จำนวนใบทั้งสำรับจึงไม่เปลี่ยน เล่นต่อได้เลยไม่ต้องเปิดเกมใหม่ */
+const ALL_CARDS = [...BASE_CARDS, ...EXTRA_CARDS];
+
+function paintDevCards(el, ctx) {
+  const box = el.querySelector('.wr-devcards');
+  if (!box) return;
+
+  const deck = ctx.secrets?._deck;
+  if (!DEV_CARDS || !ctx.isHost || !deck) {
+    box.hidden = true;
+    if (box.dataset.sig) { box.dataset.sig = ''; box.innerHTML = ''; }
+    return;
+  }
+
+  const slots = deck.slots || [];
+  const name = (id) => {
+    const c = ALL_CARDS.find(x => x.id === id);
+    return c ? (c[lang] || c.th).name : (id || '\u2014');
+  };
+
+  let html = `<div class="wr-dev-head">\u26a0 ${esc(t('wreck.dev.head'))}</div>
+    <div class="wr-dev-slots">` +
+    slots.map((id, i) => `<button class="wr-dev-slot${devSlot === i ? ' on' : ''}" data-slot="${i}">
+      <span class="wr-dev-n">${i + 1}</span>${esc(name(id))}</button>`).join('') + `</div>`;
+
+  if (devSlot !== null) {
+    const groups = ['common', 'rare', 'map'].map(r => {
+      const list = ALL_CARDS.filter(c => c.rarity === r);
+      if (!list.length) return '';
+      return `<div class="wr-dev-group">${esc(r)}</div>` + list.map(c =>
+        `<button class="wr-dev-pick" data-id="${esc(c.id)}">${esc((c[lang] || c.th).name)}</button>`
+      ).join('');
+    }).join('');
+    html += `<div class="wr-dev-list">${groups}</div>`;
+  }
+
+  box.hidden = false;
+  if (box.dataset.sig === html) return;
+  box.dataset.sig = html;
+  box.innerHTML = html;
+
+  box.querySelectorAll('[data-slot]').forEach(b => {
+    b.onclick = () => { devSlot = devSlot === Number(b.dataset.slot) ? null : Number(b.dataset.slot); paint(el); };
+  });
+  box.querySelectorAll('[data-id]').forEach(b => {
+    b.onclick = () => {
+      ctx.send('devCard', { slot: devSlot, id: b.dataset.id });
+      devSlot = null;
+      paint(el);
+    };
+  });
 }
 
 /* ── จำนวนไพ่ที่เหลือในกอง ─────────────────────────────────── */
