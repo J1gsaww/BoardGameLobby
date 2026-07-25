@@ -12,7 +12,7 @@ import {
   QUEUE, capacityOf, occupants, compact, joinPlace, roleAt, nextSeat, isPlaying,
   actionsFor, boatsOpen, canShift, maroon, pileOf, redeal, shuffle,
   startVote, voters, voteReady, tallyRow, attackPasses, mutinyPasses, brawlSplit,
-  moveBox, countBoxes, score, winningSide, winners, dutchCount, dealNations,
+  moveBox, countBoxes, score, winningSide, winners, dutchCount, dealNations, dutchAllowed,
   SHIP_CARGO_CAP, TOTAL_BOXES, pushLog, LOG_MAX
 } from './rules.js';
 import { onAction, init, tick, finish, passTurn, openTurn } from './game.js';
@@ -267,6 +267,19 @@ ok('เกาะสี่กล่อง ชนะห่างสาม ยั�
 ok('เกาะสี่กล่อง ห่างถึงสี่ ยกไปหมด 4-0', brawlSplit({ B: 6, R: 2 }, 4), { B: 4, F: 0 });
 ok('ฝรั่งเศสถล่มขาดก็ยกไปหมดเหมือนกัน', brawlSplit({ B: 1, R: 6 }, 4), { B: 0, F: 4 });
 ok('หม้อสองสามใบไปได้ไกลสุดแค่ 3-1', brawlSplit({ B: 3, R: 0 }, 4), { B: 3, F: 1 });
+{
+  /* เกาะมี 3 หรือ 5 กล่องไม่ได้ ผลโหวตจึงห้ามเปลี่ยนจำนวนรวมไม่ว่ากรณีไหน */
+  const bad = [];
+  for (const total of [2, 4]) {
+    for (let b = 0; b <= 8; b++) {
+      for (let f = 0; f <= 8; f++) {
+        const sp = brawlSplit({ B: b, R: f }, total);
+        if (sp.B + sp.F !== total || sp.B < 0 || sp.F < 0) bad.push([total, b, f, sp]);
+      }
+    }
+  }
+  ok('ผลโหวตไม่เคยเปลี่ยนจำนวนกล่องรวมบนเกาะ', bad, []);
+}
 
 group('ชั้น 3 · กองไพ่กับการแจกคืน');
 {
@@ -336,20 +349,43 @@ ok('ฝรั่งเศสมากกว่า ฝรั่งเศสชน
 }
 
 group('ชั้น 4 · ไพ่ประเทศ');
-ok('คนคู่ไม่มีดัตช์', dutchCount(6, 'auto'), 0);
-ok('คนคี่มีดัตช์หนึ่งคน', dutchCount(7, 'auto'), 1);
+ok('คนคี่ได้ดัตช์หนึ่งคน', dutchCount(7, 'auto'), 1);
+ok('คนคู่ได้ดัตช์สองคน', dutchCount(6, 'auto'), 2);
 ok('กำหนดเองได้ว่าสองคน', dutchCount(8, '2'), 2);
-ok('สุ่มแล้วได้ 1 หรือ 2 เสมอ',
-   [dutchCount(8, 'random', () => 0.1), dutchCount(8, 'random', () => 0.9)], [2, 1]);
+ok('เลือกหนึ่งคนได้ที่ห้าคน', dutchAllowed(5, '1'), true);
+ok('เลือกหนึ่งคนได้ที่เจ็ดคน', dutchAllowed(7, '1'), true);
+ok('เลือกหนึ่งคนได้ที่เก้าคน', dutchAllowed(9, '1'), true);
+ok('เก้าคนเลือกหนึ่ง เหลือแบ่งสี่สี่',
+   (() => { const m = dealNations(Array.from({length:9},(_,i)=>'p'+i), '1', fakeRng([0.3,0.8,0.1,0.6,0.44]));
+            const c = nationTally(m); return c; })(),
+   [['B', 4], ['D', 1], ['F', 4]]);
+ok('เลือกหนึ่งคนไม่ได้ที่หกคน', dutchAllowed(6, '1'), false);
+ok('เลือกสองคนได้ที่แปดกับสิบ', [dutchAllowed(8, '2'), dutchAllowed(10, '2')], [true, true]);
+ok('เลือกสองคนไม่ได้ที่หกคน', dutchAllowed(6, '2'), false);
+ok('ตามจำนวนคนกดได้เสมอ', dutchAllowed(4, 'auto'), true);
+ok('ตั้งค่าค้างไว้แล้วคนเปลี่ยน ให้ตกกลับเป็นอัตโนมัติ', dutchCount(6, '1'), 2);
 {
   const n = dealNations(['a', 'b', 'c', 'd', 'e', 'f'], 'auto', fakeRng([0.2, 0.8, 0.4, 0.6, 0.1]));
-  const tally = nationTally(n);
-  ok('หกคนแบ่งสามสาม ไม่มีดัตช์', tally, [['B', 3], ['F', 3]]);
+  ok('หกคน ดัตช์สอง ที่เหลือแบ่งสองสอง', nationTally(n), [['B', 2], ['D', 2], ['F', 2]]);
   ok('ทุกคนได้ประเทศครบ', Object.keys(n).length, 6);
+}
+{
+  /* ทุกจำนวนคนที่เกมรองรับต้องแบ่งบริติชกับฝรั่งเศสเท่ากันเสมอ */
+  const bad = [];
+  for (let n = 4; n <= 10; n++) {
+    const seats = Array.from({ length: n }, (_, i) => 'p' + i);
+    const map = dealNations(seats, 'auto', fakeRng([0.13, 0.71, 0.37, 0.92, 0.5, 0.24]));
+    const c = Object.values(map).reduce((m, v) => ({ ...m, [v]: (m[v] || 0) + 1 }), {});
+    if ((c.B || 0) !== (c.F || 0)) bad.push([n, c]);
+  }
+  ok('4 ถึง 10 คน สองฝั่งเท่ากันทุกกรณี', bad, []);
 }
 {
   const n = dealNations(['a', 'b', 'c', 'd', 'e'], 'auto', fakeRng([0.3, 0.7, 0.2]));
   ok('ห้าคนได้ดัตช์หนึ่งคน ที่เหลือแบ่งสองสอง', nationTally(n), [['B', 2], ['D', 1], ['F', 2]]);
+  ok('ห้าคนเลือกเองว่าหนึ่งก็ได้ผลเดียวกัน',
+     nationTally(dealNations(['a','b','c','d','e'], '1', fakeRng([0.3, 0.7, 0.2]))),
+     [['B', 2], ['D', 1], ['F', 2]]);
 }
 {
   const n = dealNations(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], '2', fakeRng([0.5, 0.2, 0.9, 0.4]));
@@ -387,6 +423,42 @@ group('ต่อสาย · เปิดเกม');
   ok('ทุกคนได้ไพ่ประเทศ', Object.values(out.secrets).every(s => 'BFD'.includes(s.nation)), true);
   ok('กองไพ่ที่เหลือถูกต้อง', st.voteDeck, DECK.length - 18);
   ok('ตั้งเวลาต่อตาตามที่เลือกไว้', st.turnSeconds, 45);
+  ok('เปิดเกมมาเป็นช่วงโชว์ไพ่ประเทศก่อน', st.phase, 'reveal');
+  ok('ช่วงโชว์ยังทำ Action ไม่ได้', actionsFor(st, st.turn), []);
+}
+{
+  const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+  ok('เลือกไม่จับเวลาแล้วเก็บค่าศูนย์ไว้จริง ไม่ตกกลับไปหกสิบ', out.state.turnSeconds, 0);
+}
+
+group('ต่อสาย · ช่วงโชว์ไพ่ประเทศ');
+{
+  const st = { ...filled(), phase: 'reveal', deadline: Date.now() - 1000 };
+  const r = await tick({ ...ctxOf(st), members });
+  ok('หมดเวลาโชว์แล้วเข้าสู่การเล่น', r.state.phase, 'play');
+  ok('ยังไม่หมดเวลาก็ยังค้างอยู่',
+     await tick({ ...ctxOf({ ...st, deadline: Date.now() + 9000 }), members }), null);
+}
+
+group('ต่อสาย · โหมดไม่จับเวลา');
+{
+  const st = { ...filled(), turnSeconds: 0, deadline: null };
+  ok('ทุกคนออนไลน์ ก็ไม่ตั้งเส้นตายอะไรเลย', await tick({ ...ctxOf(st), members }), null);
+
+  const off = members.map(m => (m.uid === 'a' ? { ...m, online: false } : m));
+  const r = await tick({ ...ctxOf(st), members: off });
+  ok('คนที่ถึงตาหลุด ตั้งเพดานรอ 120 วินาที', r.state.deadline > Date.now() + 110000, true);
+
+  const back = await tick({ ...ctxOf({ ...st, deadline: Date.now() + 60000, graced: true }), members });
+  ok('กลับมาก่อนหมดเพดาน ยกเลิกให้ ไม่โดนข้ามตา', back.state.deadline, null);
+
+  const gone = await tick({ ...ctxOf({ ...st, deadline: Date.now() - 500, graced: true }), members: off });
+  ok('หมดเพดานแล้วยังไม่กลับ ข้ามตาไป', gone.state.turn, 'b');
+}
+{
+  const st = { ...filled(), turnSeconds: 0, deadline: null };
+  const done = (await onAction(ctxOf(st), { uid: 'a', type: 'peek' })).state;
+  ok('ไม่จับเวลา ส่งตาต่อแล้วก็ยังไม่มีเส้นตาย', done.deadline, null);
 }
 
 group('ต่อสาย · หนึ่งตาหนึ่ง Action');

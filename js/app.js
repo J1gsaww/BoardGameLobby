@@ -252,8 +252,9 @@ function paintGames(room) {
    ถ้าเขียนทับทั้งก้อนทุกครั้ง ตำแหน่งเลื่อนในรายการการ์ดจะเด้งกลับขึ้นบนสุด
    จึงข้ามการวาดเมื่อไม่มีอะไรเปลี่ยน และจำตำแหน่งเลื่อนไว้เวลาต้องวาดจริง */
 function paintGameSettings(room, game, count) {
+  lastCount = count;
   const host = $('gameSettings');
-  const sig = JSON.stringify([game?.id, room.doc.gameSettings || {}, room.isHost]);
+  const sig = JSON.stringify([game?.id, room.doc.gameSettings || {}, room.isHost, count, cardsOpen]);
   if (host.dataset.sig === sig) return;
 
   const keep = host.querySelector('.card-picker-list')?.scrollTop || 0;
@@ -268,7 +269,16 @@ function paintGameSettings(room, game, count) {
 
     row.appendChild(setting.type === 'cards'
       ? cardPicker(room, game, setting)
-      : segmentedSetting(room, game, setting));
+      : segmentedSetting(room, game, setting, count));
+
+    /* คำอธิบายใต้ตัวเลือก — มีเฉพาะตัวเลือกที่ประกาศ hint ไว้
+       ใช้บอกเงื่อนไขที่มองจากปุ่มอย่างเดียวไม่ออก เช่นต้องมีกี่คนถึงจะกดได้ */
+    if (setting.hint) {
+      const tip = document.createElement('p');
+      tip.className = 'field-hint';
+      tip.textContent = t(Games.settingKey(game.id, setting.key) + '.hint');
+      row.appendChild(tip);
+    }
 
     host.appendChild(row);
   });
@@ -277,15 +287,17 @@ function paintGameSettings(room, game, count) {
   if (list && keep) list.scrollTop = keep;
 }
 
-function segmentedSetting(room, game, setting) {
+function segmentedSetting(room, game, setting, count) {
   const current = room.doc.gameSettings?.[setting.key] ?? setting.default;
   const seg = document.createElement('div');
   seg.className = 'segmented';
   setting.options.forEach(value => {
+    /* เกมเป็นคนบอกเองว่าตัวเลือกนี้ใช้ได้ไหมกับจำนวนคนตอนนี้ */
+    const usable = !setting.enabled || setting.enabled(value, count);
     const b = document.createElement('button');
-    b.className = 'seg' + (value === current ? ' on' : '');
+    b.className = 'seg' + (value === current ? ' on' : '') + (usable ? '' : ' off');
     b.textContent = t(Games.optionKey(game.id, setting.key, value));
-    b.disabled = !room.isHost;
+    b.disabled = !room.isHost || !usable;
     b.onclick = () => Room.setGameSetting(setting.key, value);
     seg.appendChild(b);
   });
@@ -295,6 +307,9 @@ function segmentedSetting(room, game, setting) {
 /* ── ตัวเลือกการ์ดพิเศษ ───────────────────────────
    แสดงแค่ชื่อกับวงเล็บบอกระดับและจำนวนใบ คำอธิบายเต็มโผล่ตอนเอาเมาส์ชี้
    ถ้าโชว์คำอธิบายทุกใบพร้อมกัน รายการจะยาวจนเลือกไม่ไหว */
+let cardsOpen = false;         /* รายการการ์ดพิเศษเปิดค้างอยู่หรือเปล่า */
+let lastCount = 0;             /* จำนวนคนล่าสุด ใช้ตอนวาดซ้ำจากการกดปุ่มเอง */
+
 function cardPicker(room, game, setting) {
   const chosen = room.doc.gameSettings?.[setting.key] || setting.default || [];
   const list = setting.catalogue || [];
@@ -318,10 +333,20 @@ function cardPicker(room, game, setting) {
     none.onclick = () => Room.setGameSetting(setting.key, []);
     head.append(all, none);
   }
+  head.hidden = !cardsOpen;
   wrap.appendChild(head);
+
+  /* พับรายการไว้ก่อน กดแล้วค่อยคลี่ออก — ยี่สิบกว่าใบทำให้หน้าตั้งค่ายาวเกินไป
+     จำสถานะเปิดปิดไว้นอกฟังก์ชัน ไม่งั้นห้องอัปเดตทีเดียวก็หุบกลับเอง */
+  const toggle = document.createElement('button');
+  toggle.className = 'btn btn-slim card-picker-toggle';
+  toggle.textContent = t(cardsOpen ? 'cards.hide' : 'cards.add');
+  toggle.onclick = () => { cardsOpen = !cardsOpen; paintGameSettings(room, game, lastCount); };
+  wrap.appendChild(toggle);
 
   const grid = document.createElement('div');
   grid.className = 'card-picker-list';
+  grid.hidden = !cardsOpen;
 
   list.forEach(card => {
     const info = card[lang] || card.th;
@@ -377,8 +402,6 @@ function paintRoom() {
   paintGames(room);
 
   // โหมดทดสอบ เห็นเฉพาะเจ้าของห้อง แต่ป้ายเตือนขึ้นให้ทุกคนเห็น
-  $('devRow').hidden = !room.isHost;
-  $('devMode').checked = !!room.doc.devMode;
 
   const mine = room.mine;
   const spectator = mine?.role === 'spectator';
@@ -401,9 +424,8 @@ function paintRoom() {
   else if (!players.every(m => m.ready))
     note = t('lobby.waitReady', { n: players.filter(m => !m.ready).length });
 
-  if (room.doc.devMode) note = t('lobby.devOn') + (note ? ' \u00b7 ' + note : '');
   $('lobbyNote').textContent = note;
-  $('lobbyNote').classList.toggle('warn', !!room.doc.devMode);
+  $('lobbyNote').classList.remove('warn');
 }
 
 Room.watch((room) => {
@@ -805,7 +827,6 @@ $('btnRulesBack').onclick = () => {
 };
 $('btnSettingBack').onclick = () => { show(cameFrom === 'view-setting' ? 'view-home' : cameFrom); if (lastRoom) paintRoom(); };
 
-$('devMode').addEventListener('change', e => Room.setDevMode(e.target.checked));
 $('btnReady').onclick = () => Room.setReady(!Room.room.mine?.ready);
 $('btnStart').onclick = () => Room.start();
 $('btnBack').onclick  = () => Room.backToLobby();

@@ -11,7 +11,7 @@
    ไว้ทำชั้นการ์ดแล้วค่อยมาต่อผลของแต่ละใบ */
 
 import {
-  SHIP_SLOTS, EVENT_SLOTS, MAX_VOTE, eventTotal, TURN_OPTIONS, graceMs, rollStarter
+  SHIP_SLOTS, EVENT_SLOTS, MAX_VOTE, eventTotal, graceMs, rollStarter, OFFLINE_WAIT
 } from './board.js';
 import { deal } from './vote.js';
 import {
@@ -21,6 +21,9 @@ import {
   startVote, voteReady, tallyRow, attackPasses, mutinyPasses, brawlSplit,
   moveBox, score, winningSide, winners, dealNations, pushLog
 } from './rules.js';
+
+/* เวลาค้างหน้าไพ่ประเทศก่อนเริ่มทอยลูกเต๋า */
+export const REVEAL_MS = 3000;
 
 const seated = (members) =>
   members.filter(m => m.role === 'player' && !m.left && m.seat !== null)
@@ -41,20 +44,26 @@ export function init(ctx) {
   });
 
   const die = rollStarter(seats.length);
-  const turnSeconds = Number(ctx.settings?.turnSeconds) || TURN_OPTIONS[2];
+  /* 0 = ไม่จับเวลา จึงเช็กว่าเป็นตัวเลขจริงไหม ไม่ใช้ || เพราะศูนย์จะโดนมองว่าไม่มีค่า */
+  const raw = Number(ctx.settings?.turnSeconds);
+  const turnSeconds = Number.isFinite(raw) ? raw : 60;
   const { hands, pile } = deal(seats, MAX_VOTE);
   const nations = dealNations(seats, String(ctx.settings?.dutch || 'auto'));
 
   return {
     state: {
-      phase: 'play',
+      /* เปิดมาโชว์ไพ่ประเทศก่อน ค้างไว้สามวินาที แล้วค่อยทอยลูกเต๋าหาคนเริ่ม
+         ต้องเป็นช่วงของตัวเองในสถานะ ไม่ใช่แค่หน่วงในหน้าจอ
+         ไม่งั้นคนเข้าช้าหรือรีเฟรชกลางคันจะไม่เห็น หรือเห็นไม่พร้อมกัน */
+      phase: 'reveal',
+      revealMs: REVEAL_MS,
       roundNo: 1,
       seats,
       names: Object.fromEntries(ctx.members.map(m => [m.uid, m.name || ''])),
       out: [],
       turn: seats[die.face - 1] || seats[0] || null,
       turnSeconds,
-      deadline: Date.now() + turnSeconds * 1000,
+      deadline: Date.now() + REVEAL_MS,
       graced: false,
       die,
       pos,
@@ -123,12 +132,17 @@ export function openTurn(st) {
                  { name: st.names?.[uid], place: to });
 }
 
+/* ไม่จับเวลา = ไม่มีเส้นตาย ไม่ใช่เส้นตายยาว ๆ
+   เส้นตายจะถูกตั้งเฉพาะตอนคนที่ถึงตาหลุดไปเท่านั้น */
+export const turnDeadline = (st, now = Date.now()) =>
+  st.turnSeconds ? now + st.turnSeconds * 1000 : null;
+
 export function passTurn(st, now = Date.now()) {
   const next = nextSeat(st);
   return openTurn({
     ...st,
     turn: next,
-    deadline: now + st.turnSeconds * 1000,
+    deadline: turnDeadline(st, now),
     graced: false,
     vote: null
   });
@@ -233,7 +247,7 @@ function callVote(ctx, uid, kind, payload) {
   opened.vote.from = payload.from === 'F' ? 'F' : 'B';
 
   return {
-    state: pushLog({ ...opened, deadline: Date.now() + st.turnSeconds * 1000 },
+    state: pushLog({ ...opened, deadline: turnDeadline(st) },
                    'wreck.log.call.' + kind, { name: st.names?.[uid] }),
     secrets: secretsFrom(ctx, handsOf(ctx))       /* ล้างไพ่ที่เลือกค้างจากโหวตครั้งก่อน */
   };
@@ -330,15 +344,36 @@ export function resolveBrawl(st, n) {
 }
 
 /* ── นาฬิกา ───────────────────────────────────────────────
-   สองกรณีคนละเรื่องกัน — หมดเวลาตอนโหวต กับหมดเวลาตอนถึงตาตัวเอง */
+   สามเรื่องคนละกรณีกัน
+     1) ช่วงโชว์ไพ่ประเทศหมดเวลา — เข้าสู่การทอยลูกเต๋าแล้วเริ่มเล่น
+     2) โหวตค้าง — ส่งไพ่แทนคนที่ยังไม่ส่ง แล้วเปิดผลเลย
+     3) ตาปกติหมดเวลา — ผ่อนผันให้คนหลุดก่อนหนึ่งครั้ง แล้วค่อยข้าม
+
+   โหมดไม่จับเวลาไม่มีเส้นตายเลย จนกว่าจะมีคนหลุด ถึงจะตั้งเพดาน 120 วินาที
+   กลับมาก่อนหมดเพดานก็ยกเลิกให้ ไม่โดนข้ามตา */
 export async function tick(ctx) {
   const st = ctx.state;
-  if (!st || st.phase !== 'play') return null;
-  if (!st.deadline || Date.now() < st.deadline - 250) return null;
+  if (!st || st.phase === 'over') return null;
 
-  /* โหวตค้าง — ส่งไพ่แทนคนที่ยังไม่ส่งแบบสุ่ม แล้วเปิดผลเลย
-     ไม่งั้นคนหลุดคนเดียวค้างทั้งวง */
+  const now = Date.now();
+  const due = !!st.deadline && now >= st.deadline - 250;
+  const offline = (uid) => {
+    const m = ctx.members.find(x => x.uid === uid);
+    return !!m && !m.online;
+  };
+
+  if (st.phase === 'reveal') {
+    if (!due) return null;
+    return { state: openTurn({ ...st, phase: 'play', deadline: turnDeadline(st, now) }) };
+  }
+
   if (st.vote) {
+    if (!due) {
+      if (st.deadline) return null;
+      const stuck = st.vote.voters.some(u => !st.vote.done.includes(u) && offline(u));
+      return stuck ? { state: { ...st, deadline: now + OFFLINE_WAIT } } : null;
+    }
+
     const hands = handsOf(ctx);
     const picks = pickMap(ctx);
     let left = hands;
@@ -357,11 +392,20 @@ export async function tick(ctx) {
     return reveal(ctx, { ...next, votes: countHands(left) }, left, picks);
   }
 
-  const mine = ctx.members.find(m => m.uid === st.turn);
-  if (mine && !mine.online && !st.graced) {
-    return { state: { ...st, graced: true, deadline: Date.now() + graceMs(st.turnSeconds) } };
+  if (!due) {
+    if (!st.deadline) {
+      /* ไม่จับเวลาและยังไม่มีเพดาน — ตั้งให้เฉพาะตอนคนที่ถึงตาหลุดไป */
+      return offline(st.turn) ? { state: { ...st, deadline: now + OFFLINE_WAIT, graced: true } } : null;
+    }
+    /* กลับมาแล้วก่อนหมดเพดาน ยกเลิกให้ เล่นต่อได้ตามสบาย */
+    if (!st.turnSeconds && !offline(st.turn)) return { state: { ...st, deadline: null, graced: false } };
+    return null;
   }
-  return { state: passTurn(pushLog(st, 'wreck.log.timeout', { name: st.names?.[st.turn] })) };
+
+  if (st.turnSeconds && offline(st.turn) && !st.graced) {
+    return { state: { ...st, graced: true, deadline: now + graceMs(st.turnSeconds) } };
+  }
+  return { state: passTurn(pushLog(st, 'wreck.log.timeout', { name: st.names?.[st.turn] }), now) };
 }
 
 /* ── จบเกม ────────────────────────────────────────────────

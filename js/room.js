@@ -121,7 +121,6 @@ export async function createRoom(name) {
       status: 'lobby',
       gameId: null,
       gameSettings: {},
-      devMode: false,
       seq: 0,
       createdAt: fb.serverTimestamp(),
       touchedAt: fb.serverTimestamp()
@@ -207,7 +206,7 @@ function attach(code) {
       });
 
     maybeClaimHost();
-    if (room.isHost) assignSeats();
+    if (room.isHost) { assignSeats(); resetCountSettings(); }
     emit();
   }, err => console.error('[members]', err)));
 
@@ -306,13 +305,6 @@ export async function pickGame(gameId) {
     gameSettings: game ? Games.defaultSettings(game) : {},
     touchedAt: fb.serverTimestamp()
   });
-}
-
-/* โหมดทดสอบ — ข้ามเงื่อนไขจำนวนคนและการกดพร้อม
-   เก็บไว้ในเอกสารห้องเพราะทุกคนต้องเห็นว่ากำลังเปิดอยู่ ไม่ใช่ความลับของเจ้าของห้อง */
-export async function setDevMode(on) {
-  if (!room.isHost) return;
-  await fb.updateDoc(roomRef(), { devMode: !!on, touchedAt: fb.serverTimestamp() });
 }
 
 export async function setGameSetting(key, value) {
@@ -447,9 +439,6 @@ export function canStart() {
 
   const players = room.members.filter(m => m.role === 'player' && !m.left);
 
-  // โหมดทดสอบ: เริ่มได้เลยขอแค่มีคนนั่งอยู่ ไม่ต้องครบจำนวนและไม่ต้องกดพร้อม
-  if (room.doc.devMode) return players.length >= 1;
-
   return Games.fits(game, players.length) &&
          players.every(m => m.ready && m.online);
 }
@@ -549,11 +538,16 @@ async function commit(out, actionRef) {
 
 /* นาฬิกาจับเวลาต่อตา — เจ้าของห้องเป็นคนถือคนเดียว
    เก็บเวลาหมดไว้ในสถานะสาธารณะ คนที่รับช่วงต่อจึงตั้งนาฬิกาเองได้ */
+const IDLE_POLL = 5000;
+
 function armClock() {
   clearTimeout(clock);
+  if (room.doc?.status !== 'playing') return;
+
+  /* โหมดไม่จับเวลาไม่มีเส้นตาย แต่ยังต้องมีคนคอยดูว่าคนที่ถึงตาหลุดไปหรือยัง
+     จึงเดินเบา ๆ ทุกห้าวินาที เกมเป็นคนตัดสินเองว่าจะทำอะไรหรือไม่ทำเลย */
   const at = room.doc?.state?.deadline;
-  if (!at || room.doc.status !== 'playing') return;
-  clock = setTimeout(runTick, Math.max(0, at - Date.now()) + 60);
+  clock = setTimeout(runTick, at ? Math.max(0, at - Date.now()) + 60 : IDLE_POLL);
 }
 
 async function runTick() {
@@ -561,8 +555,10 @@ async function runTick() {
   const game = currentGame();
   if (!game || typeof game.tick !== 'function') return;
   try {
-    await commit(await game.tick(context()), null);
-  } catch (e) { console.error('นาฬิกาทำงานผิดพลาด', e); }
+    const out = await game.tick(context());
+    await commit(out, null);
+    if (!out || !out.state) armClock();      /* ไม่มีอะไรเปลี่ยน ก็ตั้งรอบถัดไปเอง */
+  } catch (e) { console.error('นาฬิกาทำงานผิดพลาด', e); armClock(); }
 }
 
 /* ── ข้อมูลที่ส่งให้เกม ───────────────────────────── */
@@ -572,7 +568,6 @@ export function context() {
     members: room.members,
     isHost: room.isHost,
     hostUid: room.doc?.hostUid || null,
-    devMode: !!room.doc?.devMode,
     state: room.doc?.state || {},
     settings: room.doc?.gameSettings || {},
     avatars: room.avatars,        // รูปประจำตัวของทุกคนในห้อง
@@ -586,6 +581,35 @@ export function context() {
 /* ── งานบ้านของเจ้าของห้อง ───────────────────────── */
 
 /* แจกเลขที่นั่งให้คนที่ยังไม่มี — ทำที่เดียวจึงไม่มีทางชนกัน */
+/* ── ตัวเลือกที่ผูกกับจำนวนคน ─────────────────────────────
+   บางตัวเลือกใช้ได้เฉพาะบางจำนวนคน เช่นจำนวนดัตช์
+   ตั้งไว้ตอนมีห้าคนแล้วมีคนที่หกเดินเข้ามา ค่าที่ตั้งไว้จะกลายเป็นแบ่งฝั่งไม่ลงตัวทันที
+   ทุกครั้งที่จำนวนคนขยับจึงดีดกลับไปค่าเริ่มต้น ปลอดภัยกว่าปล่อยค้างแล้วเริ่มเกมพัง */
+let lastPlayerCount = -1;
+
+async function resetCountSettings() {
+  const game = Games.get(room.doc?.gameId);
+  const count = room.members.filter(m => m.role === 'player' && !m.left).length;
+  if (count === lastPlayerCount) return;
+  lastPlayerCount = count;
+  if (!game || room.doc?.status !== 'lobby') return;
+
+  const snap = {};
+  for (const st of game.settings || []) {
+    if (typeof st.enabled !== 'function') continue;
+    const now = room.doc.gameSettings?.[st.key] ?? st.default;
+    if (now !== st.default) snap[st.key] = st.default;
+  }
+  if (!Object.keys(snap).length) return;
+
+  try {
+    await fb.updateDoc(roomRef(), {
+      ...Object.fromEntries(Object.entries(snap).map(([k, v]) => [`gameSettings.${k}`, v])),
+      touchedAt: fb.serverTimestamp()
+    });
+  } catch (e) { console.warn('ดีดตัวเลือกกลับค่าเริ่มต้นไม่สำเร็จ', e); }
+}
+
 async function assignSeats() {
   if (seating) return;
   const need = room.members.filter(m => m.role === 'player' && m.seat === null && m.online && !m.left);

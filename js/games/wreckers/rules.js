@@ -332,21 +332,27 @@ export const winners = (cargo, nations = {}) => {
 };
 
 /* ── ไพ่ประเทศ ─────────────────────────────────────────────
-   คนคู่แบ่งบริติชกับฝรั่งเศสเท่ากัน · คนคี่มีดัตช์หนึ่งคน
-   8 กับ 10 คนเลือกได้ว่าจะมีดัตช์กี่คน เพราะเหลือแบ่งได้ลงตัวทั้งสองแบบ
-   ถ้าเลือกจนหารไม่ลงตัว ฝั่งที่เกินจะได้ไปหนึ่งคน ไม่ปัดทิ้ง */
-export const DUTCH_OPTIONS = ['auto', '1', '2', 'random'];
+   ตามจำนวนคน: คนคี่มีดัตช์ 1 คน · คนคู่มีดัตช์ 2 คน
+   ที่เหลือหารสองลงตัวเสมอในช่วง 4–10 คน บริติชกับฝรั่งเศสจึงเท่ากันทุกกรณี
 
-export function dutchCount(n, setting = 'auto', rng = Math.random) {
-  if (setting === 'random') return n % 2 === 0 ? (rng() < 0.5 ? 2 : 1) : 1;
+   กำหนดเองได้เฉพาะจำนวนคนที่ยังแบ่งลงตัว — ดัตช์ 1 คนได้ที่ 5, 7, 9 คน
+   ดัตช์ 2 คนได้ที่ 8 กับ 10 คน นอกนั้นปุ่มจะกดไม่ได้ */
+export const DUTCH_OPTIONS = ['auto', '1', '2'];
+export const DUTCH_NEEDS = { '1': [5, 7, 9], '2': [8, 10] };
+
+export const dutchAllowed = (n, setting) =>
+  setting === 'auto' || (DUTCH_NEEDS[setting] || []).includes(Number(n));
+
+export function dutchCount(n, setting = 'auto') {
+  if (!dutchAllowed(n, setting)) setting = 'auto';     /* ตั้งค่าค้างไว้แล้วคนเปลี่ยน ให้ตกกลับเป็นอัตโนมัติ */
   if (setting === '1') return 1;
   if (setting === '2') return 2;
-  return n % 2 === 0 ? 0 : 1;                          // auto
+  return n % 2 === 0 ? 2 : 1;                          // auto
 }
 
 export function dealNations(seats, setting = 'auto', rng = Math.random) {
   const n = seats.length;
-  const d = Math.min(dutchCount(n, setting, rng), Math.max(0, n - 2));
+  const d = Math.min(dutchCount(n, setting), Math.max(0, n - 2));
   const rest = n - d;
   const b = Math.ceil(rest / 2);
   const bag = shuffle([

@@ -530,12 +530,7 @@ button{ cursor:pointer; border:0; background:none; }
 @media (max-width:520px){ .game-filter{ flex-wrap:wrap; } .game-filter .pick{ max-width:100%; flex:1 1 100%; } }
 
 /* ── โหมดทดสอบ ───────────────────────────────────── */
-.dev-row{
-  display:flex; align-items:flex-start; gap:9px; margin-top:16px;
-  font-size:12.5px; color:var(--muted); line-height:1.5; cursor:pointer;
-}
-.dev-row input{ margin-top:2px; accent-color:var(--rose); flex:0 0 auto; }
-.dev-row:hover{ color:var(--ink); }
+
 .note.warn{ color:var(--rose); font-weight:600; }
 
 /* ══ กระดาน Wreckers ═══════════════════════════════ */
@@ -677,9 +672,11 @@ button{ cursor:pointer; border:0; background:none; }
 }
 .wr-empty{ margin:0; font-size:12px; color:var(--muted); text-align:center; }
 
-/* ไพ่คว่ำวาดด้วย CSS ล้วน ยังไม่มีไฟล์ภาพไพ่ */
+/* ไพ่คว่ำวาดด้วย CSS ล้วน ยังไม่มีไฟล์ภาพไพ่
+   สัดส่วน 3:4 เพราะ Midjourney ล็อกสัดส่วนไว้เป็นชุดตายตัว 3:4 ใกล้ของเดิม (5:7) ที่สุด
+   ใช้ตรง ๆ เลยดีกว่าครอปภาพทีละใบสี่สิบใบ ย้อนกลับได้ด้วยการแก้บรรทัดนี้บรรทัดเดียว */
 .wr-card{
-  position:relative; aspect-ratio:5/7; border-radius:9px; padding:0;
+  position:relative; aspect-ratio:3/4; border-radius:9px; padding:0;
   background:linear-gradient(150deg,#2f2450 0%,#1a1330 55%,#241a3f 100%);
   border:1px solid #4a3c78;
   box-shadow:0 3px 9px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.05) inset;
@@ -1022,3 +1019,45 @@ button{ cursor:pointer; border:0; background:none; }
 }
 .wr-log li{ font-size:11.5px; color:var(--muted); }
 .wr-log li:first-child{ color:var(--ink); }
+
+/* ── ไพ่ประเทศ ─────────────────────────────────────────── */
+.wr-nation{
+  display:grid; gap:3px; margin-bottom:12px; padding:9px 11px;
+  border-radius:12px; background:rgba(20,16,42,.75); border:1px solid var(--line);
+}
+.wr-nation-label{
+  font-family:var(--mono); font-size:9.5px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--muted);
+}
+.wr-nation-tag{ font-family:var(--display); font-size:17px; font-weight:700; }
+.wr-nation-goal{ font-size:11px; color:var(--muted); line-height:1.4; }
+.n-B{ color:#7fb2ff; } .n-F{ color:#ff8f9c; } .n-D{ color:#ffc861; }
+
+/* หน้าเปิดไพ่ประเทศ — บังทั้งจอไว้ก่อนเริ่มทอยลูกเต๋า */
+.wr-reveal{
+  position:fixed; inset:0; z-index:60; display:grid; place-items:center;
+  background:rgba(8,6,20,.93); backdrop-filter:blur(3px);
+}
+.wr-reveal-card{
+  display:grid; gap:9px; justify-items:center; text-align:center;
+  padding:34px 46px; border-radius:20px;
+  background:linear-gradient(150deg,#2f2450,#1a1330);
+  border:1px solid currentColor;
+  animation:wr-reveal-in .45s cubic-bezier(.2,.9,.3,1);
+}
+.wr-reveal-small{
+  font-family:var(--mono); font-size:10px; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--muted);
+}
+.wr-reveal-big{ font-family:var(--display); font-size:44px; font-weight:700; line-height:1; }
+.wr-reveal-goal{ font-size:13px; color:var(--ink); max-width:280px; }
+@keyframes wr-reveal-in{
+  from{ transform:scale(.86) translateY(14px); opacity:0; }
+  to  { transform:none; opacity:1; }
+}
+@media (prefers-reduced-motion:reduce){ .wr-reveal-card{ animation:none; } }
+
+/* ตัวเลือกที่ยังกดไม่ได้เพราะจำนวนคนไม่ถึง */
+.seg.off{ opacity:.34; text-decoration:line-through; }
+.field-hint{ margin:6px 0 0; font-size:11px; color:var(--muted); line-height:1.5; }
+.card-picker-toggle{ width:100%; margin-bottom:8px; }

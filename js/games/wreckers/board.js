@@ -201,7 +201,10 @@ export function canTouchCargo(spot, pos, place) {
 /* ── เวลาต่อตา ───────────────────────────────────────────────
    คนหลุดกลางตาจะได้เวลาผ่อนผันเท่ากับเวลาปกติคูณ 2.5 แต่ไม่เกิน 120 วินาที
    หมดแล้วยังไม่กลับมาก็ข้ามตาไปเลย ไม่งั้นทั้งวงต้องรออยู่คนเดียว */
-export const TURN_OPTIONS = [30, 45, 60, 90, 120];
+export const TURN_OPTIONS = [0, 30, 45, 60, 90, 120];   /* 0 = ไม่จับเวลา */
+
+/* ไม่จับเวลาไม่ได้แปลว่ารอตลอดกาล — ถ้าคนที่ถึงตาหลุดไป ยังต้องมีเพดานให้ทั้งวงไปต่อ */
+export const OFFLINE_WAIT = 120000;
 export const GRACE_MULT = 2.5;
 export const GRACE_CAP = 120;
 export const graceMs = (sec) => Math.min(GRACE_CAP, sec * GRACE_MULT) * 1000;

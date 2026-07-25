@@ -7,7 +7,7 @@ import { init, onAction, tick } from './game.js';
 import { render } from './ui.js';
 import { EXTRA_CARDS } from './cards.js';
 import { TURN_OPTIONS } from './board.js';
-import { DUTCH_OPTIONS } from './rules.js';
+import { DUTCH_OPTIONS, dutchAllowed, DUTCH_NEEDS } from './rules.js';
 
 register({
   id: 'wreckers',
@@ -29,7 +29,10 @@ register({
 
   settings: [
     { key: 'turnSeconds', default: 60, options: TURN_OPTIONS },
-    { key: 'dutch', default: 'auto', options: DUTCH_OPTIONS },
+    /* enabled กับ hint เป็นข้อมูลที่เกมประกาศเอง หน้าตั้งค่าแค่วาดตาม
+       ปุ่มดัตช์กดได้เฉพาะจำนวนคนที่แบ่งฝั่งแล้วยังลงตัว */
+    { key: 'dutch', default: 'auto', options: DUTCH_OPTIONS, hint: true,
+      enabled: (value, count) => dutchAllowed(count, value) },
     { key: 'extraCards', type: 'cards', default: [], catalogue: EXTRA_CARDS }
   ],
   init, onAction, tick, render,
@@ -47,8 +50,6 @@ register({
       'game.wreckers.turnSeconds.90': '90 วิ',
       'game.wreckers.turnSeconds.120': '120 วิ',
       'wreck.rolling': 'กำลังทอยหาคนเริ่ม',
-      'wreck.devRoll': 'ทดสอบลูกเต๋า',
-      'wreck.devRolled': 'ทอยทดสอบ ไม่มีผลกับเกม',
       'wreck.starts': '{name} เริ่มก่อน',
       'wreck.yourTurn': 'ตาคุณ',
       'wreck.waitFor': 'รอ {name}',
@@ -98,7 +99,20 @@ register({
       'game.wreckers.dutch.auto': 'ตามจำนวนคน',
       'game.wreckers.dutch.1': '1 คน',
       'game.wreckers.dutch.2': '2 คน',
-      'game.wreckers.dutch.random': 'สุ่ม 1 หรือ 2',
+      'game.wreckers.dutch.hint':
+        'ตามจำนวนคน = คนคี่ได้ดัตช์ 1 คน คนคู่ได้ 2 คน · เลือก 1 คนได้เมื่อมี 5, 7, 9 คน · เลือก 2 คนได้เมื่อมี 8, 10 คน',
+      'game.wreckers.turnSeconds.0': 'ไม่จับเวลา',
+
+      'wreck.nation.head': 'ประเทศของคุณ',
+      'wreck.nation.you': 'คุณคือ {nation}',
+      'wreck.nation.hide': 'อย่าให้ใครเห็นจอ',
+      'wreck.nation.B.tag': 'บริติช',
+      'wreck.nation.F.tag': 'ฝรั่งเศส',
+      'wreck.nation.D.tag': 'ดัตช์',
+      'wreck.nation.B.goal': 'ชนะเมื่อฝั่งบริติชมีกล่องมากที่สุด',
+      'wreck.nation.F.goal': 'ชนะเมื่อฝั่งฝรั่งเศสมีกล่องมากที่สุด',
+      'wreck.nation.D.goal': 'ชนะเมื่อสองฝั่งมีกล่องเท่ากัน',
+      'wreck.offlineWait': 'รอ {n} วินาทีเผื่อคนที่หลุดกลับมา',
 
       'wreck.plan.target': 'ยิงลำไหน',
       'wreck.plan.otherShip': 'เรืออีกลำ',
@@ -122,7 +136,6 @@ register({
       'wreck.vote.result.mutiny': 'ผลการก่อกบฏ',
       'wreck.vote.result.islandVote': 'ผลการย้ายกล่อง',
       'wreck.over.done': 'จบเกมแล้ว',
-      'wreck.dev.finish': 'จบเกม สรุปคะแนน',
       'wreck.over.score': 'บริติช {B} · ฝรั่งเศส {F}',
       'wreck.over.win.B': 'บริติชชนะ',
       'wreck.over.win.F': 'ฝรั่งเศสชนะ',
@@ -163,8 +176,6 @@ register({
       'game.wreckers.turnSeconds.90': '90s',
       'game.wreckers.turnSeconds.120': '120s',
       'wreck.rolling': 'Rolling for first turn',
-      'wreck.devRoll': 'Test roll',
-      'wreck.devRolled': 'Test roll \u2014 no effect on the game',
       'wreck.starts': '{name} goes first',
       'wreck.yourTurn': 'Your turn',
       'wreck.waitFor': 'Waiting for {name}',
@@ -214,7 +225,20 @@ register({
       'game.wreckers.dutch.auto': 'By player count',
       'game.wreckers.dutch.1': '1',
       'game.wreckers.dutch.2': '2',
-      'game.wreckers.dutch.random': 'Random 1 or 2',
+      'game.wreckers.dutch.hint':
+        'By player count = 1 Dutch for odd, 2 for even \u00b7 pick 1 with 5, 7, 9 players \u00b7 pick 2 with 8, 10',
+      'game.wreckers.turnSeconds.0': 'No timer',
+
+      'wreck.nation.head': 'Your nation',
+      'wreck.nation.you': 'You are {nation}',
+      'wreck.nation.hide': 'Keep this off other screens',
+      'wreck.nation.B.tag': 'British',
+      'wreck.nation.F.tag': 'France',
+      'wreck.nation.D.tag': 'Dutch',
+      'wreck.nation.B.goal': 'Win when British hold the most boxes',
+      'wreck.nation.F.goal': 'Win when France hold the most boxes',
+      'wreck.nation.D.goal': 'Win when both sides hold the same',
+      'wreck.offlineWait': 'waiting {n}s in case they reconnect',
 
       'wreck.plan.target': 'Fire at',
       'wreck.plan.otherShip': 'The other ship',
@@ -238,7 +262,6 @@ register({
       'wreck.vote.result.mutiny': 'Mutiny result',
       'wreck.vote.result.islandVote': 'Cargo vote result',
       'wreck.over.done': 'Game over',
-      'wreck.dev.finish': 'End game \u2014 score it',
       'wreck.over.score': 'British {B} \u00b7 France {F}',
       'wreck.over.win.B': 'British win',
       'wreck.over.win.F': 'France win',

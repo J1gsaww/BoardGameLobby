@@ -59,6 +59,7 @@ function shell(el, ctx) {
 
       <div class="wr-grid">
         <aside class="wr-side wr-hand">
+          <div class="wr-nation"></div>
           <h4>${esc(t('wreck.yourHand'))}</h4>
           <div class="wr-hand-cards"></div>
         </aside>
@@ -107,8 +108,8 @@ function shell(el, ctx) {
 
       <ul class="wr-log" hidden></ul>
 
+      <div class="wr-reveal" hidden></div>
       <div class="wr-legend"></div>
-      <div class="wr-devbar" hidden></div>
     </div>`;
 
   mountSea(el.querySelector('.wr-stage'), ART);
@@ -218,6 +219,8 @@ export function render(el, ctx) {
     if (box.dataset.sig !== html) { box.dataset.sig = html; box.innerHTML = html; }
   });
 
+  paintNation(el, ctx);
+  paintReveal(el, st, ctx);
   paintHand(el, st, ctx);
   paintRoster(el, st, ctx);
   paintActions(el, st, ctx);
@@ -233,12 +236,50 @@ export function render(el, ctx) {
   paintMenu(el, st, ctx);
   paintTurn(el, st, ctx);
   paintDice(el, st);
-  paintDevBar(el, ctx);
 
   const legendHtml =
     (ctx.isHost ? `<button class="btn btn-slim" data-act="leave">${esc(t('wreck.back'))}</button>` : '');
   const bar = el.querySelector('.wr-legend');
   if (bar.dataset.sig !== legendHtml) { bar.dataset.sig = legendHtml; bar.innerHTML = legendHtml; }
+}
+
+/* ── ไพ่ประเทศ ─────────────────────────────────────────────
+   ค้างอยู่เหนือไพ่บนมือทั้งเกม เพราะเป็นข้อมูลที่ต้องเห็นตลอดเวลาเล่น
+   อ่านจากข้อมูลลับของตัวเอง คนอื่นไม่มีทางเห็นแม้จะเปิดหน้าจอดู */
+function paintNation(el, ctx) {
+  const box = el.querySelector('.wr-nation');
+  if (!box) return;
+  const n = ctx.secret?.nation;
+  const html = !n ? '' : `
+    <span class="wr-nation-label">${esc(t('wreck.nation.head'))}</span>
+    <span class="wr-nation-tag n-${esc(n)}">${esc(t('wreck.nation.' + n + '.tag'))}</span>
+    <span class="wr-nation-goal">${esc(t('wreck.nation.' + n + '.goal'))}</span>`;
+  box.hidden = !html;
+  if (box.dataset.sig !== html) { box.dataset.sig = html; box.innerHTML = html; }
+}
+
+/* ── หน้าเปิดไพ่ประเทศตอนเริ่มเกม ──────────────────────────
+   บังทั้งจอไว้สามวินาทีก่อนทอยลูกเต๋า จะได้ไม่มีใครพลาดของตัวเอง
+   เวลานับจากสถานะกลาง ทุกคนจึงเห็นพร้อมกันและปิดพร้อมกัน */
+function paintReveal(el, st, ctx) {
+  const box = el.querySelector('.wr-reveal');
+  if (!box) return;
+
+  if (st.phase !== 'reveal') {
+    box.hidden = true;
+    if (box.dataset.sig) { box.dataset.sig = ''; box.innerHTML = ''; }
+    return;
+  }
+
+  const n = ctx.secret?.nation;
+  const html = `<div class="wr-reveal-card n-${esc(n || 'D')}">
+      <span class="wr-reveal-small">${esc(t('wreck.nation.hide'))}</span>
+      <strong class="wr-reveal-big">${esc(n ? t('wreck.nation.' + n + '.tag') : '\u2014')}</strong>
+      <span class="wr-reveal-goal">${esc(n ? t('wreck.nation.' + n + '.goal') : '')}</span>
+    </div>`;
+
+  box.hidden = false;
+  if (box.dataset.sig !== html) { box.dataset.sig = html; box.innerHTML = html; }
 }
 
 /* ── ไพ่บนมือ ──────────────────────────────────────────────
@@ -294,30 +335,6 @@ function paintEvents(el) {
 /* ── แผงทดสอบ ──────────────────────────────────────────────
    โผล่เฉพาะตอนเปิดโหมดทดสอบของห้อง ใช้ดูภาพลูกเต๋าโดยไม่ต้องเริ่มเกมใหม่
    ทอยตรงนี้เป็นภาพล้วน ไม่แตะสถานะเกมและไม่ส่งให้ใคร */
-function paintDevBar(el, ctx) {
-  const bar = el.querySelector('.wr-devbar');
-  if (!bar) return;
-  bar.hidden = !ctx.devMode;
-  if (!ctx.devMode) { bar.innerHTML = ''; return; }
-  if (bar.dataset.built) return;
-
-  bar.dataset.built = '1';
-  bar.innerHTML = `<span class="wr-dev-label">${esc(t('wreck.devRoll'))}</span>` +
-    [4, 6, 12].map(n => `<button class="btn btn-slim" data-die="${n}">D${n}</button>`).join('') +
-    `<button class="btn btn-slim" data-finish="1">${esc(t('wreck.dev.finish'))}</button>`;
-
-  bar.querySelector('[data-finish]').onclick = () => live?.send('endGame', {});
-
-  bar.querySelectorAll('[data-die]').forEach(b => {
-    b.onclick = () => {
-      const sides = Number(b.dataset.die);
-      const seats = live?.state?.seats?.length || sides;
-      const max = Math.min(sides, seats);       // โชว์ได้แค่เลขที่มีคนจริง
-      showDice(el, sides, 1 + Math.floor(Math.random() * max), t('wreck.devRolled'));
-    };
-  });
-}
-
 /* ── ป้ายบอกตากับนาฬิกา ────────────────────────────────────
    นับถอยหลังเดินเองในเครื่องทุกครึ่งวินาที ไม่ต้องรอสถานะใหม่จากเซิร์ฟเวอร์ */
 let clockTimer = null;
@@ -393,7 +410,7 @@ export function showDice(el, sides, face, note) {
 }
 
 function paintDice(el, st) {
-  if (!st.die) return;
+  if (!st.die || st.phase !== 'play') return;   /* ทอยหลังโชว์ไพ่ประเทศจบแล้วเท่านั้น */
   const key = st.die.sides + ':' + st.die.face + ':' + st.roundNo;
   if (dieShown === key) return;
   dieShown = key;
