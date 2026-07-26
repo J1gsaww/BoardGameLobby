@@ -894,7 +894,8 @@ $('chatText').addEventListener('keydown', e => { if (e.key === 'Enter') submitCh
      และการจะกลับต้องพิมพ์พารามิเตอร์เองซึ่งไม่มีใครจำได้ */
   tag.onclick = () => {
     if (!confirm(t('db.confirm'))) return;
-    location.href = `${location.origin}${location.pathname}?db=dev`;
+    try { sessionStorage.removeItem('wr.db'); } catch {}
+    location.href = `${location.origin}${location.pathname}`;
   };
 })();
 
