@@ -887,7 +887,15 @@ $('chatText').addEventListener('keydown', e => { if (e.key === 'Enter') submitCh
   if (!env || env === 'dev') return;
   tag.hidden = false;
   tag.textContent = `DB: ${env}`;
-  tag.title = window.FIREBASE_CONFIG?.projectId || '';
+  tag.title = `${window.FIREBASE_CONFIG?.projectId || ''} — ${t('db.back')}`;
+
+  /* กดแล้วกลับไปโปรเจกต์หลักเลย
+     ค่านี้ถูกจำไว้ในเครื่อง ไม่ได้อ่านจาก URL คนจึงไม่รู้ตัวว่าติดอยู่โปรเจกต์ไหน
+     และการจะกลับต้องพิมพ์พารามิเตอร์เองซึ่งไม่มีใครจำได้ */
+  tag.onclick = () => {
+    if (!confirm(t('db.confirm'))) return;
+    location.href = `${location.origin}${location.pathname}?db=dev`;
+  };
 })();
 
 $('btnInvite').onclick = async () => {

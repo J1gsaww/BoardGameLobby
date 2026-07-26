@@ -573,8 +573,9 @@ button{ cursor:pointer; border:0; background:none; }
 .wr-sea{
   position:absolute; inset:-2%;
   width:104%; height:104%; object-fit:cover;
-  pointer-events:none; user-select:none;
+  cursor:pointer; user-select:none; border:none;
 }
+#dbTag:hover{ filter:brightness(1.12); }
 .wr-sea.over{ opacity:0; transition:opacity 1.5s linear; }
 .wr-sea.over.lit{ opacity:1; }
 .wr-pieces{ position:absolute; inset:0; }
