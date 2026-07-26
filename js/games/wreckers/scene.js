@@ -38,6 +38,8 @@ const T = {
   lead: 500,       // เว้นก่อนไอคอนแรกโผล่ ให้สายตาตั้งหลักก่อน
   verdict: 900,    // เว้นก่อนขึ้นคำตัดสิน
   afterIcons: 1400, // ค้างหลังไอคอนครบ ก่อนไปช่วงถัดไป
+  strike: 2400,    // ฉากเหตุการณ์แบบนกถล่ม — สั้นกว่าผลโหวตเพราะไม่มีอะไรให้นับ
+  after: 900,      // ค้างหลังการ์ดที่ผลเกิดทันที ก่อนปล่อยให้กระดานขยับ
   linger: 3200     // ค้างผลไว้ให้อ่านก่อนปิดฉากเอง
 };
 
@@ -273,7 +275,7 @@ function shoutNote(body, st) {
           <p class="wr-strike-line">${esc(t('wreck.scene.birds', { n: sh.who.length }))}</p>
         </div>`;
     }
-    if (now() - stageAt < T.linger + 1200) return true;
+    if (now() - stageAt < T.strike) return true;
     dismissed.add('shout:' + sh.at);
     closing = true;
     return false;
@@ -377,7 +379,9 @@ function cardNote(body, st, ctx) {
   /* ยังต้องเลือกอยู่ = ค้างไว้ ไม่นับถอยหลัง
      ไม่มีอะไรให้เลือกแล้ว = ขึ้นให้อ่านครบเวลาแล้วปิด */
   if (st.pending) return !parked;
-  if (ms < CARD_READ + T.linger) return true;
+  /* การ์ดที่ผลเกิดทันที ตัวการ์ดคือทั้งเรื่องแล้ว ไม่ต้องค้างนานเท่าผลโหวต
+     ค้างนานไปกลายเป็นช่วงที่ไม่มีอะไรเกิดขึ้นแล้วรอเฉย ๆ */
+  if (ms < CARD_READ + T.after) return true;
   dismissed.add('card:' + st.cardUp.at);
   closing = true;
   return false;

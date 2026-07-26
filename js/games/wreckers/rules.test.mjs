@@ -1213,3 +1213,29 @@ group('การ์ด · นกอัลบาทรอส');
   ok('ย้ายมาลำเดียวกันแล้วเกิดทันที', hit?.place, 'shipR');
   ok('คนที่ไม่ถือนกก็โดนด้วย', hit.who.includes('c'), true);
 }
+
+group('ฉากเล่าจบก่อนกระดานขยับ');
+{
+  /* บั๊กที่เคยพลาด: เติมผังก่อนเกิดผล **หลัง** เรียกผลการ์ด
+     ค่าจึงไม่ติดไปกับสถานะที่ส่งออก หน้าจอไม่มีอะไรบอกให้ค้าง หมากเด้งก่อนฉากเล่าจบ */
+  const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+  const deck = { ...out.secrets._deck, slots: ['blackspot', ...out.secrets._deck.slots.slice(1)] };
+  const base = { ...out.state, phase: 'play', turn: 'a', pos: filled().pos,
+                 seats: [...P], names: filled().names, out: [] };
+  const ctx = { ...ctxOf(base), secrets: { ...out.secrets, _deck: deck }, hostUid: 'a' };
+
+  const r = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+  ok('เหตุการณ์พาผังก่อนเกิดผลไปด้วย', !!r.state.cardUp.beforePos, true);
+  ok('ผังนั้นคือตำแหน่งก่อนโดน Maroon', r.state.cardUp.beforePos.a, 'shipL:C');
+  ok('สถานะจริงย้ายไปแล้ว', r.state.pos.a.startsWith('island'), true);
+  ok('สองอย่างต่างกันจริง — ถ้าเท่ากันแปลว่าค้างไม่ทำงาน',
+     r.state.cardUp.beforePos.a !== r.state.pos.a, true);
+}
+{
+  /* นกถล่ม — ผังที่พาไปต้องเป็นหลังคนย้ายที่แล้ว แต่ก่อน Maroon */
+  const st = board({ a: 'shipL:C', b: 'shipL:F', c: 'island:G', d: 'shipR:C' });
+  const two = addMark(addMark(st, 'a', 'bird'), 'b', 'bird');
+  const hit = birdStrike(two, {}, zero);
+  ok('ผังก่อน Maroon ยังอยู่บนเรือ', two.pos.a, 'shipL:C');
+  ok('หลัง Maroon ลงเกาะแล้ว', hit.state.pos.a.startsWith('island'), true);
+}
