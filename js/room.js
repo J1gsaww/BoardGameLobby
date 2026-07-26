@@ -117,8 +117,17 @@ async function sweepStaleRooms() {
 }
 
 /* ลิงก์เชิญที่ฝังรหัสห้องไว้ เพื่อนกดแล้วเข้าได้เลยไม่ต้องพิมพ์รหัส */
-export const inviteLink = (code = room.code) =>
-  code ? `${location.origin}${location.pathname}?room=${code}` : '';
+/* ลิงก์เชิญต้องพาโปรเจกต์ที่ใช้อยู่ไปด้วย
+
+   หน้าต่างปกปิดตัวตนกับเบราว์เซอร์คนละตัวมีที่เก็บของตัวเองแยกกัน
+   ค่าที่จำไว้ว่าใช้โปรเจกต์ไหนจึงไม่ข้ามไปด้วย
+   ถ้าลิงก์ไม่บอก คนที่กดเข้ามาจะไปลงโปรเจกต์เริ่มต้น แล้วหาห้องไม่เจอ
+   ทั้งที่รหัสห้องถูกต้องทุกตัวอักษร */
+export const inviteLink = (code = room.code) => {
+  if (!code) return '';
+  const db = window.DB_ENV && window.DB_ENV !== 'dev' ? `&db=${window.DB_ENV}` : '';
+  return `${location.origin}${location.pathname}?room=${code}${db}`;
+};
 
 export async function createRoom(name) {
   profileName = name;

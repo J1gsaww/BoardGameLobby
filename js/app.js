@@ -877,6 +877,19 @@ $('chatToggle').onclick = () => { chatOpen = !chatOpen; paintChat(lastRoom); };
 $('chatSend').onclick = submitChat;
 $('chatText').addEventListener('keydown', e => { if (e.key === 'Enter') submitChat(); });
 
+/* ป้ายโปรเจกต์ — ขึ้นค้างไว้มุมจอตลอดเมื่ออยู่โปรเจกต์ที่ไม่ใช่ตัวหลัก
+   อาการที่เจอบ่อยคือเบราว์เซอร์คนละตัวไปคนละโปรเจกต์แล้วหาห้องกันไม่เจอ
+   ซึ่งเดิมรู้ได้จากคอนโซลอย่างเดียว */
+(() => {
+  const tag = $('dbTag');
+  if (!tag) return;
+  const env = window.DB_ENV;
+  if (!env || env === 'dev') return;
+  tag.hidden = false;
+  tag.textContent = `DB: ${env}`;
+  tag.title = window.FIREBASE_CONFIG?.projectId || '';
+})();
+
 $('btnInvite').onclick = async () => {
   try {
     await navigator.clipboard.writeText(Room.inviteLink());
