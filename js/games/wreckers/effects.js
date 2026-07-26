@@ -11,22 +11,28 @@
    แล้วค่อยผ่านตาตอนที่ผลถูกใช้จริง จังหวะจึงเหมือนกับการโหวตที่ทำไว้แล้ว
    ───────────────────────────────────────────────────────────── */
 
-import { maroon, occupants, placeOf } from './rules.js';
+import { maroon, occupants, placeOf, addMark } from './rules.js';
 
 /* needs ที่รองรับตอนนี้
    'player'  เลือกผู้เล่นหนึ่งคน (ยกเว้นตัวเอง)  */
 export const EFFECTS = {
+  /* นกอัลบาทรอส — ติดนกไว้กับคนเปิด ไม่มีผลอะไรทันที
+     อันตรายอยู่ที่เรือลำเดียวกันมีนกครบสองตัว ซึ่งตรวจรวมหลังทุกคำสั่ง
+     ไม่ได้ตรวจแค่ตอนเปิดการ์ด เพราะคนย้ายที่ก็ทำให้ครบได้ */
+  albatross: {
+    needs: null,
+    run: (st, uid, _target, hands) => ({ state: addMark(st, uid, 'bird'), hands })
+  },
+
   /* จุดดำ — คนที่เปิดโดน Maroon เอง ไม่ต้องเลือกอะไร ผลเกิดทันที
      เป็นการ์ดใบแรกที่ไม่มี needs จึงเป็นแม่แบบของกลุ่ม "เปิดแล้วเกิดเลย" */
   blackspot: {
     needs: null,
     run: (st, uid, _target, hands) => {
       const out = maroon(st, uid, hands);
-      return {
-        state: out.state,
-        hands: out.hands,
-        shout: { kind: 'spot', by: uid, who: uid, card: 'blackspot' }
-      };
+      /* ไม่ต้องประกาศผลซ้ำ — แค่เห็นว่าเปิดเจอจุดดำ ทุกคนก็รู้แล้วว่าคนเปิดโดน
+         ประกาศเพิ่มมีแต่ทำให้ต้องรออ่านสิ่งที่รู้อยู่แล้ว */
+      return { state: out.state, hands: out.hands };
     }
   },
 

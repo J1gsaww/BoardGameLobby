@@ -23,7 +23,7 @@ import {
   actionsFor, boatsOpen, maroon, pileOf, shuffle, redeal, advance, burnVoteBans, clearVoteWeights,
   buildEventDeck, refillSlots, emptyDeck,
   startVote, voteReady, tallyRow, attackPasses, mutinyPasses, brawlSplit,
-  moveBox, score, winningSide, winners, dealNations, pushLog, refill,
+  moveBox, score, winningSide, winners, dealNations, pushLog, refill, birdStrike,
   attackTargets, takeSides, keepSides, canAttack
 } from './rules.js';
 
@@ -189,6 +189,41 @@ export async function onAction(ctx, action) {
   if (!isPlaying(st, uid)) return null;
   if (!actionsFor(st, uid).includes(type)) return null;
 
+  return settle(ctx, await route(ctx, uid, type, payload));
+}
+
+/* ── กวาดผลข้างเคียงหลังทุกคำสั่ง ──────────────────────────
+   บางกฎถูกจุดชนวนได้จากหลายทางเกินกว่าจะไล่ใส่ทีละที่
+   เช่นนกครบสองตัวบนเรือลำเดียว เกิดได้ทั้งจากได้นกมาใหม่และจากคนย้ายที่
+   ซึ่งการย้ายที่มีจุดเกิดสิบกว่าที่ ถ้าไล่ใส่เองจะลืมแน่
+
+   ตรวจรวมทีเดียวที่นี่จึงพลาดไม่ได้ ไม่ว่าคำสั่งไหนจะเป็นตัวจุดชนวน */
+function settle(ctx, out) {
+  if (!out?.state) return out;
+
+  const hands = out.secrets
+    ? Object.fromEntries(Object.entries(out.secrets)
+        .filter(([u]) => !u.startsWith('_'))
+        .map(([u, s]) => [u, s.vote || []]))
+    : handsOf(ctx);
+
+  const hit = birdStrike(out.state, hands);
+  if (!hit) return out;
+
+  const said = pushLog({ ...hit.state,
+                         shout: { kind: 'birds', place: hit.place, who: hit.who,
+                                  at: (hit.state.logSeq || 0) + 1 } },
+                       'wreck.log.birds', { n: hit.who.length });
+
+  return {
+    ...out,
+    state: said,
+    secrets: { ...(out.secrets || {}), ...secretsFrom(ctx, hit.hands) }
+  };
+}
+
+async function route(ctx, uid, type, payload) {
+  const st = ctx.state;
   switch (type) {
     case 'toBoat':     return toBoat(ctx, uid, payload.boat);
     case 'kick':       return kick(ctx, uid, payload.uid);
@@ -282,9 +317,12 @@ function activate(ctx, uid, { slot }) {
   if (!needs && eff?.run) {
     const hands = handsOf(ctx);
     const out = eff.run(said, uid, null, hands);
-    const done = pushLog({ ...out.state,
-                           shout: { ...out.shout, at: (out.state.logSeq || 0) + 1 } },
-                         'wreck.log.card.' + id, { name: st.names?.[uid] });
+    /* การ์ดที่ไม่คืน shout มา แปลว่าไม่ต้องประกาศผล อย่าสร้างประกาศเปล่าขึ้นมา
+       ไม่งั้นฉากจะขึ้นกล่องว่าง ๆ ให้รออ่านโดยไม่มีอะไรอยู่ข้างใน */
+    const done = pushLog(out.shout
+      ? { ...out.state, shout: { ...out.shout, at: (out.state.logSeq || 0) + 1 } }
+      : out.state,
+      'wreck.log.card.' + id, { name: st.names?.[uid] });
     return {
       state: passTurn(done),
       secrets: { _deck: next, ...cleared,

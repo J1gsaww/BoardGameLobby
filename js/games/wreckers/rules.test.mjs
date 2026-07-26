@@ -13,7 +13,7 @@ import {
   actionsFor, boatsOpen, canShift, maroon, pileOf, redeal, shuffle,
   startVote, voters, voteReady, tallyRow, attackPasses, mutinyPasses, brawlSplit,
   moveBox, countBoxes, score, winningSide, winners, dutchCount, dealNations, dutchAllowed,
-  attackTargets, takeSides, keepSides, canAttack, canVoteNow, refill,
+  attackTargets, takeSides, keepSides, canAttack, canVoteNow, refill, birdStrike,
   holdCard, dropHeld, giveCard, addSkip, owesSkip, burnSkip, advance,
   addVoteBan, isVoteBanned, burnVoteBans, voteWeight, setVoteWeight, clearVoteWeights,
   addMark, markCount, marksIn, clearMark, swapSpots, shuffleQueue,
@@ -1162,7 +1162,8 @@ group('การ์ด · จุดดำ');
   const r = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
   ok('ประกาศชื่อการ์ดให้ทุกคนเห็น', r.state.cardUp.id, 'blackspot');
   ok('คนเปิดโดน Maroon เอง', r.state.pos.a.startsWith('island'), true);
-  ok('ประกาศผลบอกว่าใครโดน', [r.state.shout.kind, r.state.shout.by], ['spot', 'a']);
+  /* ไม่ประกาศผลซ้ำ — เห็นการ์ดก็รู้อยู่แล้วว่าคนเปิดโดน */
+  ok('ไม่มีประกาศผลเพิ่ม', r.state.shout ?? null, null);
   ok('ไม่ต้องเลือกอะไร ผลเกิดทันที', r.state.pending ?? null, null);
   ok('เปิดแล้วผ่านตาไปเลย', r.state.turn, 'b');
   ok('การ์ดลงกองทิ้ง', r.secrets._deck.discard, ['blackspot']);
@@ -1180,4 +1181,35 @@ group('การ์ด · จุดดำ');
   const r = await onAction(ctx, { uid: 'c', type: 'activate', payload: { slot: 0 } });
   ok('ท้ายแถวบนเกาะเปิดเจอ = เสียไพ่ถาวร', r.state.maxVote.c, 2);
   ok('ตำแหน่งไม่ขยับ', r.state.pos.c, 'island:3');
+}
+
+group('การ์ด · นกอัลบาทรอส');
+{
+  const st = board({ a: 'shipL:C', b: 'shipL:F', c: 'shipL:3', d: 'shipR:C', e: 'island:G', f: 'island:2' });
+
+  ok('นกตัวเดียวยังไม่เกิดอะไร', birdStrike(addMark(st, 'a', 'bird'), {}), null);
+
+  const two = addMark(addMark(st, 'a', 'bird'), 'b', 'bird');
+  const hit = birdStrike(two, {}, zero);
+  ok('นกครบสองตัวบนเรือลำเดียว = ทั้งลำโดน', hit.place, 'shipL');
+  ok('โดนทุกคนบนลำนั้น ไม่ใช่แค่คนถือนก', hit.who, ['a', 'b', 'c']);
+  ok('ทุกคนลงเกาะ', ['a', 'b', 'c'].every(u => hit.state.pos[u].startsWith('island')), true);
+  ok('เรืออีกลำไม่เกี่ยว', hit.state.pos.d, 'shipR:C');
+
+  const split = addMark(addMark(st, 'a', 'bird'), 'd', 'bird');
+  ok('นกอยู่คนละลำไม่เกิดอะไร', birdStrike(split, {}), null);
+
+  const isle = addMark(addMark(st, 'e', 'bird'), 'f', 'bird');
+  ok('นกสองตัวบนเกาะไม่เกิดอะไร กฎนี้ใช้กับเรือเท่านั้น', birdStrike(isle, {}), null);
+}
+{
+  /* นกติดตัวคน ย้ายที่แล้วตามไปด้วย จึงเกิดได้จากการย้ายที่ ไม่ใช่แค่ตอนได้นกใหม่ */
+  const st = board({ a: 'shipL:C', b: 'shipR:C', c: 'shipR:F' });
+  const two = addMark(addMark(st, 'a', 'bird'), 'b', 'bird');
+  ok('อยู่คนละลำ ยังไม่เกิด', birdStrike(two, {}), null);
+
+  const moved = { ...two, pos: joinPlace(two.pos, 'a', 'shipR') };
+  const hit = birdStrike(moved, {}, zero);
+  ok('ย้ายมาลำเดียวกันแล้วเกิดทันที', hit?.place, 'shipR');
+  ok('คนที่ไม่ถือนกก็โดนด้วย', hit.who.includes('c'), true);
 }

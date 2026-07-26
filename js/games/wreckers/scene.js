@@ -16,7 +16,7 @@
 import { t } from '../../i18n.js';
 import { VOTE_ART, ICON_EXT } from './vote.js';
 import { takeSides, keepSides, SHIP_CARGO_CAP } from './rules.js';
-import { BASE_CARDS, cardArt } from './events.js';
+import { BASE_CARDS, cardArt, eventArt, eventAlt } from './events.js';
 import { EXTRA_CARDS } from './cards.js';
 import { lang } from '../../i18n.js';
 
@@ -260,11 +260,27 @@ function peekNote(body, st) {
 
 /* ประกาศเหตุการณ์สั้น ๆ อย่างการไล่คนลงจากเรือ */
 function shoutNote(body, st) {
+  const sh = st.shout;
+
+  /* นกโจมตี — ใช้ภาพเต็มกลางกระดาน เพราะเป็นเหตุการณ์ที่กระทบทุกคนบนเรือลำนั้น
+     ประกาศให้เห็นก่อน แล้วกระดานจึงค่อยขยับตามตอนฉากปิด */
+  if (sh.kind === 'birds') {
+    if (goto('collect')) {
+      body.innerHTML = `<div class="wr-strike">
+          <img class="wr-strike-img" src="${esc(eventArt('albatross_strike'))}" alt=""
+            draggable="false" data-alt="${esc(eventAlt('albatross_strike'))}"
+            onerror="if(this.dataset.alt){this.src=this.dataset.alt;this.dataset.alt='';}else{this.remove();}">
+          <p class="wr-strike-line">${esc(t('wreck.scene.birds', { n: sh.who.length }))}</p>
+        </div>`;
+    }
+    if (now() - stageAt < T.linger + 1200) return true;
+    dismissed.add('shout:' + sh.at);
+    closing = true;
+    return false;
+  }
+
   if (goto('collect')) {
-    const sh = st.shout;
-    const msg = sh.kind === 'spot'
-      ? t('wreck.scene.spot', { name: st.names?.[sh.by] || '?' })
-      : sh.kind === 'shot'
+    const msg = sh.kind === 'shot'
       ? t('wreck.scene.shot', {
           name: st.names?.[sh.by] || '?',
           who: st.names?.[sh.who] || '?'
@@ -313,7 +329,10 @@ function cardNote(body, st, ctx) {
   }
 
   const ms = now() - stageAt;
-  const parked = ms > CARD_READ;
+  /* ย่อไปมุมเฉพาะการ์ดที่ต้องให้เลือกเป้า เพราะต้องเปิดกระดานให้คลิก
+     การ์ดที่ผลเกิดทันทีไม่ต้องย่อ ขึ้นกลางจอให้อ่านแล้วปิดไปเลย
+     ย่อไปมุมทั้งที่ไม่มีอะไรให้ทำต่อ มีแต่ทำให้ดูเหมือนเกมยังรออะไรอยู่ */
+  const parked = !!st.pending && ms > CARD_READ;
 
   /* ย่อไปมุม — ต้องเล่นเป็นการเคลื่อนที่จริง ไม่ใช่กระโดด
 
@@ -369,6 +388,9 @@ function titleOf(st, ph, me) {
     return { who: t('wreck.scene.cardUp'), big: st.names?.[st.cardUp.by] || '?' };
   }
   if (st.shout && key.startsWith('shout:')) {
+    if (st.shout.kind === 'birds') {
+      return { who: t('wreck.card.albatross'), big: t('wreck.scene.birdsBig') };
+    }
     return {
       who: t(st.shout.kind === 'shift' ? 'wreck.act.shiftCargo' : 'wreck.role.captain'),
       big: st.names?.[st.shout.by] || '?'
@@ -640,8 +662,11 @@ export const sceneAtAim = () => phase === 'aim';
    เพราะกระดานถูกวาดก่อนที่ฉากจะได้ทำงานในเฟรมเดียวกัน
    ถ้าถามตัวแปรภายใน คำตอบจะยังเป็นค่าของเฟรมที่แล้วเสมอ
    กระดานเลยแอบขยับไปหนึ่งเฟรมก่อนฉากจะเริ่มเล่า */
+/* ค้างกระดานไว้ระหว่างเล่าผล — ทั้งผลโหวตและเหตุการณ์ที่ทำให้คนย้ายที่
+   นกโจมตีก็ต้องค้าง เพราะต้องประกาศก่อนแล้วค่อยเห็นคนถูก Maroon */
 export const sceneHolding = (st) =>
-  !!st?.lastVote && !told.has(st.lastVote.at);
+  (!!st?.lastVote && !told.has(st.lastVote.at))
+  || (st?.shout?.kind === 'birds' && !dismissed.has('shout:' + st.shout.at));
 
 export const setPlanView = () => {};
 export const setPlanWire = () => {};

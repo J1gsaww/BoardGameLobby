@@ -30,6 +30,15 @@ export const cardArt = (id) => `${CARD_ART}${dirOf(id)}/${id}${CARD_EXT}`;
 export const cardArtAlt = (id) => `${CARD_ART}${dirOf(id)}/${id}${CARD_ALT}`;
 /* หลังการ์ด อยู่นอกโฟลเดอร์ standard/special เพราะไม่ใช่การ์ดใบไหนโดยเฉพาะ */
 export const CARD_BACK = `${CARD_ART}back${CARD_EXT}`;
+
+/* ของติดตัวผู้เล่น (เช่นนกจากอัลบาทรอส) กับภาพเหตุการณ์พิเศษ
+   แยกโฟลเดอร์จากการ์ดเพราะไม่ใช่หน้าไพ่ ใช้คนละที่คนละขนาด */
+export const TOKEN_ART = 'assets/game/wreckers/token/';
+export const EVENT_ART = 'assets/game/wreckers/special_event/';
+export const tokenArt = (id) => `${TOKEN_ART}${id}${CARD_EXT}`;
+export const tokenAlt = (id) => `${TOKEN_ART}${id}${CARD_ALT}`;
+export const eventArt = (id) => `${EVENT_ART}${id}${CARD_EXT}`;
+export const eventAlt = (id) => `${EVENT_ART}${id}${CARD_ALT}`;
 export const CARD_BACK_ALT = `${CARD_ART}back${CARD_ALT}`;
 
 export const BASE_CARDS = [

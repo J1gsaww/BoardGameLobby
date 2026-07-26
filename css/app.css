@@ -1627,3 +1627,45 @@ button{ cursor:pointer; border:0; background:none; }
   box-shadow:0 2px 8px rgba(0,0,0,.5);
   pointer-events:none; user-select:none;
 }
+
+/* ── ของติดตัวผู้เล่น (นกจากอัลบาทรอส) ────────────────────
+   เรืองสีคาวเพื่อบอกว่าเป็นของร้าย ไม่ใช่เครื่องประดับ
+   วางมุมล่างซ้ายของหมาก ให้พ้นวงไฟบอกตาที่อยู่รอบตัว */
+.wr-token{
+  position:absolute; left:-4px; bottom:-4px; z-index:12;
+  width:56%; height:auto; pointer-events:none;
+  filter:
+    drop-shadow(0 0 3px #b6ff6a)
+    drop-shadow(0 0 7px rgba(150,230,90,.85))
+    drop-shadow(0 2px 4px rgba(0,0,0,.8));
+  animation:wr-token-pulse 2.1s ease-in-out infinite;
+}
+@keyframes wr-token-pulse{
+  0%,100%{ filter:drop-shadow(0 0 2px #b6ff6a) drop-shadow(0 0 5px rgba(150,230,90,.6))
+                  drop-shadow(0 2px 4px rgba(0,0,0,.8)); }
+  50%    { filter:drop-shadow(0 0 4px #b6ff6a) drop-shadow(0 0 11px rgba(150,230,90,1))
+                  drop-shadow(0 2px 4px rgba(0,0,0,.8)); }
+}
+
+.wr-row-token{
+  width:20px; height:auto; flex:0 0 auto; margin-right:-2px;
+  filter:drop-shadow(0 0 3px #b6ff6a) drop-shadow(0 0 6px rgba(150,230,90,.8));
+}
+
+/* ── ฉากนกถล่มเรือ ────────────────────────────────────── */
+.wr-strike{ display:grid; justify-items:center; gap:8px; }
+.wr-strike-img{
+  width:min(340px, 62vw); height:auto;
+  filter:drop-shadow(0 10px 26px rgba(0,0,0,.8));
+  animation:wr-strike-in .6s cubic-bezier(.15,1.3,.35,1) both;
+}
+@keyframes wr-strike-in{
+  0%  { opacity:0; transform:scale(1.5) translateY(-40px); }
+  60% { opacity:1; transform:scale(.97) translateY(6px); }
+  100%{ opacity:1; transform:none; }
+}
+.wr-strike-line{
+  margin:0; text-align:center; max-width:min(460px, 82vw);
+  font-family:var(--display); font-size:17px; font-weight:700; color:#fdf6e6;
+  text-shadow:0 2px 6px rgba(0,0,0,.9), 0 5px 18px rgba(0,0,0,.6);
+}

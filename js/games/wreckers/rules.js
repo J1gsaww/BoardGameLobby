@@ -673,6 +673,35 @@ export function refillSlots(deck, count) {
   return { ...deck, slots: slots.slice(0, count), draw };
 }
 
+/* ── นกอัลบาทรอสครบสองตัวบนเรือลำเดียว ────────────────────
+   ทั้งลำโดน Maroon ตามลำดับผู้เล่น
+
+   ต้องตรวจหลังทุกอย่างที่ทำให้จำนวนนกในสถานที่เปลี่ยน ซึ่งมีสองทาง
+     ได้นกมาใหม่          — เปิดการ์ดอัลบาทรอส
+     คนย้ายที่             — ลงเรือเล็ก ขึ้นฝั่ง โดนไล่ โดน Maroon สลับตำแหน่ง
+
+   ทางที่สองมีจุดที่ต้องตรวจเยอะเกินกว่าจะไล่ใส่ทีละที่ จึงตรวจรวมทีเดียว
+   หลังทุกคำสั่งแทน ที่ไหนเข้าเงื่อนไขก็จัดการที่นั่น พลาดไม่ได้เลย
+
+   นกไม่หายไปหลังจากนี้ ติดตัวคนไปตลอดจนกว่าจะมีการ์ดมาเก็บคืน
+   จึงเป็นไปได้ที่ลำเดิมจะเข้าเงื่อนไขซ้ำเมื่อมีคนใหม่ถือนกย้ายเข้ามา */
+export function birdStrike(st, hands = {}, rng = Math.random) {
+  for (const ship of SHIP_IDS) {
+    if (marksIn(st, ship, 'bird') < 2) continue;
+
+    const crew = occupants(st.pos, ship);
+    if (!crew.length) continue;
+
+    let cur = st, h = hands;
+    for (const uid of crew) {
+      const out = maroon(cur, uid, h, rng);
+      cur = out.state; h = out.hands;
+    }
+    return { state: cur, hands: h, place: ship, who: crew };
+  }
+  return null;
+}
+
 /* ── บันทึกเหตุการณ์ ───────────────────────────────────────
    เก็บเป็นคีย์ภาษากับพารามิเตอร์ ไม่เก็บเป็นข้อความสำเร็จรูป
    คนละเครื่องตั้งภาษาไม่เหมือนกัน แปลตอนวาดจึงถูกต้องทั้งสองฝั่ง */

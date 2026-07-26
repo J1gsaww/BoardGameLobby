@@ -18,7 +18,8 @@ import { cardById as voteById, voteCard, iconSrc } from './vote.js';
 import { dieSvg, rollPose, HERO, ROLL_MS } from './die.js';
 import { actionsFor, occupants, placeOf, BOAT_IDS, canVoteNow } from './rules.js';
 import { targetsOf } from './effects.js';
-import { BASE_CARDS, cardArt, cardArtAlt, CARD_BACK, CARD_BACK_ALT } from './events.js';
+import { BASE_CARDS, cardArt, cardArtAlt, CARD_BACK, CARD_BACK_ALT,
+         tokenArt, tokenAlt } from './events.js';
 import { paintScene, stopScene, setPlanView, setPlanWire, VOTE_BACK,
          sceneAtAim, sceneHolding } from './scene.js';
 import { EXTRA_CARDS } from './cards.js';
@@ -356,6 +357,24 @@ export function render(el, ctx) {
         ? `<span class="wr-pawn">${avatarFace(uid, st.names?.[uid] || '', (ctx.avatars || {})[uid], null)}</span>`
         : '';
     }
+
+    /* ป้ายของติดตัว วางมุมล่างซ้ายของหมาก แยกจากการวาดรูปประจำตัว
+       เพราะรูปวาดใหม่เฉพาะตอนคนในช่องเปลี่ยน ส่วนป้ายเปลี่ยนได้ตลอดเวลา */
+    const birds = uid ? (view.marks?.[uid]?.bird || 0) : 0;
+    let tok = b.querySelector('.wr-token');
+    if (birds && !tok) {
+      tok = document.createElement('img');
+      tok.className = 'wr-token';
+      tok.draggable = false;
+      tok.src = tokenArt('albatross_icon');
+      tok.dataset.alt = tokenAlt('albatross_icon');
+      tok.title = t('wreck.token.bird');
+      tok.onerror = () => {
+        if (tok.dataset.alt) { tok.src = tok.dataset.alt; tok.dataset.alt = ''; }
+        else tok.remove();
+      };
+      b.appendChild(tok);
+    } else if (!birds && tok) tok.remove();
   });
 
   /* ช่วงกัปตันเล็งเป้า — เรือที่ยิงได้เรืองแสง ชี้แล้วโตขึ้นและเป็นสีแดง คลิกคือเลือก
@@ -1128,8 +1147,15 @@ function paintRoster(el, st, ctx) {
     const role = roleOf(st.pos?.[uid]);
     const turn = st.turn === uid;
     const pick = hot.includes(uid);
+    const birds = st.marks?.[uid]?.bird || 0;
+    const tok = birds
+      ? `<img class="wr-row-token" src="${esc(tokenArt('albatross_icon'))}" alt=""
+           draggable="false" title="${esc(t('wreck.token.bird'))}"
+           data-alt="${esc(tokenAlt('albatross_icon'))}"
+           onerror="if(this.dataset.alt){this.src=this.dataset.alt;this.dataset.alt='';}else{this.remove();}">`
+      : '';
     return `<li class="wr-row${turn ? ' turn' : ''}${pick ? ' pick-target' : ''}"
-      ${pick ? `data-pick="${esc(uid)}"` : ''}>
+      ${pick ? `data-pick="${esc(uid)}"` : ''}>${tok}
       ${avatarFace(uid, st.names?.[uid] || '', (ctx.avatars || {})[uid], 26)}
       <span class="wr-row-name">${esc(st.names?.[uid] || '?')}${uid === ctx.me.uid ? ' \u00b7' : ''}</span>
       ${role ? `<span class="wr-tag wr-tag-${role}">${esc(t('wreck.role.' + role))}</span>` : ''}
