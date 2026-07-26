@@ -86,8 +86,10 @@ function sceneKey(st) {
   if (st.vote) return `ep:${st.vote.caller}:${st.vote.place}`;
   /* ประกาศการแอบดูเป็นฉากสั้น ๆ ของตัวเอง ไม่ปนกับฉากโหวต */
   if (st.lastPeek && !dismissed.has('peek:' + st.lastPeek.at)) return `peek:${st.lastPeek.at}`;
-  if (st.shout && !dismissed.has('shout:' + st.shout.at)) return `shout:${st.shout.at}`;
+  /* การ์ดมาก่อนประกาศผลเสมอ — ต้องรู้ว่าเปิดเจออะไรก่อนถึงจะเข้าใจว่าทำไมถึงเกิดผลนั้น
+     ถ้าสลับลำดับ จะเห็นผลลอย ๆ ก่อนแล้วค่อยรู้ว่ามาจากการ์ดใบไหน */
   if (st.cardUp && !dismissed.has('card:' + st.cardUp.at)) return `card:${st.cardUp.at}`;
+  if (st.shout && !dismissed.has('shout:' + st.shout.at)) return `shout:${st.shout.at}`;
   /* ช่วงรอให้คนเปิดเลือกเป้า — ค้างไว้จนกว่าจะเลือกเสร็จ ไม่มีนับถอยหลัง
      ทุกคนต้องรู้ว่ากำลังอยู่ในช่วงนี้ ไม่ใช่แค่คนที่ต้องเลือก */
   if (st.pending) return `card:${st.pending.at}`;   /* กุญแจเดียวกับตอนเปิด ฉากจึงต่อเนื่อง ไม่กะพริบ */
@@ -260,7 +262,9 @@ function peekNote(body, st) {
 function shoutNote(body, st) {
   if (goto('collect')) {
     const sh = st.shout;
-    const msg = sh.kind === 'shot'
+    const msg = sh.kind === 'spot'
+      ? t('wreck.scene.spot', { name: st.names?.[sh.by] || '?' })
+      : sh.kind === 'shot'
       ? t('wreck.scene.shot', {
           name: st.names?.[sh.by] || '?',
           who: st.names?.[sh.who] || '?'

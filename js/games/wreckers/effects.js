@@ -16,6 +16,20 @@ import { maroon, occupants, placeOf } from './rules.js';
 /* needs ที่รองรับตอนนี้
    'player'  เลือกผู้เล่นหนึ่งคน (ยกเว้นตัวเอง)  */
 export const EFFECTS = {
+  /* จุดดำ — คนที่เปิดโดน Maroon เอง ไม่ต้องเลือกอะไร ผลเกิดทันที
+     เป็นการ์ดใบแรกที่ไม่มี needs จึงเป็นแม่แบบของกลุ่ม "เปิดแล้วเกิดเลย" */
+  blackspot: {
+    needs: null,
+    run: (st, uid, _target, hands) => {
+      const out = maroon(st, uid, hands);
+      return {
+        state: out.state,
+        hands: out.hands,
+        shout: { kind: 'spot', by: uid, who: uid, card: 'blackspot' }
+      };
+    }
+  },
+
   /* ปืนพก — Maroon ใครก็ได้ยกเว้นตัวเอง ข้ามเรือข้ามเกาะได้ */
   pistol: {
     needs: 'player',

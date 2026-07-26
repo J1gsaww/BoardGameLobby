@@ -1151,3 +1151,33 @@ group('ชั้น 3 · จั่วทดแทนเฉพาะใบที�
   const none = refill(seats, hands, { a: 0, b: 3, c: 3 }, zero);
   ok('เพดานเหลือศูนย์ก็ไม่มีไพ่เลย', none.hands.a, []);
 }
+group('การ์ด · จุดดำ');
+{
+  const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+  const deck = { ...out.secrets._deck, slots: ['blackspot', ...out.secrets._deck.slots.slice(1)] };
+  const base = { ...out.state, phase: 'play', turn: 'a', pos: filled().pos,
+                 seats: [...P], names: filled().names, out: [] };
+  const ctx = { ...ctxOf(base), secrets: { ...out.secrets, _deck: deck }, hostUid: 'a' };
+
+  const r = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+  ok('ประกาศชื่อการ์ดให้ทุกคนเห็น', r.state.cardUp.id, 'blackspot');
+  ok('คนเปิดโดน Maroon เอง', r.state.pos.a.startsWith('island'), true);
+  ok('ประกาศผลบอกว่าใครโดน', [r.state.shout.kind, r.state.shout.by], ['spot', 'a']);
+  ok('ไม่ต้องเลือกอะไร ผลเกิดทันที', r.state.pending ?? null, null);
+  ok('เปิดแล้วผ่านตาไปเลย', r.state.turn, 'b');
+  ok('การ์ดลงกองทิ้ง', r.secrets._deck.discard, ['blackspot']);
+  ok('ช่องได้ใบใหม่มาเติม', !!r.secrets._deck.slots[0], true);
+}
+{
+  /* เปิดตอนอยู่ท้ายแถวบนเกาะ = เสียไพ่โหวตถาวร ตามกฎ Maroon ที่เพิ่งเพิ่ม */
+  const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+  const deck = { ...out.secrets._deck, slots: ['blackspot', ...out.secrets._deck.slots.slice(1)] };
+  const pos = { a: 'island:G', b: 'island:2', c: 'island:3', d: 'shipL:C', e: 'shipL:F', f: 'shipR:C' };
+  const base = { ...out.state, phase: 'play', turn: 'c', pos, seats: [...P],
+                 names: filled().names, out: [] };
+  const ctx = { ...ctxOf(base), secrets: { ...out.secrets, _deck: deck }, hostUid: 'a' };
+
+  const r = await onAction(ctx, { uid: 'c', type: 'activate', payload: { slot: 0 } });
+  ok('ท้ายแถวบนเกาะเปิดเจอ = เสียไพ่ถาวร', r.state.maxVote.c, 2);
+  ok('ตำแหน่งไม่ขยับ', r.state.pos.c, 'island:3');
+}

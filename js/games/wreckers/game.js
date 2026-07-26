@@ -275,6 +275,22 @@ function activate(ctx, uid, { slot }) {
   /* การ์ดที่ต้องถามก่อน จะยังไม่ผ่านตา เกมค้างรอคนเปิดเลือกเป้าก่อน
      จังหวะเดียวกับการโหวต ผลจึงไม่โผล่ก่อนที่ฉากจะเล่าถึง */
   const needs = needsOf(id);
+  const eff = effectOf(id);
+
+  /* การ์ดที่ไม่ต้องถามอะไร ผลเกิดทันทีตอนเปิด แล้วผ่านตาไปเลย
+     ฉากจะเล่าสองช่วงต่อกันเอง — โชว์การ์ดก่อน แล้วค่อยประกาศผล */
+  if (!needs && eff?.run) {
+    const hands = handsOf(ctx);
+    const out = eff.run(said, uid, null, hands);
+    const done = pushLog({ ...out.state,
+                           shout: { ...out.shout, at: (out.state.logSeq || 0) + 1 } },
+                         'wreck.log.card.' + id, { name: st.names?.[uid] });
+    return {
+      state: passTurn(done),
+      secrets: { _deck: next, ...cleared,
+                 ...(out.hands === hands ? {} : secretsFrom(ctx, out.hands)) }
+    };
+  }
 
   return {
     state: needs
