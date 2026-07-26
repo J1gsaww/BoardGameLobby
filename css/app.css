@@ -677,11 +677,13 @@ button{ cursor:pointer; border:0; background:none; }
 /* ── ผังหน้าเกม Wreckers สามคอลัมน์ ──────────────── */
 .wr-grid{
   display:grid; gap:12px; align-items:start;
-  grid-template-columns:150px minmax(0,1fr) 216px;
+  /* คอลัมน์รายชื่อกว้างขึ้น เพราะชื่อไทยยาวกว่าที่กะไว้แล้วถูกตัดด้วยจุดสามจุด
+     แถวยังมีป้ายบทบาทกับป้ายนกมาเบียดพื้นที่อีก */
+  grid-template-columns:150px minmax(0,1fr) 268px;
 }
 .wr-side{
   background:rgba(14,11,28,.72); backdrop-filter:blur(2px);
-  border:1px solid var(--line); border-radius:16px; padding:12px;
+  border:1px solid var(--line); border-radius:16px; padding:12px 9px;
 }
 .wr-side h4{
   margin:0 0 10px; font-family:var(--mono); font-size:10.5px;
@@ -711,12 +713,15 @@ button{ cursor:pointer; border:0; background:none; }
 /* ── รายชื่อผู้เล่นพร้อมบทบาท ────────────────────── */
 .wr-list{ list-style:none; margin:0; padding:0; display:grid; gap:6px; }
 .wr-row{
-  display:flex; align-items:center; gap:7px; flex-wrap:wrap;
+  display:flex; align-items:center; gap:6px; flex-wrap:nowrap;
   background:rgba(33,27,58,.7); border:1px solid var(--line);
-  border-radius:10px; padding:7px 9px;
+  border-radius:10px; padding:7px 7px;
 }
 .wr-row.turn{ border-color:var(--lamp); box-shadow:0 0 0 1px var(--lamp) inset; }
-.wr-row-name{ flex:1; font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wr-row-name{
+  flex:1 1 auto; min-width:0; font-size:12.5px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
 .wr-tag{
   font-family:var(--mono); font-size:9.5px; letter-spacing:.04em;
   border-radius:999px; padding:2px 7px; border:1px solid currentColor; flex:0 0 auto;

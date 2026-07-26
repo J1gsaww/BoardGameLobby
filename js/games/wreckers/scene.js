@@ -666,7 +666,17 @@ export const sceneAtAim = () => phase === 'aim';
    นกโจมตีก็ต้องค้าง เพราะต้องประกาศก่อนแล้วค่อยเห็นคนถูก Maroon */
 export const sceneHolding = (st) =>
   (!!st?.lastVote && !told.has(st.lastVote.at))
-  || (st?.shout?.kind === 'birds' && !dismissed.has('shout:' + st.shout.at));
+  || (!!st?.shout?.beforePos && !dismissed.has('shout:' + st.shout.at))
+  || (!!st?.cardUp?.beforePos && !dismissed.has('card:' + st.cardUp.at));
+
+/* ผังที่ควรวาดระหว่างเล่าฉาก — ตัวเหตุการณ์พามาเอง
+   แม่นกว่าให้หน้าจอเก็บภาพไว้เอง เพราะบางทีมีสองอย่างเกิดในการเขียนครั้งเดียว
+   (เช่นขึ้นฝั่งจากเรือเล็กแล้วนกครบพร้อมกัน) ภาพที่เก็บไว้จะเก่าไปหนึ่งจังหวะ */
+export function scenePos(st) {
+  if (st?.shout?.beforePos && !dismissed.has('shout:' + st.shout.at)) return st.shout.beforePos;
+  if (st?.cardUp?.beforePos && !dismissed.has('card:' + st.cardUp.at)) return st.cardUp.beforePos;
+  return null;
+}
 
 export const setPlanView = () => {};
 export const setPlanWire = () => {};

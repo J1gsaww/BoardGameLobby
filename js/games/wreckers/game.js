@@ -210,8 +210,12 @@ function settle(ctx, out) {
   const hit = birdStrike(out.state, hands);
   if (!hit) return out;
 
+  /* ผังที่ควรเห็นตอนประกาศคือ **หลังคนย้ายที่แล้ว แต่ก่อนโดน Maroon**
+     เพราะการย้ายที่เป็นเหตุ ส่วน Maroon เป็นผล ถ้าโชว์ผังก่อนย้ายด้วย
+     คนดูจะไม่เข้าใจว่าทำไมนกถึงครบสองตัว เพราะหมากยังอยู่ที่เดิม */
   const said = pushLog({ ...hit.state,
                          shout: { kind: 'birds', place: hit.place, who: hit.who,
+                                  beforePos: out.state.pos,
                                   at: (hit.state.logSeq || 0) + 1 } },
                        'wreck.log.birds', { n: hit.who.length });
 
@@ -317,6 +321,9 @@ function activate(ctx, uid, { slot }) {
   if (!needs && eff?.run) {
     const hands = handsOf(ctx);
     const out = eff.run(said, uid, null, hands);
+    /* พาผังก่อนเกิดผลไปกับตัวเหตุการณ์เลย หน้าจอจะได้วาดภาพที่ถูกต้อง
+       ระหว่างเล่าฉาก โดยไม่ต้องเดาจากภาพที่ตัวเองเก็บไว้ ซึ่งมักเก่าเกินไป */
+    said.cardUp = { ...said.cardUp, beforePos: st.pos };
     /* การ์ดที่ไม่คืน shout มา แปลว่าไม่ต้องประกาศผล อย่าสร้างประกาศเปล่าขึ้นมา
        ไม่งั้นฉากจะขึ้นกล่องว่าง ๆ ให้รออ่านโดยไม่มีอะไรอยู่ข้างใน */
     const done = pushLog(out.shout
@@ -359,7 +366,8 @@ function useCard(ctx, uid, { target }) {
   /* ล้าง cardUp ด้วย ไม่งั้นพอฉากประกาศผลจบ ฉากเปิดการ์ดจะเด้งกลับมาเล่าซ้ำ
      เพราะมันยังอยู่ในสถานะและยังไม่เคยถูกปิด */
   const next = pushLog({ ...out.state, pending: null, cardUp: null,
-                         shout: { ...out.shout, at: (out.state.logSeq || 0) + 1 } },
+                         shout: { ...out.shout, beforePos: st.pos,
+                                  at: (out.state.logSeq || 0) + 1 } },
                        'wreck.log.card.' + p.card,
                        { name: st.names?.[uid], who: st.names?.[target] });
 

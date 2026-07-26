@@ -21,7 +21,7 @@ import { targetsOf } from './effects.js';
 import { BASE_CARDS, cardArt, cardArtAlt, CARD_BACK, CARD_BACK_ALT,
          tokenArt, tokenAlt } from './events.js';
 import { paintScene, stopScene, setPlanView, setPlanWire, VOTE_BACK,
-         sceneAtAim, sceneHolding } from './scene.js';
+         sceneAtAim, sceneHolding, scenePos } from './scene.js';
 import { EXTRA_CARDS } from './cards.js';
 import { lang } from '../../i18n.js';
 import {
@@ -281,6 +281,10 @@ function preload(el) {
 let frozen = null;
 
 function boardView(st) {
+  /* ตัวเหตุการณ์บอกมาเองว่าควรวาดผังไหน ใช้อันนั้นก่อนเสมอ */
+  const told = scenePos(st);
+  if (told) return { ...st, pos: told, cargo: frozen?.cargo ?? st.cargo };
+
   if (sceneHolding(st) && frozen) return { ...st, pos: frozen.pos, cargo: frozen.cargo };
   frozen = { pos: st.pos, cargo: st.cargo };
   return st;
