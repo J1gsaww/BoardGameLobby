@@ -18,13 +18,13 @@ import {
   holdCard, dropHeld, giveCard, addSkip, owesSkip, burnSkip, advance,
   addVoteBan, isVoteBanned, burnVoteBans, voteWeight, setVoteWeight, clearVoteWeights,
   addMark, markCount, marksIn, clearMark, swapSpots, shuffleQueue,
-  addShield, hasShield, burnShield, insertBehind, addVoter,
+  addShield, hasShield, burnShield, insertBehind, addVoter, boatsFromAll,
   buildEventDeck, refillSlots,
   SHIP_CARGO_CAP, TOTAL_BOXES, pushLog, LOG_MAX
 } from './rules.js';
 import { onAction, init, tick, finish, passTurn, openTurn } from './game.js';
 import { DECK } from './vote.js';
-import { shipsWithRoom, canUseCard, MAP_CARDS, playWindow, pickCountOf } from './effects.js';
+import { shipsWithRoom, canUseCard, MAP_CARDS, playWindow, pickCountOf, targetsOf } from './effects.js';
 import { BASE_CARDS, BASE_TOTAL, baseById, ENDER } from './events.js';
 import { EXTRA_CARDS } from './cards.js';
 
@@ -1711,4 +1711,46 @@ group('รังกา · เลือกตัวเองได้');
   const done = await onAction(c2, { uid: 'a', type: 'useCard', payload: { cards: pick } });
   ok('มือตัวเองถูกเปลี่ยนตามที่เลือก', done.secrets.a.vote, pick);
   ok('ประกาศบอกว่าเป้าคือตัวเอง', done.state.shout.who, 'a');
+}
+
+group('การ์ด · ดินปืน');
+{
+  const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+  const deck = { ...out.secrets._deck, slots: ['blackpowder', ...out.secrets._deck.slots.slice(1)] };
+  const base = { ...out.state, phase: 'play', turn: 'a', pos: filled().pos,
+                 seats: [...P], names: filled().names, out: [] };
+  const ctx = { ...ctxOf(base), secrets: { ...out.secrets, _deck: deck }, hostUid: 'a' };
+
+  const up = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+  ok('ขั้นแรกเลือกเรือเล็ก', up.state.pending.needs, 'boat');
+  ok('เลือกได้ทั้งสองลำตอนยังไม่มีลำไหนพัง',
+     targetsOf(up.state, 'a', 'blackpowder', 'boat', {}), ['boatL', 'boatR']);
+
+  const boom = await onAction({ ...ctx, state: up.state },
+                              { uid: 'a', type: 'useCard', payload: { target: 'boatL' } });
+  ok('ลำนั้นถูกบันทึกว่าพังแล้ว', boom.state.wrecked, ['boatL']);
+  ok('ประกาศบอกว่าระเบิดลำไหน', [boom.state.shout.kind, boom.state.shout.place], ['powder', 'boatL']);
+  ok('ใช้เสร็จแล้วผ่านตา', boom.state.turn, 'b');
+
+  ok('ลงเรือลำที่พังไม่ได้อีก', boatsOpen(boom.state, 'shipL:C').includes('boatL'), false);
+  ok('อีกลำยังลงได้', boatsOpen(boom.state, 'shipR:C'), ['boatR']);
+  ok('หน้าจอยังรู้ว่ามีลำนั้นอยู่ เพื่อโชว์ปุ่มแบบทึบ',
+     boatsFromAll('shipL:C'), ['boatL']);
+  ok('ระเบิดลำเดิมซ้ำไม่ได้',
+     targetsOf(boom.state, 'a', 'blackpowder', 'boat', {}), ['boatR']);
+}
+{
+  /* มีคนนั่งอยู่บนลำนั้น = ตกน้ำขึ้นเกาะ */
+  const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+  const deck = { ...out.secrets._deck, slots: ['blackpowder', ...out.secrets._deck.slots.slice(1)] };
+  const pos = { ...filled().pos, c: 'boatL:B' };
+  const base = { ...out.state, phase: 'play', turn: 'a', pos, seats: [...P],
+                 names: filled().names, out: [] };
+  const ctx = { ...ctxOf(base), secrets: { ...out.secrets, _deck: deck }, hostUid: 'a' };
+
+  const up = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+  const boom = await onAction({ ...ctx, state: up.state },
+                              { uid: 'a', type: 'useCard', payload: { target: 'boatL' } });
+  ok('คนบนเรือลำนั้นขึ้นเกาะ', placeOf(boom.state.pos.c), 'island');
+  ok('ประกาศบอกว่าใครตกน้ำ', boom.state.shout.who, 'c');
 }

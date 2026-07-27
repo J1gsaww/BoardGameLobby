@@ -12,7 +12,8 @@
    ───────────────────────────────────────────────────────────── */
 
 import { maroon, occupants, placeOf, addMark, joinPlace, capacityOf, SHIP_IDS,
-         insertBehind, nextSeat, swapSpots, shuffleQueue, pileOf } from './rules.js';
+         insertBehind, nextSeat, swapSpots, shuffleQueue, pileOf,
+         BOAT_IDS, isWrecked } from './rules.js';
 
 /* การ์ดหนึ่งใบประกาศได้สี่อย่าง ใส่เท่าที่ต้องใช้
 
@@ -41,6 +42,31 @@ export const EFFECTS = {
       /* บอกหน้าจอว่าใครเพิ่งสลับ จะได้ไฮไลท์ให้เห็นว่าเกิดอะไรขึ้นกับใคร
          ไม่ใช่ประกาศเป็นฉาก แค่เรืองรอบตัวสองวินาที */
       return { state: { ...st, pos, glow: { uids: [uid, target], at: (st.logSeq || 0) + 1 } }, hands };
+    }
+  },
+
+  /* ดินปืน — ระเบิดเรือเล็กทิ้งหนึ่งลำ ใช้ไม่ได้อีกตลอดเกม
+     ถ้ามีคนนั่งอยู่บนลำนั้น เขาตกน้ำแล้วขึ้นเกาะ ตามหลักเดียวกับการโดนทิ้งเกาะ
+     ลำที่พังไปแล้วเลือกซ้ำไม่ได้ เพราะไม่มีอะไรให้ระเบิดอีก */
+  blackpowder: {
+    steps: ['boat'],
+    ask: { boat: 'powder.boat' },
+    targets: (st, uid, step) => step === 'boat'
+      ? BOAT_IDS.filter(b => !isWrecked(st, b))
+      : [],
+    run: (st, uid, picks, hands) => {
+      const boat = picks.boat;
+      const rider = (st.seats || []).find(u => placeOf(st.pos?.[u]) === boat);
+      let cur = { ...st, wrecked: [...(st.wrecked || []), boat] };
+      let h = hands;
+      if (rider) {
+        const out = maroon(cur, rider, h);
+        cur = out.state; h = out.hands;
+      }
+      return {
+        state: cur, hands: h,
+        shout: { kind: 'powder', by: uid, place: boat, who: rider || null, card: 'blackpowder' }
+      };
     }
   },
 

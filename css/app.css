@@ -1810,3 +1810,10 @@ button{ cursor:pointer; border:0; background:none; }
 .wr-pool-go{ min-width:140px; color:var(--mint); }
 .wr-pool-go:disabled{ opacity:.4; color:var(--muted); cursor:not-allowed; }
 .wr-pool-go:not(:disabled):hover{ color:#241704; }
+
+/* เรือเล็กที่โดนระเบิด — ย่อลง 15% และหรี่ลงนิดหน่อยให้เห็นว่าใช้ไม่ได้แล้ว
+   ย่อด้วยการวาด ไม่ใช่แก้ไฟล์ จะได้ปรับตัวเลขทีหลังโดยไม่ต้องส่งรูปใหม่ */
+.wr-piece.wrecked .wr-art{
+  transform:scale(.85);
+  filter:saturate(.75) brightness(.92);
+}

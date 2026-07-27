@@ -295,7 +295,13 @@ function shoutNote(body, st) {
   }
 
   if (goto('collect')) {
-    const msg = sh.kind === 'crow'
+    const msg = sh.kind === 'powder'
+      ? t(sh.who ? 'wreck.scene.powderRider' : 'wreck.scene.powder', {
+          name: st.names?.[sh.by] || '?',
+          place: t('wreck.place.' + sh.place),
+          who: st.names?.[sh.who] || '?'
+        })
+      : sh.kind === 'crow'
       ? t('wreck.scene.crow', {
           name: st.names?.[sh.by] || '?', who: st.names?.[sh.who] || '?' })
       : sh.kind === 'atlantis'
@@ -585,6 +591,8 @@ function titleOf(st, ph, me) {
       marque:  'wreck.card.marque',
       saved:   'wreck.card.' + (st.shout.card || 'fountain'),
       atlantis: 'wreck.card.atlantis',
+      powder:   'wreck.card.blackpowder',
+      crow:     'wreck.card.crowsnest',
       gaveMap: 'wreck.card.' + (st.shout.card || 'fountain')
     };
     return {

@@ -16,7 +16,7 @@ import { face as avatarFace } from '../../avatar.js';
 import { mountSea, stopSea } from './sea.js';
 import { cardById as voteById, voteCard, iconSrc } from './vote.js';
 import { dieSvg, rollPose, HERO, ROLL_MS } from './die.js';
-import { actionsFor, occupants, placeOf, BOAT_IDS, canVoteNow } from './rules.js';
+import { actionsFor, occupants, placeOf, BOAT_IDS, canVoteNow, isWrecked, boatsFromAll } from './rules.js';
 import { targetsOf, canUseCard, askKey, canPlayNow, playWindow } from './effects.js';
 import { BASE_CARDS, cardArt, cardArtAlt, CARD_BACK, CARD_BACK_ALT,
          tokenArt, tokenAlt } from './events.js';
@@ -347,7 +347,9 @@ export function render(el, ctx) {
   const pickable = pend
     ? targetsOf(st, ctx.me.uid, pend.card, pickStep, pend.picks || {}) : [];
   const cardTargets = pickStep === 'player' ? pickable : [];
-  const shipTargets = pickStep === 'ship' ? pickable : [];
+  /* เป้าที่เป็นชิ้นบนกระดาน — เรือใหญ่หรือเรือเล็กก็ใช้ไฮไลท์ชุดเดียวกัน
+     เพราะในสายตาคนเล่นเป็นการกระทำแบบเดียวกัน คือชี้ไปที่ของบนกระดานแล้วเลือก */
+  const shipTargets = (pickStep === 'ship' || pickStep === 'boat') ? pickable : [];
 
   /* คนที่เพิ่งโดนสลับที่ — เริ่มนับสองวินาทีตอนที่กระดานวาดจริงเป็นครั้งแรก
      นับจากเวลาที่เกิดเหตุไม่ได้ เพราะกระดานถูกค้างไว้ระหว่างฉากเล่า
@@ -417,6 +419,25 @@ export function render(el, ctx) {
   /* ไฮไลท์เรือได้ก็ต่อเมื่อฉากเล่าถึงช่วงเลือกแล้วจริง ๆ
      ไม่ใช่ทันทีที่สถานะมี aim ซึ่งเกิดพร้อมกับตอนผลเพิ่งเริ่มขึ้น */
   const aimMine = st.aim && st.aim.by === ctx.me.uid && !st.aim.target && sceneAtAim();
+  /* เรือเล็กที่โดนระเบิด — เปลี่ยนภาพเป็นซาก และย่อลง 15%
+     ย่อด้วยการวาดแทนการแก้ไฟล์ จะได้ปรับตัวเลขทีหลังได้โดยไม่ต้องส่งรูปใหม่ */
+  for (const boat of BOAT_IDS) {
+    const node = el.querySelector(`[data-piece="${boat}"]`);
+    if (!node) continue;
+    const gone = isWrecked(view, boat);
+    node.classList.toggle('wrecked', gone);
+    const img = node.querySelector('.wr-art');
+    if (!img) continue;
+    const want = gone ? 'broken_rowboat' : 'Rowboat';
+    if (img.dataset.art !== want) {
+      img.dataset.art = want;
+      img.src = `${ART}${want}${gone ? '.webp' : '.png'}`;
+      if (gone) {
+        img.onerror = () => { img.onerror = null; img.src = `${ART}broken_rowboat.png`; };
+      }
+    }
+  }
+
   /* กล่องที่กำลังจะย้าย เรืองเหลืองไว้ให้เห็นว่าเลือกใบไหนอยู่ */
   el.querySelectorAll('[data-cargo]').forEach(b => {
     b.classList.toggle('picked', plan?.act === 'shiftCargo' && plan.box === b.dataset.cargo);
@@ -933,17 +954,21 @@ function pawnMenu(st, ctx) {
         </button>`);
     }
 
-    const boats = boatsFrom(spot);
+    /* ลำที่โดนระเบิดไปแล้ว ยังโชว์ปุ่มไว้แต่กดไม่ได้
+       ซ่อนไปเลยจะทำให้คนงงว่าทางนี้หายไปไหน เห็นแล้วทึบเข้าใจง่ายกว่า */
+    const boatWhy = (b) => isWrecked(st, b) ? t('wreck.boatGone')
+      : boatFree(st.pos, b) ? '' : t('wreck.boatTaken');
+    const boatOk = (b) => !isWrecked(st, b) && boatFree(st.pos, b);
+
+    const boats = boatsFromAll(spot);
     if (boats.length === 1) {
-      const free = boatFree(st.pos, boats[0]);
-      rows.push(btnRow('move', t('wreck.act.toBoat'), free, boats[0] + ':x',
-        free ? '' : t('wreck.boatTaken')));
+      rows.push(btnRow('move', t('wreck.act.toBoat'), boatOk(boats[0]), boats[0] + ':x',
+        boatWhy(boats[0])));
     } else if (boats.length === 2) {
       rows.push(`<div class="wr-menu-two">` + boats.map(b => {
-        const free = boatFree(st.pos, b);
         const label = t(b === 'boatL' ? 'wreck.act.toBoatL' : 'wreck.act.toBoatR');
         return `<button class="wr-menu-btn" data-do="move" data-arg="${b}:x"
-          ${free ? '' : 'disabled'} title="${esc(free ? '' : t('wreck.boatTaken'))}">${esc(label)}</button>`;
+          ${boatOk(b) ? '' : 'disabled'} title="${esc(boatWhy(b))}">${esc(label)}</button>`;
       }).join('') + `</div>`);
     }
   } else {
@@ -1029,13 +1054,16 @@ function paintActions(el, st, ctx) {
   const btn = (k, on = can.includes(k)) =>
     `<button class="wr-act" data-do="${k}"${on ? '' : ' disabled'}>${esc(t('wreck.act.' + k))}</button>`;
 
-  const boats = boatsFrom(spot);
+  const boats = boatsFromAll(spot);
   const boatBtn = (b) => {
-    const free = boatFree(st.pos, b) && can.includes('toBoat');
+    const gone = isWrecked(st, b);
+    const free = !gone && boatFree(st.pos, b) && can.includes('toBoat');
     const key = boats.length === 1 ? 'wreck.act.toBoat'
               : b === 'boatL' ? 'wreck.act.toBoatL' : 'wreck.act.toBoatR';
+    const why = gone ? t('wreck.boatGone')
+      : boatFree(st.pos, b) ? '' : t('wreck.boatTaken');
     return `<button class="wr-act" data-boat="${b}"${free ? '' : ' disabled'}
-      title="${esc(boatFree(st.pos, b) ? '' : t('wreck.boatTaken'))}">${esc(t(key))}</button>`;
+      title="${esc(why)}">${esc(t(key))}</button>`;
   };
   const boatRow = !boats.length ? ''
     : boats.length === 1 ? boatBtn(boats[0])

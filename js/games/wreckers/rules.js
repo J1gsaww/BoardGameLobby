@@ -196,8 +196,20 @@ export function boatsOpen(st, spot) {
   const taken = new Set(Object.values(st.pos || {}).map(placeOf));
   const reach = place === 'shipL' ? ['boatL'] : place === 'shipR' ? ['boatR']
               : place === 'island' ? ['boatL', 'boatR'] : [];
-  return reach.filter(b => !taken.has(b));
+  /* ลำที่โดนระเบิดไปแล้วใช้ไม่ได้อีกตลอดเกม */
+  return reach.filter(b => !taken.has(b) && !isWrecked(st, b));
 }
+
+/* เรือเล็กที่ไปถึงได้จากตรงนี้ — รวมลำที่พังแล้วด้วย
+   หน้าจอต้องรู้ว่ามีลำนั้นอยู่ เพื่อจะได้โชว์ปุ่มแบบทึบ ไม่ใช่ซ่อนหายไปเฉย ๆ */
+export const boatsFromAll = (spot) => {
+  const place = placeOf(spot);
+  return place === 'shipL' ? ['boatL'] : place === 'shipR' ? ['boatR']
+       : place === 'island' ? ['boatL', 'boatR'] : [];
+};
+
+/* เรือเล็กลำนี้พังไปแล้วหรือยัง */
+export const isWrecked = (st, boat) => (st.wrecked || []).includes(boat);
 
 /* ลูกเรือย้ายกล่องได้ — สามช่องท้ายเรือ หรือคนท้ายสุดถ้าบนเรือมีไม่ถึงสามคน
    ผู้ว่าฯ ไม่ได้ใช้ Action นี้ เพราะบนเกาะย้ายกล่องต้องผ่านการโหวตเท่านั้น */
