@@ -291,7 +291,13 @@ function shoutNote(body, st) {
   }
 
   if (goto('collect')) {
-    const msg = sh.kind === 'saved'
+    const msg = sh.kind === 'atlantis'
+      ? t(sh.spill?.length ? 'wreck.scene.atlantisSpill' : 'wreck.scene.atlantis', {
+          name: st.names?.[sh.by] || '?',
+          who: st.names?.[sh.who] || '?',
+          n: sh.spill?.length || 0
+        })
+      : sh.kind === 'saved'
       ? t('wreck.scene.savedBy', {
           name: st.names?.[sh.by] || '?', card: t('wreck.card.' + sh.card) })
       : sh.kind === 'gaveMap'
@@ -462,6 +468,7 @@ function titleOf(st, ph, me) {
       shot:    'wreck.card.pistol',
       marque:  'wreck.card.marque',
       saved:   'wreck.card.' + (st.shout.card || 'fountain'),
+      atlantis: 'wreck.card.atlantis',
       gaveMap: 'wreck.card.' + (st.shout.card || 'fountain')
     };
     return {

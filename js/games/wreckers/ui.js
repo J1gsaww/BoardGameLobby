@@ -16,7 +16,7 @@ import { face as avatarFace } from '../../avatar.js';
 import { mountSea, stopSea } from './sea.js';
 import { cardById as voteById, voteCard, iconSrc } from './vote.js';
 import { dieSvg, rollPose, HERO, ROLL_MS } from './die.js';
-import { actionsFor, occupants, placeOf, BOAT_IDS, canVoteNow } from './rules.js';
+import { actionsFor, occupants, placeOf, BOAT_IDS, canVoteNow, anytimeCards } from './rules.js';
 import { targetsOf, canUseCard, askKey } from './effects.js';
 import { BASE_CARDS, cardArt, cardArtAlt, CARD_BACK, CARD_BACK_ALT,
          tokenArt, tokenAlt } from './events.js';
@@ -517,7 +517,10 @@ function paintHand(el, st, ctx) {
     (ctx.secret?.held || []).map(id => {
       const c = eventById(id);
       const info = c ? (c[lang] || c.th) : null;
-      const usable = canUseCard(st, me, id) && actionsFor(st, me).includes('playHeld');
+      /* ใบที่ใช้ได้ในตาคนอื่นด้วย ต้องกดได้แม้ยังไม่ถึงตาเรา */
+      const anytime = anytimeCards(st, me, ctx.secret?.held || []).includes(id);
+      const usable = canUseCard(st, me, id)
+        && (anytime || actionsFor(st, me).includes('playHeld'));
       return `<button class="wr-card wr-held${usable ? ' ready' : ' off'}"
         data-held="${esc(id)}"${usable ? '' : ' disabled'}
         title="${esc(info ? `${info.name} — ${info.desc}` : id)}">
@@ -878,6 +881,12 @@ function pawnMenu(st, ctx) {
     const viaCards = ['activate', 'peek', 'force'];
     const acts = actionsFor(st, meUid)
       .filter(k => !['voteCard', 'toBoat'].includes(k) && !viaCards.includes(k));
+
+    /* การ์ดที่ใช้ได้ในตาคนอื่น ต้องมีปุ่มแม้ยังไม่ถึงตาเรา
+       ไม่งั้นจะใช้ไม่ได้เลย เพราะโอกาสใช้คือตอนที่ยังไม่ถึงตาตัวเอง */
+    const anyNow = anytimeCards(st, meUid, ctx.secret?.held || []);
+    if (anyNow.length && !acts.includes('playHeld')) acts.push('playHeld');
+
     acts.forEach(k => {
       if (k !== 'playHeld') { rows.push(btnRow(k, t('wreck.act.' + k), true)); return; }
       /* การ์ดในมือแต่ละใบเป็นปุ่มของตัวเอง ทึบเมื่อใช้ตอนนี้ไม่ได้

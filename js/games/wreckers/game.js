@@ -15,7 +15,8 @@ import {
 } from './board.js';
 import { deal } from './vote.js';
 import { BASE_CARDS, ENDER, ENDER_ZONE } from './events.js';
-import { effectOf, targetsOf, nextStep, keepsInHand, canUseCard } from './effects.js';
+import { effectOf, targetsOf, nextStep, keepsInHand, canUseCard,
+         usableAnytime, isDeferred } from './effects.js';
 import { EXTRA_CARDS } from './cards.js';
 import {
   SHIP_IDS, BOAT_IDS, BOAT_LINK, VOTE_ROW,
@@ -23,7 +24,7 @@ import {
   actionsFor, boatsOpen, maroon, pileOf, shuffle, redeal, advance, burnVoteBans, clearVoteWeights,
   buildEventDeck, refillSlots, emptyDeck,
   startVote, voteReady, tallyRow, attackPasses, mutinyPasses, brawlSplit,
-  moveBox, score, winningSide, winners, dealNations, pushLog, refill, birdStrike, SAVE_CARDS,
+  moveBox, score, winningSide, winners, dealNations, pushLog, refill, birdStrike, SAVE_CARDS, nextSeat,
   attackTargets, takeSides, keepSides, canAttack
 } from './rules.js';
 
@@ -193,6 +194,12 @@ export async function onAction(ctx, action) {
      เพราะคนที่ถูกถามมักไม่ใช่คนที่ถึงตา เช่นโดนคนอื่นยิงหรือโดนนกถล่มทั้งลำ */
   if (type === 'useSave') return settle(ctx, useSave(ctx, uid, payload));
 
+  /* การ์ดบางใบใช้ได้ในตาของใครก็ได้ (เช่นแอตแลนติสที่ใช้แทรกตาคนอื่น)
+     จึงต้องผ่านด่านนี้ก่อนถึงการตรวจว่าถึงตาหรือยัง */
+  if (type === 'playHeld' && usableAnytime(payload.card)) {
+    return settle(ctx, playHeld(ctx, uid, payload));
+  }
+
   if (st.turn !== uid || st.vote) return null;
   if (!isPlaying(st, uid)) return null;
   if (!actionsFor(st, uid).includes(type)) return null;
@@ -208,6 +215,13 @@ export async function onAction(ctx, action) {
    ตรวจรวมทีเดียวที่นี่จึงพลาดไม่ได้ ไม่ว่าคำสั่งไหนจะเป็นตัวจุดชนวน */
 function settle(ctx, out) {
   if (!out?.state) return out;
+
+  /* การ์ดที่จองไว้ให้ทำหลังจบตา — ทำตอนที่ตาเพิ่งผ่านไปจริง ๆ
+     เทียบว่าใครถึงตาก่อนกับหลัง ถ้าเปลี่ยนแปลว่าตาจบแล้ว
+     ทำที่นี่จุดเดียวเพราะตาจบได้จากหลายทาง ทั้งลงมือเอง หมดเวลา และโดนข้าม */
+  if (out.state.queued && out.state.turn !== ctx.state.turn) {
+    out = runQueued(ctx, out);
+  }
 
   const hands = out.secrets
     ? Object.fromEntries(Object.entries(out.secrets)
@@ -231,6 +245,32 @@ function settle(ctx, out) {
     ...out,
     state: said,
     secrets: { ...(out.secrets || {}), ...secretsFrom(ctx, hit.hands) }
+  };
+}
+
+/* ทำการ์ดที่จองไว้ ตอนนี้ตาผ่านไปแล้ว ผลจึงไม่ไปแทรกกลางคันของใคร */
+function runQueued(ctx, out) {
+  const st = out.state;
+  const q = st.queued;
+  const e = effectOf(q.card);
+  if (!e?.run) return { ...out, state: { ...st, queued: null } };
+
+  const hands = out.secrets
+    ? Object.fromEntries(Object.entries(out.secrets)
+        .filter(([u]) => !u.startsWith('_'))
+        .map(([u, s]) => [u, s.vote || []]))
+    : handsOf(ctx);
+
+  const res = e.run({ ...st, queued: null }, q.by, { target: q.target }, hands);
+  const said = pushLog({ ...res.state,
+                         ...(res.shout ? { shout: { ...res.shout, beforePos: st.pos,
+                                                    at: (res.state.logSeq || 0) + 1 } } : {}) },
+                       'wreck.log.card.' + q.card, { name: st.names?.[q.by] });
+
+  return {
+    ...out,
+    state: said,
+    secrets: { ...(out.secrets || {}), ...(res.hands === hands ? {} : secretsFrom(ctx, res.hands)) }
   };
 }
 
@@ -435,6 +475,24 @@ function playHeld(ctx, uid, { card }) {
 
   const first = nextStep(card, {});
   const at = (st.logSeq || 0) + 1;
+
+  /* การ์ดที่ผลต้องรอจบตา — จองไว้เฉย ๆ ยังไม่เกิดอะไรและไม่ขึ้นฉาก
+     คนอื่นเห็นแค่จำนวนไพ่ในมือเขาลดลง ไม่รู้ว่าจองอะไรไว้
+     ตัวกวาดหลังคำสั่งจะหยิบไปทำตอนตาผ่านไปแล้ว */
+  if (isDeferred(card)) {
+    const mine = ctx.secrets?.[uid] || {};
+    const bag = (mine.held || []).filter((c, i, a) => i !== a.indexOf(card));
+    return {
+      state: pushLog({ ...st,
+        /* ล็อกเป้าไว้ตั้งแต่ตอนกด ไม่ใช่ตอนผลเกิด
+           เพราะผลเกิดหลังตาผ่านไปแล้ว คนถัดไปจะกลายเป็นอีกคน
+           เจตนาของคนใช้คือแทรกหลังคนที่กำลังจะเล่นตอนที่เขากด */
+        queued: { card, by: uid, at, target: nextSeat(st) },
+        held: { ...st.held, [uid]: bag.length }
+      }, 'wreck.log.queued', { name: st.names?.[uid] }),
+      secrets: { [uid]: { ...mine, held: bag } }
+    };
+  }
 
   return {
     state: pushLog({ ...st,

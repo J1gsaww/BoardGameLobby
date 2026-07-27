@@ -117,6 +117,17 @@ export function advance(st, from = st.turn) {
    ทำอัตโนมัติตอนเปิดตา ไม่กินสิทธิ์ Action */
 export const COMMON = ['activate', 'peek', 'force', 'toBoat'];
 
+/* การ์ดในมือที่ใช้ได้ในตาของใครก็ได้ — แยกออกมาเพราะไม่ผ่านด่านตรวจตา */
+export function anytimeCards(st, uid, held = []) {
+  if (st.phase !== 'play' || st.vote || st.saveAsk || st.pending || st.queued) return [];
+  if (!isPlaying(st, uid)) return [];
+  return held.filter(c => ANYTIME.has(c));
+}
+
+/* รายชื่อการ์ดที่ใช้ได้ตลอด — rules.js ห้ามพึ่ง effects.js เพราะ effects พึ่ง rules อยู่แล้ว
+   ถ้าอ้างกันไปมาจะเกิดวงกลม จึงประกาศไว้ที่นี่แล้วให้ทั้งสองฝั่งอ่านตัวเดียวกัน */
+export const ANYTIME = new Set(['atlantis']);
+
 export function actionsFor(st, uid) {
   if (st.phase !== 'play') return [];
 

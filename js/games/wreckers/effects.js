@@ -11,7 +11,8 @@
    แล้วค่อยผ่านตาตอนที่ผลถูกใช้จริง จังหวะจึงเหมือนกับการโหวตที่ทำไว้แล้ว
    ───────────────────────────────────────────────────────────── */
 
-import { maroon, occupants, placeOf, addMark, joinPlace, capacityOf, SHIP_IDS } from './rules.js';
+import { maroon, occupants, placeOf, addMark, joinPlace, capacityOf, SHIP_IDS,
+         insertBehind, nextSeat } from './rules.js';
 
 /* การ์ดหนึ่งใบประกาศได้สี่อย่าง ใส่เท่าที่ต้องใช้
 
@@ -101,6 +102,42 @@ for (const id of MAP_CARDS) {
     })
   };
 }
+
+/* แอตแลนติส — ย้ายตัวเองไปยืนข้างหลังคนที่จะเล่นตาถัดไป
+   คนที่ถูกล่นจนเกินความจุของที่นั่นโดน Maroon
+
+   สองอย่างที่ทำให้ใบนี้ต่างจากใบอื่น
+     whenever  ใช้ได้ในตาของใครก็ได้ ไม่ต้องรอตาตัวเอง
+     defer     ผลกับฉากรอให้เจ้าของตาทำ Action เสร็จก่อน แล้วค่อยเกิด
+               ไม่งั้นจะไปแทรกกลางคันจนคนที่กำลังเล่นอยู่งง */
+EFFECTS.atlantis = {
+  whenever: true,
+  defer: true,
+  run: (st, uid, picks, hands) => {
+    /* เป้าถูกล็อกไว้ตั้งแต่ตอนกดใช้ ไม่คำนวณใหม่ตอนนี้ */
+    const target = picks?.target || nextSeat(st);
+    const ins = insertBehind(st.pos, uid, target);
+    if (!ins) return { state: st, hands };
+
+    let cur = { ...st, pos: ins.pos };
+    let h = hands;
+    for (const u of ins.spill) {
+      const out = maroon(cur, u, h);
+      cur = out.state; h = out.hands;
+      /* เจอคนมีการ์ดกัน = หยุดไว้ก่อน ตัวกวาดหลังคำสั่งจะทำต่อให้หลังเขาตอบ */
+      if (out.kind === 'ask') break;
+    }
+
+    return {
+      state: cur, hands: h,
+      shout: { kind: 'atlantis', by: uid, who: target, spill: ins.spill, card: 'atlantis' }
+    };
+  }
+};
+
+/* ใช้ได้ในตาคนอื่นไหม · ผลต้องรอจบตาก่อนไหม */
+export const usableAnytime = (id) => !!effectOf(id)?.whenever;
+export const isDeferred = (id) => !!effectOf(id)?.defer;
 
 export const effectOf = (id) => EFFECTS[id] || null;
 

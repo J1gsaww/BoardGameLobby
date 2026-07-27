@@ -14,6 +14,7 @@ import {
   startVote, voters, voteReady, tallyRow, attackPasses, mutinyPasses, brawlSplit,
   moveBox, countBoxes, score, winningSide, winners, dutchCount, dealNations, dutchAllowed,
   attackTargets, takeSides, keepSides, canAttack, canVoteNow, refill, birdStrike,
+  anytimeCards,
   holdCard, dropHeld, giveCard, addSkip, owesSkip, burnSkip, advance,
   addVoteBan, isVoteBanned, burnVoteBans, voteWeight, setVoteWeight, clearVoteWeights,
   addMark, markCount, marksIn, clearMark, swapSpots, shuffleQueue,
@@ -1372,4 +1373,42 @@ group('การ์ดกัน Maroon · ไม่ประกาศผลท�
   ok('การ์ดถูกใช้ไปแล้ว', yes.state.saves.b ?? null, null);
   ok('ประกาศตอนนี้แหละ ไม่ใช่ก่อนหน้า', yes.state.shout.kind, 'saved');
   ok('ประกาศบอกว่าใช้ใบไหน', yes.state.shout.card, 'fountain');
+}
+
+group('การ์ด · แอตแลนติส');
+{
+  const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+  const seats = ['a', 'b', 'c', 'd', 'e', 'f'];
+  const st = { ...filled(), seats, turn: 'b', held: { e: 1 },
+               pos: { a: 'shipL:C', b: 'shipL:F', c: 'shipR:C', d: 'shipR:F', e: 'island:G', f: 'island:2' } };
+  const sec = { ...ctxOf(st).secrets, e: { ...ctxOf(st).secrets.e, held: ['atlantis'] } };
+  const ctx = { ...ctxOf(st), secrets: { ...sec, _deck: out.secrets._deck }, hostUid: 'a' };
+
+  ok('คนถัดไปคือ c', nextSeat(st), 'c');
+  ok('ใช้ได้ทั้งที่ไม่ใช่ตาตัวเอง', anytimeCards(st, 'e', ['atlantis']), ['atlantis']);
+  ok('การ์ดที่ไม่ใช่แบบนี้ใช้ในตาคนอื่นไม่ได้', anytimeCards(st, 'e', ['marque']), []);
+
+  const q = await onAction(ctx, { uid: 'e', type: 'playHeld', payload: { card: 'atlantis' } });
+  ok('จองไว้ ยังไม่เกิดผล', q.state.pos.e, 'island:G');
+  ok('ล็อกเป้าไว้ตั้งแต่ตอนกด', q.state.queued.target, 'c');
+  ok('ตายังเป็นของคนเดิม', q.state.turn, 'b');
+  ok('การ์ดออกจากมือทันที', q.secrets.e.held, []);
+
+  const ctx2 = { ...ctx, state: q.state, secrets: { ...sec, e: q.secrets.e, _deck: out.secrets._deck } };
+  const done = await onAction(ctx2, { uid: 'b', type: 'toBoat', payload: { boat: 'boatL' } });
+  ok('จบตาแล้วผลถึงเกิด', placeOf(done.state.pos.e), 'shipR');
+  ok('ไปยืนข้างหลังเป้าพอดี', occupants(done.state.pos, 'shipR'), ['c', 'e', 'd']);
+  ok('ประกาศบอกว่าแทรกหลังใคร', [done.state.shout.kind, done.state.shout.who], ['atlantis', 'c']);
+  ok('ล้างของที่จองไว้', done.state.queued, null);
+}
+{
+  /* คนล้นความจุโดน Maroon */
+  const seats = ['a', 'b', 'c', 'd', 'e', 'f'];
+  const st = { ...filled(), seats, turn: 'a', held: { f: 1 },
+               pos: { a: 'shipL:C', b: 'shipR:C', c: 'shipR:F', d: 'shipR:3',
+                      e: 'shipR:4', f: 'shipR:5' } };
+  const ins = insertBehind(st.pos, 'a', 'b');
+  ok('เรือเต็มแล้วแทรก คนท้ายสุดล้นออก', ins.spill, ['f']);
+  ok('คนที่เหลืออยู่ครบห้า', occupants(ins.pos, 'shipR').length, 5);
+  ok('คนแทรกอยู่หลังเป้า', occupants(ins.pos, 'shipR')[1], 'a');
 }
