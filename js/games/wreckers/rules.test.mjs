@@ -1689,3 +1689,26 @@ group('การ์ด · รังกา');
   ok('ประกาศบอกว่าใครโดน', [done.state.shout.kind, done.state.shout.who], ['crow', 'b']);
   ok('ใช้เสร็จแล้วผ่านตา', done.state.turn, 'b');
 }
+
+group('รังกา · เลือกตัวเองได้');
+{
+  const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+  const deck = { ...out.secrets._deck, slots: ['crowsnest', ...out.secrets._deck.slots.slice(1)] };
+  const base = { ...out.state, phase: 'play', turn: 'a', pos: filled().pos,
+                 seats: [...P], names: filled().names, out: [] };
+  const ctx0 = ctxOf(base);
+  const ctx = { ...ctx0, secrets: { ...ctx0.secrets, _deck: deck }, hostUid: 'a' };
+
+  const up = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+  const self = await onAction({ ...ctx, state: up.state },
+                              { uid: 'a', type: 'useCard', payload: { target: 'a' } });
+  ok('เลือกตัวเองได้ เพราะเป็นการจัดมือ ไม่ใช่การทำร้าย', !!self, true);
+  ok('มือเดิมของตัวเองอยู่ในกองให้เลือกกลับได้',
+     ctx0.secrets.a.vote.every(c => self.secrets.a.pool.includes(c)), true);
+
+  const c2 = { ...ctx, state: self.state, secrets: { ...ctx.secrets, a: self.secrets.a } };
+  const pick = self.secrets.a.pool.slice(0, 3);
+  const done = await onAction(c2, { uid: 'a', type: 'useCard', payload: { cards: pick } });
+  ok('มือตัวเองถูกเปลี่ยนตามที่เลือก', done.secrets.a.vote, pick);
+  ok('ประกาศบอกว่าเป้าคือตัวเอง', done.state.shout.who, 'a');
+}

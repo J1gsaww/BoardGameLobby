@@ -55,8 +55,10 @@ export const EFFECTS = {
     steps: ['player', 'cards'],
     ask: { player: 'crow.player', cards: 'crow.cards' },
     pickCount: { cards: 3 },
+    /* เลือกตัวเองได้ด้วย — เป็นการเปลี่ยนไพ่ในมือตัวเอง ซึ่งเป็นการใช้ที่ถูกต้อง
+       ต่างจากปืนพกที่ยิงตัวเองไม่ได้ เพราะนั่นเป็นการทำร้าย ส่วนใบนี้เป็นการจัดมือ */
     targets: (st, uid, step) => step === 'player'
-      ? (st.seats || []).filter(u => u !== uid && st.pos?.[u])
+      ? (st.seats || []).filter(u => st.pos?.[u])
       : [],
     run: (st, uid, picks, hands) => ({
       state: st,
@@ -249,9 +251,12 @@ export const pickCountOf = (id, step) => effectOf(id)?.pickCount?.[step] || 1;
 /* กองไพ่โหวตที่รังกาเลือกได้ — สำรับลบมือคนอื่น รวมมือเดิมของเป้าด้วย
    เพราะไพ่ของเป้าคืนกองก่อนแล้วค่อยหยิบใหม่ ใบเดิมจึงมีสิทธิ์กลับมา */
 export function crowPool(hands, target) {
+  /* ตัดมือของเป้าออกจากบัญชี = ไพ่ของเขากลับเข้ากองทันที
+     pileOf คืนสำรับลบมือที่ส่งไปให้ ไพ่ของเป้าจึงอยู่ในกองอยู่แล้ว
+     ห้ามเอามาต่อท้ายซ้ำ ไม่งั้นกองจะมีใบซ้ำ แล้วคนเลือกจะโดนปฏิเสธโดยไม่รู้ว่าทำไม */
   const others = { ...hands };
   delete others[target];
-  return [...pileOf(others, []), ...(hands[target] || [])].sort();
+  return pileOf(others, []).sort();
 }
 
 export function canUseCard(st, uid, id) {

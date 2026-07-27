@@ -407,7 +407,13 @@ function cardNote(body, st, ctx) {
   const line = body.parentElement.querySelector('.wr-scene-line');
   const stage = body.parentElement.querySelector('.wr-scene-stage');
   const mineNow = st.pending?.by === ctx.me.uid;
-  const many = st.pending && pickCountOf(st.pending.card, st.pending.needs) > 1;
+  /* อยู่ในขั้นเลือกไพ่จากกองหรือยัง — ดูจาก **กองที่ถูกส่งมาให้จริง** ด้วย
+     ไม่ใช่เดาจากชื่อการ์ดกับชื่อขั้นอย่างเดียว เพราะถ้าค่าใดค่าหนึ่งเพี้ยน
+     หน้าจอจะกลับไปแสดงข้อความธรรมดาแล้วไม่มีทางส่งคำตอบได้ เกมค้างทันที
+     กองมีอยู่ = เซิร์ฟเวอร์กำลังรอไพ่จากเรา ซึ่งเถียงไม่ได้ */
+  const many = !!st.pending
+    && (pickCountOf(st.pending.card, st.pending.needs) > 1
+        || (st.pending.by === ctx.me.uid && (ctx.secret?.pool || []).length > 0));
 
   /* ขั้นที่ต้องเลือกไพ่หลายใบจากกอง — คนเปิดได้แผงเลือกไพ่
      คนอื่นได้ข้อความรอเฉย ๆ ไม่เห็นว่ากองมีอะไรบ้าง */
