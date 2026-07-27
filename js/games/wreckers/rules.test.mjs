@@ -24,7 +24,7 @@ import {
 } from './rules.js';
 import { onAction, init, tick, finish, passTurn, openTurn } from './game.js';
 import { DECK } from './vote.js';
-import { shipsWithRoom, canUseCard } from './effects.js';
+import { shipsWithRoom, canUseCard, MAP_CARDS } from './effects.js';
 import { BASE_CARDS, BASE_TOTAL, baseById, ENDER } from './events.js';
 import { EXTRA_CARDS } from './cards.js';
 
@@ -1411,4 +1411,32 @@ group('การ์ด · แอตแลนติส');
   ok('เรือเต็มแล้วแทรก คนท้ายสุดล้นออก', ins.spill, ['f']);
   ok('คนที่เหลืออยู่ครบห้า', occupants(ins.pos, 'shipR').length, 5);
   ok('คนแทรกอยู่หลังเป้า', occupants(ins.pos, 'shipR')[1], 'a');
+}
+
+group('การ์ดแผนที่ · ทุกใบต้องยกให้คนอื่นตอนเปิด');
+{
+  /* บั๊กที่เคยเกิด: ประกาศกติกาแผนที่ไว้ก่อน แล้วเขียนผลของแอตแลนติสทับทีหลัง
+     ใบนั้นเลยกลายเป็นการ์ดธรรมดาที่เปิดแล้วทำงานทันที ไม่ต้องยกให้ใคร
+     เทสนี้ไล่ทุกใบ ไม่ใช่ใบตัวอย่าง จะได้จับได้ถ้ามีใบไหนหลุดอีก */
+  for (const card of MAP_CARDS) {
+    const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+    const deck = { ...out.secrets._deck, slots: [card, ...out.secrets._deck.slots.slice(1)] };
+    const base = { ...out.state, phase: 'play', turn: 'a', pos: filled().pos,
+                   seats: [...P], names: filled().names, out: [] };
+    const ctx = { ...ctxOf(base), secrets: { ...out.secrets, _deck: deck }, hostUid: 'a' };
+
+    const up = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+    ok(card + ' · เปิดแล้วถามว่าจะยกให้ใคร', up.state.pending?.mode, 'gift');
+    ok(card + ' · ยังไม่ผ่านตา', up.state.turn, 'a');
+    ok(card + ' · ยังไม่เกิดผลอะไรกับกระดาน', up.state.pos.a, base.pos.a);
+
+    const c2 = { ...ctxOf(up.state), secrets: { ...out.secrets, _deck: deck }, hostUid: 'a' };
+    ok(card + ' · ยกให้ตัวเองไม่ได้',
+       await onAction(c2, { uid: 'a', type: 'useCard', payload: { target: 'a' } }), null);
+
+    const give = await onAction(c2, { uid: 'a', type: 'useCard', payload: { target: 'b' } });
+    ok(card + ' · เข้ามือคนที่เลือก', give.secrets.b.held, [card]);
+    ok(card + ' · คนเปิดไม่ได้ถือ', give.secrets.a?.held ?? [], []);
+    ok(card + ' · ยกเสร็จแล้วผ่านตา', give.state.turn, 'b');
+  }
 }

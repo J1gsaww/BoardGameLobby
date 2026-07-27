@@ -82,34 +82,12 @@ export const shipsWithRoom = (st, who) =>
     return line.includes(who) || line.length < capacityOf(s);
   });
 
-/* การ์ดแผนที่ทุกใบใช้กติกาเดียวกัน — เปิดแล้วต้องยกให้คนอื่น ให้ตัวเองไม่ได้
-   ผลของแต่ละใบต่างกันตอนถูกใช้ ไม่ใช่ตอนได้มา จึงประกาศรวมกันตรงนี้ได้ */
-export const MAP_CARDS = ['fountain', 'atlantis', 'eldorado', 'lyonesse', 'anthemoessa'];
-
-for (const id of MAP_CARDS) {
-  EFFECTS[id] = {
-    steps: ['player'],
-    ask: { player: 'map.player' },
-    targets: (st, uid) => (st.seats || []).filter(u => u !== uid && st.pos?.[u]),
-    /* ผลคือยกการ์ดให้คนที่เลือก ไม่ได้ทำอะไรกับกระดาน
-       ตัวจัดการคำสั่งเป็นคนเอาไปใส่มือให้ เพราะต้องแตะข้อมูลลับของคนอื่น */
-    give: true,
-    run: (st, uid, picks, hands) => ({
-      state: st,
-      hands,
-      give: { to: picks.player, card: id },
-      shout: { kind: 'gaveMap', by: uid, who: picks.player, card: id }
-    })
-  };
-}
-
-/* แอตแลนติส — ย้ายตัวเองไปยืนข้างหลังคนที่จะเล่นตาถัดไป
-   คนที่ถูกล่นจนเกินความจุของที่นั่นโดน Maroon
+/* แอตแลนติส — ผลตอน **ใช้จากมือ** (ตอนเปิดยกให้คนอื่นเหมือนแผนที่ทุกใบ)
+   ย้ายตัวเองไปยืนข้างหลังคนที่จะเล่นตาถัดไป คนที่ถูกล่นเกินความจุโดน Maroon
 
    สองอย่างที่ทำให้ใบนี้ต่างจากใบอื่น
      whenever  ใช้ได้ในตาของใครก็ได้ ไม่ต้องรอตาตัวเอง
-     defer     ผลกับฉากรอให้เจ้าของตาทำ Action เสร็จก่อน แล้วค่อยเกิด
-               ไม่งั้นจะไปแทรกกลางคันจนคนที่กำลังเล่นอยู่งง */
+     defer     ผลกับฉากรอให้เจ้าของตาทำ Action เสร็จก่อน แล้วค่อยเกิด */
 EFFECTS.atlantis = {
   whenever: true,
   defer: true,
@@ -139,6 +117,26 @@ EFFECTS.atlantis = {
 export const usableAnytime = (id) => !!effectOf(id)?.whenever;
 export const isDeferred = (id) => !!effectOf(id)?.defer;
 
+/* ── การ์ดแผนที่ ────────────────────────────────────────────
+   ทุกใบเหมือนกันตรง **ตอนเปิด** — ต้องยกให้คนอื่น เก็บเองไม่ได้
+   ส่วน **ตอนใช้** แต่ละใบทำคนละอย่าง ซึ่งประกาศไว้ข้างบนแล้ว
+
+   ต้องผสมเข้ากับของเดิม ไม่ใช่เขียนทับ
+   เคยพลาดมาแล้ว: ประกาศกติกาแผนที่ไว้ก่อน แล้วเขียนผลของแอตแลนติสทับทีหลัง
+   แผนที่ใบนั้นเลยกลายเป็นการ์ดธรรมดาที่เปิดแล้วทำงานทันที ไม่ต้องยกให้ใคร */
+export const MAP_CARDS = ['fountain', 'atlantis', 'eldorado', 'lyonesse', 'anthemoessa'];
+
+for (const id of MAP_CARDS) {
+  EFFECTS[id] = { ...(EFFECTS[id] || {}), gift: true };
+}
+
+/* เปิดแล้วต้องยกให้คนอื่นไหม */
+export const isGift = (id) => !!effectOf(id)?.gift;
+
+/* คนที่รับแผนที่ได้ — ใครก็ได้ยกเว้นตัวเอง */
+export const giftTargets = (st, uid) =>
+  (st.seats || []).filter(u => u !== uid && st.pos?.[u]);
+
 export const effectOf = (id) => EFFECTS[id] || null;
 
 /* การ์ดใบนี้เปิดแล้วเข้ามือไหม */
@@ -153,7 +151,9 @@ export function nextStep(id, picks = {}) {
 /* เป้าที่เลือกได้ในขั้นนั้น เขียนที่เดียวจะได้ไม่มีทางที่สองที่ตัดสินไม่ตรงกัน */
 export function targetsOf(st, uid, id, step, picks = {}) {
   const e = effectOf(id);
-  if (!e?.targets || !step) return [];
+  if (!step) return [];
+  /* ตอนถามว่าจะยกแผนที่ให้ใคร ใช้รายชื่อของการยก ไม่ใช่ของผลการ์ด */
+  if (!e?.targets) return step === 'player' ? giftTargets(st, uid) : [];
   return e.targets(st, uid, step, picks);
 }
 

@@ -16,7 +16,7 @@ import {
 import { deal } from './vote.js';
 import { BASE_CARDS, ENDER, ENDER_ZONE } from './events.js';
 import { effectOf, targetsOf, nextStep, keepsInHand, canUseCard,
-         usableAnytime, isDeferred } from './effects.js';
+         usableAnytime, isDeferred, isGift, giftTargets } from './effects.js';
 import { EXTRA_CARDS } from './cards.js';
 import {
   SHIP_IDS, BOAT_IDS, BOAT_LINK, VOTE_ROW,
@@ -366,6 +366,18 @@ function activate(ctx, uid, { slot }) {
   const eff = effectOf(id);
   const needs = nextStep(id, {});
 
+  /* การ์ดแผนที่ — เปิดแล้วต้องยกให้คนอื่น เก็บเองไม่ได้ ตรวจก่อนทุกกรณี
+     ผลของแผนที่จะเกิดก็ต่อเมื่อคนที่ได้รับหยิบมาใช้ทีหลัง ไม่ใช่ตอนเปิด */
+  if (isGift(id)) {
+    return {
+      state: { ...said,
+        pending: { card: id, by: uid, mode: 'gift', picks: {}, needs: 'player',
+                   at: (st.logSeq || 0) + 1 },
+        deadline: Date.now() + PICK_MS },
+      secrets: { _deck: next, ...cleared }
+    };
+  }
+
   /* การ์ดที่เก็บเข้ามือ — ไม่เกิดผลตอนเปิด ผู้เล่นเอาไปใช้ทีหลังในตาตัวเอง
      จำนวนใบเป็นข้อมูลสาธารณะ ส่วนใบไหนเป็นความลับของเจ้าตัว */
   if (keepsInHand(id)) {
@@ -464,6 +476,30 @@ function giftSaves(cur = {}, uid, bag, gift, theirBag) {
   return out;
 }
 
+/* ยกแผนที่ให้คนอื่น — เข้ามือเขา ไม่เกิดผลอะไรกับกระดานตอนนี้ */
+function giveMap(ctx, uid, p, target) {
+  const st = ctx.state;
+  if (!giftTargets(st, uid).includes(target)) return null;
+
+  const theirs = ctx.secrets?.[target] || {};
+  const bag = [...(theirs.held || []), p.card];
+
+  const saves = { ...st.saves };
+  if (SAVE_CARDS.includes(p.card)) saves[target] = p.card;
+
+  const done = pushLog({ ...st, pending: null, cardUp: null, saves,
+                         held: { ...st.held, [target]: bag.length },
+                         shout: { kind: 'gaveMap', by: uid, who: target, card: p.card,
+                                  at: (st.logSeq || 0) + 1 } },
+                       'wreck.log.gaveMap',
+                       { name: st.names?.[uid], who: st.names?.[target] });
+
+  return {
+    state: passTurn(done),
+    secrets: { [target]: { ...theirs, held: bag } }
+  };
+}
+
 /* ── หยิบการ์ดจากมือมาใช้ ──────────────────────────────────
    ใช้ได้ในตาตัวเองเท่านั้น และนับเป็น Action ของตานั้น
    ยังไม่ผ่านตาทันที เพราะต้องถามก่อนว่าจะใช้กับใครที่ไหน */
@@ -510,6 +546,9 @@ function useCard(ctx, uid, { target }) {
   const st = ctx.state;
   const p = st.pending;
   if (p?.by !== uid) return null;
+
+  /* กำลังถามว่าจะยกแผนที่ให้ใคร — คนละเรื่องกับการถามเป้าของผลการ์ด */
+  if (p.mode === 'gift') return giveMap(ctx, uid, p, target);
 
   const picks = p.picks || {};
   const step = p.needs || nextStep(p.card, picks);
