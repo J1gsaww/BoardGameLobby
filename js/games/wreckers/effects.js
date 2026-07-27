@@ -12,7 +12,7 @@
    ───────────────────────────────────────────────────────────── */
 
 import { maroon, occupants, placeOf, addMark, joinPlace, capacityOf, SHIP_IDS,
-         insertBehind, nextSeat, swapSpots, shuffleQueue } from './rules.js';
+         insertBehind, nextSeat, swapSpots, shuffleQueue, pileOf } from './rules.js';
 
 /* การ์ดหนึ่งใบประกาศได้สี่อย่าง ใส่เท่าที่ต้องใช้
 
@@ -42,6 +42,27 @@ export const EFFECTS = {
          ไม่ใช่ประกาศเป็นฉาก แค่เรืองรอบตัวสองวินาที */
       return { state: { ...st, pos, glow: { uids: [uid, target], at: (st.logSeq || 0) + 1 } }, hands };
     }
+  },
+
+  /* รังกา — เลือกเป้า แล้วเลือกไพ่โหวตให้เขาใหม่สามใบจากกองที่เหลือ
+
+     ใบนี้ต่างจากใบอื่นตรงที่ขั้นที่สองไม่ใช่การเลือก "หนึ่งเป้า" แต่เป็นการเลือกไพ่หลายใบ
+     จึงประกาศ pickCount ไว้ ให้ตัวจัดการรู้ว่าต้องรอครบกี่ใบก่อนถึงจะทำงาน
+
+     กองที่เลือกได้ = สำรับทั้งใบ ลบมือคนอื่น แต่ **รวมมือเดิมของเป้า** ด้วย
+     เพราะกติกาบอกว่าไพ่ของเป้าคืนกองก่อน แล้วค่อยหยิบใหม่ ใบเดิมจึงมีสิทธิ์ถูกหยิบกลับ */
+  crowsnest: {
+    steps: ['player', 'cards'],
+    ask: { player: 'crow.player', cards: 'crow.cards' },
+    pickCount: { cards: 3 },
+    targets: (st, uid, step) => step === 'player'
+      ? (st.seats || []).filter(u => u !== uid && st.pos?.[u])
+      : [],
+    run: (st, uid, picks, hands) => ({
+      state: st,
+      hands: { ...hands, [picks.player]: [...picks.cards] },
+      shout: { kind: 'crow', by: uid, who: picks.player, card: 'crowsnest' }
+    })
   },
 
   /* ระฆังแปดครั้ง — ทุกคนในสถานที่เดียวกับคนเปิดสุ่มที่ยืนใหม่หมด
@@ -220,6 +241,17 @@ export function canPlayNow(st, uid, id) {
   if (w === 'own' && st.turn !== uid) return { ok: false, why: 'notTurn' };
   if (!canUseCard(st, uid, id)) return { ok: false, why: 'noTarget' };
   return { ok: true, why: '' };
+}
+
+/* ขั้นนี้ต้องเลือกกี่ใบ — ไม่ใช่ทุกขั้นที่เลือกทีละหนึ่ง */
+export const pickCountOf = (id, step) => effectOf(id)?.pickCount?.[step] || 1;
+
+/* กองไพ่โหวตที่รังกาเลือกได้ — สำรับลบมือคนอื่น รวมมือเดิมของเป้าด้วย
+   เพราะไพ่ของเป้าคืนกองก่อนแล้วค่อยหยิบใหม่ ใบเดิมจึงมีสิทธิ์กลับมา */
+export function crowPool(hands, target) {
+  const others = { ...hands };
+  delete others[target];
+  return [...pileOf(others, []), ...(hands[target] || [])].sort();
 }
 
 export function canUseCard(st, uid, id) {

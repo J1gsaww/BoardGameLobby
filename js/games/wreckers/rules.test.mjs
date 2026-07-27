@@ -24,7 +24,7 @@ import {
 } from './rules.js';
 import { onAction, init, tick, finish, passTurn, openTurn } from './game.js';
 import { DECK } from './vote.js';
-import { shipsWithRoom, canUseCard, MAP_CARDS, playWindow } from './effects.js';
+import { shipsWithRoom, canUseCard, MAP_CARDS, playWindow, pickCountOf } from './effects.js';
 import { BASE_CARDS, BASE_TOTAL, baseById, ENDER } from './events.js';
 import { EXTRA_CARDS } from './cards.js';
 
@@ -1647,4 +1647,45 @@ group('การ์ด · ระฆังแปดครั้ง');
   const r = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
   ok('บอกว่าใครเพิ่งสลับ', [...r.state.glow.uids].sort(), ['a', 'b']);
   ok('ยังไม่มีประกาศเป็นฉาก', r.state.shout ?? null, null);
+}
+
+group('การ์ด · รังกา');
+{
+  const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+  const deck = { ...out.secrets._deck, slots: ['crowsnest', ...out.secrets._deck.slots.slice(1)] };
+  const base = { ...out.state, phase: 'play', turn: 'a', pos: filled().pos,
+                 seats: [...P], names: filled().names, out: [] };
+  const ctx0 = ctxOf(base);
+  let ctx = { ...ctx0, secrets: { ...ctx0.secrets, _deck: deck }, hostUid: 'a' };
+
+  const up = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+  ok('ขั้นแรกเลือกเป้า', up.state.pending.needs, 'player');
+  ok('เลือกตัวเองไม่ได้',
+     await onAction({ ...ctx, state: up.state }, { uid: 'a', type: 'useCard', payload: { target: 'a' } }), null);
+
+  const who = await onAction({ ...ctx, state: up.state }, { uid: 'a', type: 'useCard', payload: { target: 'b' } });
+  ok('ขั้นสองเลือกไพ่', who.state.pending.needs, 'cards');
+  ok('ต้องเลือกสามใบ', pickCountOf('crowsnest', 'cards'), 3);
+
+  const pool = who.secrets.a.pool;
+  ok('กองส่งไปให้เฉพาะคนเปิด', Array.isArray(pool), true);
+  ok('กองรวมมือเดิมของเป้าด้วย', ctx0.secrets.b.vote.every(c => pool.includes(c)), true);
+  ok('กองไม่มีมือของคนอื่น', ctx0.secrets.c.vote.some(c => pool.includes(c)), false);
+  ok('ขนาดกอง = สำรับ ลบมือคนอื่น', pool.length, DECK.length - (P.length - 1) * 3);
+
+  ctx = { ...ctx, state: who.state, secrets: { ...ctx.secrets, a: who.secrets.a } };
+  ok('เลือกไม่ครบสามใบไม่ได้',
+     await onAction(ctx, { uid: 'a', type: 'useCard', payload: { cards: pool.slice(0, 2) } }), null);
+  ok('เลือกใบซ้ำไม่ได้',
+     await onAction(ctx, { uid: 'a', type: 'useCard', payload: { cards: [pool[0], pool[0], pool[1]] } }), null);
+  ok('เลือกใบที่ไม่อยู่ในกองไม่ได้',
+     await onAction(ctx, { uid: 'a', type: 'useCard', payload: { cards: [ctx0.secrets.c.vote[0], pool[0], pool[1]] } }), null);
+
+  const pick = pool.slice(0, 3);
+  const done = await onAction(ctx, { uid: 'a', type: 'useCard', payload: { cards: pick } });
+  ok('มือของเป้าถูกแทนที่ทั้งหมด', done.secrets.b.vote, pick);
+  ok('มือคนอื่นไม่ถูกแตะ', done.secrets.c.vote, ctx0.secrets.c.vote);
+  ok('เก็บกองที่ส่งไปให้ดูทิ้งแล้ว', done.secrets.a.pool, null);
+  ok('ประกาศบอกว่าใครโดน', [done.state.shout.kind, done.state.shout.who], ['crow', 'b']);
+  ok('ใช้เสร็จแล้วผ่านตา', done.state.turn, 'b');
 }

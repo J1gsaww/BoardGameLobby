@@ -16,7 +16,8 @@
 import { t } from '../../i18n.js';
 import { VOTE_ART, ICON_EXT } from './vote.js';
 import { takeSides, keepSides, SHIP_CARGO_CAP, occupants } from './rules.js';
-import { askKey } from './effects.js';
+import { askKey, pickCountOf } from './effects.js';
+import { voteCard, cardById as voteById } from './vote.js';
 import { BASE_CARDS, cardArt, eventArt, eventAlt } from './events.js';
 import { EXTRA_CARDS } from './cards.js';
 import { lang } from '../../i18n.js';
@@ -294,7 +295,10 @@ function shoutNote(body, st) {
   }
 
   if (goto('collect')) {
-    const msg = sh.kind === 'atlantis'
+    const msg = sh.kind === 'crow'
+      ? t('wreck.scene.crow', {
+          name: st.names?.[sh.by] || '?', who: st.names?.[sh.who] || '?' })
+      : sh.kind === 'atlantis'
       ? t(sh.spill?.length ? 'wreck.scene.atlantisSpill' : 'wreck.scene.atlantis', {
           name: st.names?.[sh.by] || '?',
           who: st.names?.[sh.who] || '?',
@@ -401,11 +405,23 @@ function cardNote(body, st, ctx) {
   /* ข้อความอยู่นอกกล่องการ์ด ไม่งั้นพอการ์ดย่อไปมุม ข้อความจะตามไปด้วย
      ตำแหน่งของมันอิงกับเวทีทั้งผืน จึงค้างอยู่ระหว่างเกาะกับเรือสินค้าได้ */
   const line = body.parentElement.querySelector('.wr-scene-line');
+  const stage = body.parentElement.querySelector('.wr-scene-stage');
+  const mineNow = st.pending?.by === ctx.me.uid;
+  const many = st.pending && pickCountOf(st.pending.card, st.pending.needs) > 1;
+
+  /* ขั้นที่ต้องเลือกไพ่หลายใบจากกอง — คนเปิดได้แผงเลือกไพ่
+     คนอื่นได้ข้อความรอเฉย ๆ ไม่เห็นว่ากองมีอะไรบ้าง */
+  if (stage) {
+    if (many && mineNow) poolPanel(stage, st, ctx);
+    else if (!seq) { stage.hidden = true; stage.dataset.pool = ''; }
+  }
+
   if (line) {
     const want = !st.pending ? ''
-      : st.pending.by === ctx.me.uid
-        ? t(askKey(st.pending.card, st.pending.needs))
-        : t('wreck.scene.pickTargetThem', { name: st.names?.[st.pending.by] || '?' });
+      : mineNow
+        ? (many ? '' : t(askKey(st.pending.card, st.pending.needs)))
+        : (many ? t('wreck.scene.crowWait')
+                : t('wreck.scene.pickTargetThem', { name: st.names?.[st.pending.by] || '?' }));
     if (line.textContent !== want) line.textContent = want;
     line.hidden = !want || !parked;
   }
@@ -494,6 +510,48 @@ function bellsStage(stage, st, ms) {
   stage.querySelectorAll('.wr-bell').forEach((el, i) => el.classList.toggle('in', i < shown));
 
   return ms > BELL_LEAD + order.length * BELL_STEP + BELL_HOLD;
+}
+
+/* ── แผงเลือกไพ่จากกอง (รังกา) ─────────────────────────────
+   คลิกเลือก คลิกซ้ำเอาออก ครบตามจำนวนแล้วปุ่มยืนยันถึงจะกดได้
+   กองมาจากข้อมูลลับของคนเปิด ซึ่งมีแต่เจ้าของห้องเป็นคนคำนวณให้
+   คนอื่นไม่มีทางเห็นว่ากองมีอะไร เพราะข้อมูลไม่เคยถูกส่งไปหาเขา */
+let poolPick = [];
+let poolKey = '';
+
+function poolPanel(stage, st, ctx) {
+  const need = pickCountOf(st.pending.card, st.pending.needs);
+  const pool = ctx.secret?.pool || [];
+  const key = st.pending.at + ':' + pool.length;
+  if (poolKey !== key) { poolKey = key; poolPick = []; }
+
+  const sig = key + '|' + poolPick.join(',');
+  if (stage.dataset.pool === sig) return;
+  stage.dataset.pool = sig;
+  stage.hidden = false;
+
+  stage.innerHTML = `<div class="wr-pool">
+      <p class="wr-pool-head">${esc(t('wreck.scene.crowPick', {
+        n: need, left: need - poolPick.length }))}</p>
+      <div class="wr-pool-grid">${
+        pool.map(id => `<button class="wr-pool-card${poolPick.includes(id) ? ' on' : ''}"
+          data-pool="${esc(id)}">${voteCard(voteById(id), lang)}</button>`).join('')
+      }</div>
+      <button class="wr-scene-btn wr-pool-go"${poolPick.length === need ? '' : ' disabled'}>
+        ${esc(t('wreck.plan.confirm'))}</button>
+    </div>`;
+
+  stage.querySelectorAll('[data-pool]').forEach(b => {
+    b.onclick = () => {
+      const id = b.dataset.pool;
+      poolPick = poolPick.includes(id)
+        ? poolPick.filter(c => c !== id)
+        : (poolPick.length < need ? [...poolPick, id] : poolPick);
+      poolPanel(stage, st, ctx);
+    };
+  });
+  const go = stage.querySelector('.wr-pool-go');
+  if (go) go.onclick = () => { if (!go.disabled) sendFn?.('useCard', { cards: [...poolPick] }); };
 }
 
 function titleOf(st, ph, me) {

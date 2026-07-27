@@ -16,7 +16,7 @@ import {
 import { deal } from './vote.js';
 import { BASE_CARDS, ENDER, ENDER_ZONE } from './events.js';
 import { effectOf, targetsOf, nextStep, keepsInHand, canUseCard,
-         isDeferred, isGift, giftTargets, canPlayNow } from './effects.js';
+         isDeferred, isGift, giftTargets, canPlayNow, pickCountOf, crowPool } from './effects.js';
 import { EXTRA_CARDS } from './cards.js';
 import {
   SHIP_IDS, BOAT_IDS, BOAT_LINK, VOTE_ROW,
@@ -572,7 +572,7 @@ function playHeld(ctx, uid, { card }) {
 /* ── ใช้ผลของการ์ดที่ค้างรออยู่ ────────────────────────────
    ตรวจเป้าด้วยรายชื่อชุดเดียวกับที่หน้าจอใช้ไฮไลท์
    จะได้ไม่มีทางที่สองที่ตัดสินไม่ตรงกัน */
-function useCard(ctx, uid, { target }) {
+function useCard(ctx, uid, { target, cards }) {
   const st = ctx.state;
   const p = st.pending;
   if (p?.by !== uid) return null;
@@ -583,14 +583,39 @@ function useCard(ctx, uid, { target }) {
   const picks = p.picks || {};
   const step = p.needs || nextStep(p.card, picks);
   if (!step) return null;
-  if (!targetsOf(st, uid, p.card, step, picks).includes(target)) return null;
+
+  const want = pickCountOf(p.card, step);
+  let answer;
+
+  if (want > 1) {
+    /* ขั้นที่เลือกหลายใบพร้อมกัน — ส่งมาเป็นชุดเดียว ต้องครบพอดีและห้ามซ้ำ
+       ตรวจกับกองที่เก็บไว้ในข้อมูลลับของคนเปิด ไม่ใช่กองที่หน้าจอส่งมาเอง */
+    const pool = ctx.secrets?.[uid]?.pool || [];
+    const list = Array.isArray(cards) ? cards : [];
+    if (list.length !== want) return null;
+    if (new Set(list).size !== list.length) return null;
+    if (!list.every(c => pool.includes(c))) return null;
+    answer = list;
+  } else {
+    if (!targetsOf(st, uid, p.card, step, picks).includes(target)) return null;
+    answer = target;
+  }
 
   /* เก็บคำตอบของขั้นนี้ แล้วดูว่ายังมีขั้นถัดไปอีกไหม
      การ์ดที่ถามหลายขั้น (เช่นจดหมาย — เลือกคน แล้วเลือกเรือ)
      จะวนกลับมาที่ฟังก์ชันนี้จนกว่าจะครบ ไม่ต้องมีทางแยกแยกต่างหาก */
-  const got = { ...picks, [step]: target };
+  const got = { ...picks, [step]: answer };
   const more = nextStep(p.card, got);
   if (more) {
+    /* ขั้นถัดไปเป็นการเลือกไพ่จากกอง ต้องส่งกองให้คนเปิดเห็นก่อน
+       กองคำนวณจากมือทุกคนซึ่งมีแต่เจ้าของห้องรู้ จึงส่งผ่านข้อมูลลับของเขา */
+      if (pickCountOf(p.card, more) > 1) {
+      const mine0 = ctx.secrets?.[uid] || {};
+      return {
+        state: { ...st, pending: { ...p, picks: got, needs: more } },
+        secrets: { [uid]: { ...mine0, pool: crowPool(handsOf(ctx), got.player) } }
+      };
+    }
     return { state: { ...st, pending: { ...p, picks: got, needs: more } } };
   }
 
@@ -626,9 +651,11 @@ function useCard(ctx, uid, { target }) {
                        { name: st.names?.[uid],
                          who: st.names?.[got.player] || st.names?.[target] });
 
+  /* ใช้เสร็จแล้วเก็บกองที่ส่งไปให้ดูทิ้ง ไม่ต้องค้างไว้ในข้อมูลลับ */
   const secrets = {
     ...(out.hands === hands ? {} : secretsFrom(ctx, out.hands)),
-    [uid]: { ...mine, ...(out.hands === hands ? {} : { vote: out.hands[uid] }), held: bag },
+    [uid]: { ...mine, ...(out.hands === hands ? {} : { vote: out.hands[uid] }),
+             held: bag, pool: null },
     ...(gift ? { [gift.to]: { ...(ctx.secrets?.[gift.to] || {}), held: theirBag } } : {})
   };
 
