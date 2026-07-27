@@ -623,6 +623,11 @@ button{ cursor:pointer; border:0; background:none; }
   background:transparent; border:2px solid transparent;
   transition:transform .12s, border-color .12s;
 }
+/* ชิ้นที่กำลังให้เลือกเป็นเป้า — วงที่นั่งต้องไม่มาบังและไม่กินคลิก
+   ปุ่มที่ถูกปิดยังกินคลิกอยู่ คลิกกลางลำจึงไม่เคยถึงตัวเรือ
+   ซ่อนไปเลยระหว่างเลือกด้วย จะได้ไม่มีอะไรให้กดผิด */
+.wr-piece.aim-hot .wr-slot{ pointer-events:none; opacity:0; }
+
 .wr-slot.free{ cursor:pointer; }
 .wr-slot.taken{ cursor:default; }
 .wr-slot.free:hover{ border-color:var(--lamp); transform:translate(-50%,-50%) scale(1.14); }

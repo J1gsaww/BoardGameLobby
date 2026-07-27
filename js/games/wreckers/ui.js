@@ -143,6 +143,14 @@ function shell(el, ctx) {
       return;
     }
 
+    /* ระหว่างเล็งเป้า วงที่นั่งถูกปิดเสียง — ส่งคลิกต่อไปให้ชิ้นที่ครอบอยู่
+       ไม่งั้นคลิกกลางลำจะโดนวงที่นั่งกินไปโดยไม่มีอะไรเกิดขึ้น */
+    const muted = e.target.closest('[data-mute]');
+    if (muted) {
+      const piece = muted.closest('[data-piece]');
+      if (piece?.onclick) { piece.onclick(e); return; }
+    }
+
     const b = e.target.closest('[data-spot]');
     if (!b) { if (!plan) closeMenu(); paint(el); return; }
 
@@ -450,6 +458,11 @@ export function render(el, ctx) {
     const hot = (aimMine && st.aim.options.includes(node.dataset.piece))
              || shipTargets.includes(node.dataset.piece);
     node.classList.toggle('aim-hot', !!hot);
+    /* ระหว่างเล็ง ปิดวงที่นั่งข้างในไม่ให้กินคลิก
+       ทำที่ตัวปุ่มด้วย ไม่ใช่แค่ในซีเอสเอส เพราะบางเบราว์เซอร์ยังส่งคลิกให้ปุ่มที่ปิดอยู่ */
+    node.querySelectorAll('.wr-slot').forEach(s => {
+      if (hot) s.dataset.mute = '1'; else delete s.dataset.mute;
+    });
     /* ใช้ onclick ทับตัวเดิมทุกครั้ง จะได้ไม่ผูกซ้อนกันหลายชั้นตอนวาดใหม่
        และตั้งเป็น null เมื่อไม่ใช่ช่วงเล็ง จะได้ไม่ค้างไว้กดได้ตอนอื่น */
     node.onclick = hot

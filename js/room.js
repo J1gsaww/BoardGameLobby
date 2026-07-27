@@ -587,6 +587,13 @@ async function drain() {
       try {
         const game = currentGame();
         const out = game ? await game.onAction(context(), { uid: d.uid, type: d.type, payload: d.payload }) : null;
+
+        /* คำขอถูกปฏิเสธ = ไม่มีอะไรเกิดขึ้นและไม่มีใครรู้ว่าทำไม
+           เขียนไว้ในคอนโซลของเจ้าของห้อง จะได้ไล่เหตุได้ตอนเจอปุ่มที่กดแล้วเงียบ */
+        if (game && !out) {
+          console.warn('[room] คำขอถูกปฏิเสธ', d.type, JSON.stringify(d.payload || {}), 'จาก', d.uid);
+        }
+
         await commit(out, snap.ref);
       } catch (e) {
         console.error('ประมวลผลคำขอล้มเหลว', d, e);
