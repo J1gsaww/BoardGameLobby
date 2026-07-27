@@ -21,7 +21,7 @@ import { targetsOf } from './effects.js';
 import { BASE_CARDS, cardArt, cardArtAlt, CARD_BACK, CARD_BACK_ALT,
          tokenArt, tokenAlt } from './events.js';
 import { paintScene, stopScene, setPlanView, setPlanWire, VOTE_BACK,
-         sceneAtAim, sceneHolding, scenePos } from './scene.js';
+         sceneAtAim, sceneHolding, scenePos, setSceneClose } from './scene.js';
 import { EXTRA_CARDS } from './cards.js';
 import { lang } from '../../i18n.js';
 import {
@@ -420,6 +420,8 @@ export function render(el, ctx) {
   /* แผนที่เกิดจากการคลิกเรือ ต้องไปโผล่ในฉากกลางจอ ไม่ใช่คอลัมน์ล่าง */
   setPlanView(null);
   setPlanWire(box => wirePlan(box, el, ctx));
+  /* ฉากปิดเมื่อไหร่ วาดกระดานใหม่ทันที ไม่ต้องรอสถานะเปลี่ยนรอบถัดไป */
+  setSceneClose(() => paint(el));   /* วาดกระดานใหม่ และเปิดฉากถัดไปถ้ามีรออยู่ */
   paintScene(el, st, ctx);
   paintHand(el, st, ctx);
   paintRoster(el, view, ctx);
