@@ -77,7 +77,7 @@ let raf = 0;
    จำเป็นเพราะ lastVote ค้างอยู่ในสถานะจนกว่าจะมีการโหวตครั้งถัดไป
    ถ้าไม่จำไว้ ฉากจะกลับมาเปิดทุกครั้งที่วาดใหม่ แล้วผู้เล่นทำอะไรต่อไม่ได้เลย */
 const dismissed = new Set();
-let seen = new Set();
+let seen = {};       // จำนวนไพ่ที่วางไปแล้วของแต่ละคน — ไม่ใช่แค่ว่าวางหรือยัง
 let voterList = [];  // รายชื่อผู้ร่วมโหวตล่าสุด ใช้เติมไพ่ที่ตกหล่น
 let sendFn = null;
 let sceneCtx = null;   /* เก็บไว้ให้ส่วนย่อยที่ต้องรู้ว่าใครกำลังดูอยู่ */
@@ -108,7 +108,7 @@ function sceneKey(st) {
 
 export function stopScene() {
   if (raf) cancelAnimationFrame(raf);
-  raf = 0; key = ''; phase = ''; aimView = ''; seen = new Set();
+  raf = 0; key = ''; phase = ''; aimView = ''; seen = {};
 }
 
 /* ช่วงย่อยเดินหน้าอย่างเดียว ถอยกลับไม่ได้เด็ดขาด
@@ -141,7 +141,7 @@ export function paintScene(el, st, ctx) {
 
   if (key !== want) {
     key = want; at = now(); phase = ''; aimView = ''; restAt = 0; closing = false;
-  seen = new Set();
+  seen = {};
     box.hidden = false;
     box.innerHTML = `
       <div class="wr-scene-title">
@@ -534,10 +534,15 @@ function collect(body, st) {
   const row = body.querySelector('.wr-vb-row');
   voterList = st.vote.voters;
 
-  for (const uid of st.vote.done) {
-    if (seen.has(uid)) continue;
-    seen.add(uid);
-    row.appendChild(voteBack(st.names?.[uid] || '?'));
+  /* วางไพ่ตาม **จำนวนใบที่ส่งไปแล้ว** ไม่ใช่ตามว่าใครส่งเสร็จแล้ว
+     เอลโดราโดส่งได้สองใบ ถ้ารอให้ส่งเสร็จค่อยวาง ไพ่จะโผล่พรวดสองใบทีเดียว
+     และใบที่สองจะไม่มีชื่อกำกับเพราะโค้ดเดิมวางได้คนละหนึ่งใบเท่านั้น */
+  const sent = st.vote.sent || {};
+  for (const uid of st.vote.voters) {
+    const now = sent[uid] ?? (st.vote.done.includes(uid) ? 1 : 0);
+    const have = seen[uid] || 0;
+    for (let i = have; i < now; i++) row.appendChild(voteBack(st.names?.[uid] || '?'));
+    if (now > have) seen[uid] = now;
   }
 
   const left = st.vote.voters.filter(u => !st.vote.done.includes(u));
@@ -613,9 +618,12 @@ function pot(body, v) {
     /* คนที่ส่งไพ่เป็นคนสุดท้ายไม่เคยโผล่ในช่วงรอไพ่เลย
        เพราะพอเขาส่ง เกมเปิดหม้อทันทีในจังหวะเดียวกัน หน้าจอจึงไม่เคยเห็นรายชื่อที่มีเขา
        ต้องไล่เติมให้ครบตามจำนวนไพ่ในหม้อก่อน เว้นที่ไว้ให้ใบจากกองอีกหนึ่ง */
+    /* เข้ามาไม่ทันเห็นบางใบ ก็เติมให้ครบตามจำนวนไพ่ในหม้อ */
     for (const uid of voterList) {
-      if (seen.has(uid) || row.children.length >= cards.length - 1) continue;
-      seen.add(uid);
+      if (row.children.length >= cards.length - 1) break;
+      const have = seen[uid] || 0;
+      if (have) continue;
+      seen[uid] = 1;
       row.appendChild(voteBack(nameOf(uid)));
     }
     while (row.children.length < cards.length - 1) row.appendChild(voteBack(''));
