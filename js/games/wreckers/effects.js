@@ -11,59 +11,95 @@
    แล้วค่อยผ่านตาตอนที่ผลถูกใช้จริง จังหวะจึงเหมือนกับการโหวตที่ทำไว้แล้ว
    ───────────────────────────────────────────────────────────── */
 
-import { maroon, occupants, placeOf, addMark } from './rules.js';
+import { maroon, occupants, placeOf, addMark, joinPlace, capacityOf, SHIP_IDS } from './rules.js';
 
-/* needs ที่รองรับตอนนี้
-   'player'  เลือกผู้เล่นหนึ่งคน (ยกเว้นตัวเอง)  */
+/* การ์ดหนึ่งใบประกาศได้สี่อย่าง ใส่เท่าที่ต้องใช้
+
+     keep    เปิดแล้วเข้ามือแทนที่จะเกิดผลทันที (ใช้ทีหลังในตาตัวเอง)
+     steps   ลำดับสิ่งที่ต้องถามก่อนใช้ เช่น ['player', 'ship']
+     targets เป้าที่เลือกได้ในขั้นนั้น — หน้าจอกับกติกาใช้ตัวเดียวกัน
+     run     ทำอะไรกับสถานะเมื่อถามครบแล้ว
+
+   ไม่มี steps เลย = ผลเกิดทันทีตอนเปิด (เช่นจุดดำ นกอัลบาทรอส)  */
 export const EFFECTS = {
   /* นกอัลบาทรอส — ติดนกไว้กับคนเปิด ไม่มีผลอะไรทันที
      อันตรายอยู่ที่เรือลำเดียวกันมีนกครบสองตัว ซึ่งตรวจรวมหลังทุกคำสั่ง
      ไม่ได้ตรวจแค่ตอนเปิดการ์ด เพราะคนย้ายที่ก็ทำให้ครบได้ */
   albatross: {
-    needs: null,
-    run: (st, uid, _target, hands) => ({ state: addMark(st, uid, 'bird'), hands })
+    run: (st, uid, _picks, hands) => ({ state: addMark(st, uid, 'bird'), hands })
   },
 
-  /* จุดดำ — คนที่เปิดโดน Maroon เอง ไม่ต้องเลือกอะไร ผลเกิดทันที
-     เป็นการ์ดใบแรกที่ไม่มี needs จึงเป็นแม่แบบของกลุ่ม "เปิดแล้วเกิดเลย" */
+  /* จุดดำ — คนที่เปิดโดน Maroon เอง ไม่ต้องเลือกอะไร ผลเกิดทันที */
   blackspot: {
-    needs: null,
-    run: (st, uid, _target, hands) => {
+    run: (st, uid, _picks, hands) => {
       const out = maroon(st, uid, hands);
-      /* ไม่ต้องประกาศผลซ้ำ — แค่เห็นว่าเปิดเจอจุดดำ ทุกคนก็รู้แล้วว่าคนเปิดโดน
-         ประกาศเพิ่มมีแต่ทำให้ต้องรออ่านสิ่งที่รู้อยู่แล้ว */
       return { state: out.state, hands: out.hands };
     }
   },
 
   /* ปืนพก — Maroon ใครก็ได้ยกเว้นตัวเอง ข้ามเรือข้ามเกาะได้ */
   pistol: {
-    needs: 'player',
-    targets: (st, uid) => (st.seats || []).filter(u => u !== uid && st.pos?.[u]),
-    run: (st, uid, target, hands) => {
-      const out = maroon(st, target, hands);
+    steps: ['player'],
+    targets: (st, uid, step) =>
+      (st.seats || []).filter(u => u !== uid && st.pos?.[u]),
+    run: (st, uid, picks, hands) => {
+      const out = maroon(st, picks.player, hands);
       return {
         state: out.state,
         hands: out.hands,
-        shout: { kind: 'shot', by: uid, who: target, card: 'pistol' }
+        shout: { kind: 'shot', by: uid, who: picks.player, card: 'pistol' }
       };
     }
+  },
+
+  /* หนังสือตราตั้ง — เปิดแล้วเก็บเข้ามือ ใช้ทีหลังในตาตัวเอง แทนการทำ Action
+     ส่งใครก็ได้ (รวมตัวเอง) ไปต่อท้ายแถวเรือใหญ่ลำไหนก็ได้ที่ยังมีที่ว่าง */
+  marque: {
+    keep: true,
+    steps: ['player', 'ship'],
+    targets: (st, uid, step) => step === 'player'
+      ? (st.seats || []).filter(u => st.pos?.[u])
+      : shipsWithRoom(st),
+    run: (st, uid, picks, hands) => ({
+      state: { ...st, pos: joinPlace(st.pos, picks.player, picks.ship) },
+      hands,
+      shout: { kind: 'marque', by: uid, who: picks.player, place: picks.ship, card: 'marque' }
+    })
   }
 };
 
+/* เรือใหญ่ที่ยังรับคนเพิ่มได้ — ใช้ทั้งฝั่งหน้าจอ (ไฮไลท์) และฝั่งกติกา (ตรวจ)
+   คนที่อยู่บนลำนั้นอยู่แล้วไม่นับว่าเต็ม เพราะย้ายมาลำเดิมก็แค่ไปต่อท้ายแถว */
+export const shipsWithRoom = (st, who) =>
+  SHIP_IDS.filter(s => {
+    const line = occupants(st.pos, s);
+    return line.includes(who) || line.length < capacityOf(s);
+  });
+
 export const effectOf = (id) => EFFECTS[id] || null;
 
-/* การ์ดใบนี้ต้องถามอะไรก่อนไหม */
-export const needsOf = (id) => effectOf(id)?.needs || null;
+/* การ์ดใบนี้เปิดแล้วเข้ามือไหม */
+export const keepsInHand = (id) => !!effectOf(id)?.keep;
 
-/* รายชื่อเป้าที่เลือกได้จริง — หน้าจอใช้ตัวนี้ตัดสินว่าจะไฮไลท์ใคร
-   และฝั่งเซิร์ฟเวอร์ใช้ตัวเดียวกันตรวจว่าเป้าที่ส่งมาถูกต้องไหม
-   เขียนที่เดียวจะได้ไม่มีทางที่สองที่ตัดสินไม่เหมือนกัน */
-export function targetsOf(st, uid, id) {
-  const e = effectOf(id);
-  if (!e?.targets) return [];
-  return e.targets(st, uid);
+/* ขั้นตอนถัดไปที่ต้องถาม — คืน null ถ้าถามครบแล้ว */
+export function nextStep(id, picks = {}) {
+  const steps = effectOf(id)?.steps || [];
+  return steps.find(k => !picks[k]) || null;
 }
 
-/* เผื่อการ์ดใบอื่นที่ต้องใช้ตัวช่วยเดียวกัน */
+/* เป้าที่เลือกได้ในขั้นนั้น เขียนที่เดียวจะได้ไม่มีทางที่สองที่ตัดสินไม่ตรงกัน */
+export function targetsOf(st, uid, id, step, picks = {}) {
+  const e = effectOf(id);
+  if (!e?.targets || !step) return [];
+  return e.targets(st, uid, step, picks);
+}
+
+/* ใช้การ์ดใบนี้ตอนนี้ได้ไหม — ต้องมีอย่างน้อยหนึ่งเป้าในขั้นแรก
+   เรือเต็มทั้งสองลำก็ใช้จดหมายไม่ได้ เพราะไม่มีที่ให้ส่งใครไป */
+export function canUseCard(st, uid, id) {
+  const first = nextStep(id, {});
+  if (!first) return true;
+  return targetsOf(st, uid, id, first).length > 0;
+}
+
 export { occupants, placeOf };

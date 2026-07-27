@@ -23,6 +23,7 @@ import {
 } from './rules.js';
 import { onAction, init, tick, finish, passTurn, openTurn } from './game.js';
 import { DECK } from './vote.js';
+import { shipsWithRoom, canUseCard } from './effects.js';
 import { BASE_CARDS, BASE_TOTAL, baseById, ENDER } from './events.js';
 import { EXTRA_CARDS } from './cards.js';
 
@@ -1238,4 +1239,63 @@ group('ฉากเล่าจบก่อนกระดานขยับ');
   const hit = birdStrike(two, {}, zero);
   ok('ผังก่อน Maroon ยังอยู่บนเรือ', two.pos.a, 'shipL:C');
   ok('หลัง Maroon ลงเกาะแล้ว', hit.state.pos.a.startsWith('island'), true);
+}
+
+group('การ์ด · หนังสือตราตั้ง');
+{
+  const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+  const deck = { ...out.secrets._deck, slots: ['marque', ...out.secrets._deck.slots.slice(1)] };
+  const pos = { a: 'shipL:C', b: 'island:G', c: 'island:2', d: 'shipR:C', e: 'boatL:B', f: 'island:3' };
+  const base = { ...out.state, phase: 'play', turn: 'a', pos, seats: [...P],
+                 names: filled().names, out: [] };
+  const ctx = { ...ctxOf(base), secrets: { ...out.secrets, _deck: deck }, hostUid: 'a' };
+
+  const got = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+  ok('เปิดแล้วเข้ามือ ไม่เกิดผลทันที', got.secrets.a.held, ['marque']);
+  ok('จำนวนใบเป็นข้อมูลสาธารณะ', got.state.held.a, 1);
+  ok('เปิดแล้วผ่านตาไปเลย', got.state.turn, 'b');
+  ok('ไม่มีอะไรค้างรอ', got.state.pending ?? null, null);
+
+  /* ตาของ a อีกรอบ */
+  const mine = { ...got.state, turn: 'a' };
+  const ctx2 = { ...ctxOf(mine), secrets: { ...out.secrets, ...got.secrets }, hostUid: 'a' };
+  ok('มีปุ่มใช้การ์ดในมือ', actionsFor(mine, 'a').includes('playHeld'), true);
+  ok('คนที่ไม่มีการ์ดไม่มีปุ่ม', actionsFor({ ...mine, turn: 'b' }, 'b').includes('playHeld'), false);
+
+  const play = await onAction(ctx2, { uid: 'a', type: 'playHeld', payload: { card: 'marque' } });
+  ok('ขั้นแรกถามว่าจะส่งใคร', play.state.pending.needs, 'player');
+  ok('ยังไม่ผ่านตา', play.state.turn, 'a');
+  ok('ระหว่างนี้ทำอย่างอื่นไม่ได้', actionsFor(play.state, 'a'), ['useCard']);
+
+  const ctx3 = { ...ctxOf(play.state), secrets: { ...out.secrets, ...got.secrets }, hostUid: 'a' };
+  const who = await onAction(ctx3, { uid: 'a', type: 'useCard', payload: { target: 'b' } });
+  ok('เลือกคนแล้วถามต่อว่าเรือลำไหน', who.state.pending.needs, 'ship');
+  ok('จำคนที่เลือกไว้', who.state.pending.picks.player, 'b');
+  ok('ยังไม่ผ่านตา', who.state.turn, 'a');
+
+  const ctx4 = { ...ctxOf(who.state), secrets: { ...out.secrets, ...got.secrets }, hostUid: 'a' };
+  const done = await onAction(ctx4, { uid: 'a', type: 'useCard', payload: { target: 'shipR' } });
+  ok('ถูกส่งไปต่อท้ายแถวเรือที่เลือก', placeOf(done.state.pos.b), 'shipR');
+  ok('ต่อท้ายจริง ไม่ใช่แทรกกลาง', occupants(done.state.pos, 'shipR').at(-1), 'b');
+  ok('การ์ดออกจากมือแล้ว', done.secrets.a.held, []);
+  ok('จำนวนสาธารณะลดตาม', done.state.held.a, 0);
+  ok('ใช้เสร็จแล้วผ่านตา', done.state.turn, 'b');
+  ok('ประกาศบอกครบว่าใครส่งใครไปไหน',
+     [done.state.shout.kind, done.state.shout.who, done.state.shout.place],
+     ['marque', 'b', 'shipR']);
+}
+{
+  /* เรือเต็มทั้งสองลำ = ใช้จดหมายไม่ได้ ปุ่มต้องทึบ */
+  const full = {};
+  ['C', 'F', '3', '4', '5'].forEach((s, i) => { full['x' + i] = 'shipL:' + s; });
+  ['C', 'F', '3', '4', '5'].forEach((s, i) => { full['y' + i] = 'shipR:' + s; });
+  const st = { ...board(full), seats: [...Object.keys(full), 'z'], names: {} };
+  st.pos.z = 'island:G';
+
+  ok('ไม่มีเรือให้ส่งไปเลย', shipsWithRoom(st, 'z'), []);
+  ok('จึงใช้จดหมายไม่ได้', canUseCard(st, 'z', 'marque'), false);
+
+  const room = { ...st, pos: { ...st.pos, x4: 'island:2' } };
+  ok('พอมีที่ว่างหนึ่งลำก็ใช้ได้', canUseCard(room, 'z', 'marque'), true);
+  ok('เลือกได้เฉพาะลำที่ว่าง', shipsWithRoom(room, 'z'), ['shipL']);
 }

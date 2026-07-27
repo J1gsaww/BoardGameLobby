@@ -149,6 +149,11 @@ export function actionsFor(st, uid) {
   out.push('activate', 'peek', 'force');
   if (boatsOpen(st, spot).length) out.push('toBoat');
 
+  /* การ์ดในมือที่ใช้ได้ตอนนี้ — ปุ่มอยู่ท้ายรายการ ใช้แทน Action ปกติ
+     ต้องเช็กว่าใช้ได้จริงด้วย เช่นจดหมายที่เรือเต็มทั้งสองลำก็ส่งใครไปไม่ได้
+     ฝั่งหน้าจอถามตัวนี้เพื่อตัดสินว่าจะทำปุ่มทึบหรือซ่อน */
+  if ((st.held?.[uid] || 0) > 0) out.push('playHeld');
+
   if (role === 'captain') {
     if (canAttack(st, place)) out.push('attack');
     if (occupants(st.pos, place).length > 1) out.push('kick');

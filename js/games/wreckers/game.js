@@ -15,7 +15,7 @@ import {
 } from './board.js';
 import { deal } from './vote.js';
 import { BASE_CARDS, ENDER, ENDER_ZONE } from './events.js';
-import { effectOf, needsOf, targetsOf } from './effects.js';
+import { effectOf, targetsOf, nextStep, keepsInHand, canUseCard } from './effects.js';
 import { EXTRA_CARDS } from './cards.js';
 import {
   SHIP_IDS, BOAT_IDS, BOAT_LINK, VOTE_ROW,
@@ -233,6 +233,7 @@ async function route(ctx, uid, type, payload) {
     case 'kick':       return kick(ctx, uid, payload.uid);
     case 'shiftCargo': return shiftCargo(ctx, uid, payload.from);
     case 'useCard':    return useCard(ctx, uid, payload);
+    case 'playHeld':   return playHeld(ctx, uid, payload);
     case 'attack':     return callVote(ctx, uid, 'attack', payload);
     case 'aimAt':      return aimAt(ctx, uid, payload);
     case 'takeFrom':   return takeFrom(ctx, uid, payload);
@@ -313,8 +314,19 @@ function activate(ctx, uid, { slot }) {
 
   /* การ์ดที่ต้องถามก่อน จะยังไม่ผ่านตา เกมค้างรอคนเปิดเลือกเป้าก่อน
      จังหวะเดียวกับการโหวต ผลจึงไม่โผล่ก่อนที่ฉากจะเล่าถึง */
-  const needs = needsOf(id);
   const eff = effectOf(id);
+  const needs = nextStep(id, {});
+
+  /* การ์ดที่เก็บเข้ามือ — ไม่เกิดผลตอนเปิด ผู้เล่นเอาไปใช้ทีหลังในตาตัวเอง
+     จำนวนใบเป็นข้อมูลสาธารณะ ส่วนใบไหนเป็นความลับของเจ้าตัว */
+  if (keepsInHand(id)) {
+    const mine = ctx.secrets?.[uid] || {};
+    const bag = [...(mine.held || []), id];
+    return {
+      state: passTurn({ ...said, held: { ...said.held, [uid]: bag.length } }),
+      secrets: { _deck: next, ...cleared, [uid]: { ...mine, held: bag } }
+    };
+  }
 
   /* การ์ดที่ไม่ต้องถามอะไร ผลเกิดทันทีตอนเปิด แล้วผ่านตาไปเลย
      ฉากจะเล่าสองช่วงต่อกันเอง — โชว์การ์ดก่อน แล้วค่อยประกาศผล */
@@ -324,7 +336,7 @@ function activate(ctx, uid, { slot }) {
        ค่าที่เติมจึงไม่ติดไปด้วย หน้าจอเลยไม่มีอะไรบอกให้ค้างกระดาน */
     const before = { ...said, cardUp: { ...said.cardUp, beforePos: st.pos } };
     const hands = handsOf(ctx);
-    const out = eff.run(before, uid, null, hands);
+    const out = eff.run(before, uid, {}, hands);
     /* การ์ดที่ไม่คืน shout มา แปลว่าไม่ต้องประกาศผล อย่าสร้างประกาศเปล่าขึ้นมา
        ไม่งั้นฉากจะขึ้นกล่องว่าง ๆ ให้รออ่านโดยไม่มีอะไรอยู่ข้างใน */
     const done = pushLog(out.shout
@@ -351,6 +363,27 @@ function activate(ctx, uid, { slot }) {
   };
 }
 
+/* ── หยิบการ์ดจากมือมาใช้ ──────────────────────────────────
+   ใช้ได้ในตาตัวเองเท่านั้น และนับเป็น Action ของตานั้น
+   ยังไม่ผ่านตาทันที เพราะต้องถามก่อนว่าจะใช้กับใครที่ไหน */
+function playHeld(ctx, uid, { card }) {
+  const st = ctx.state;
+  const mine = ctx.secrets?.[uid] || {};
+  if (!(mine.held || []).includes(card)) return null;
+  if (!canUseCard(st, uid, card)) return null;
+
+  const first = nextStep(card, {});
+  const at = (st.logSeq || 0) + 1;
+
+  return {
+    state: pushLog({ ...st,
+      cardUp: { id: card, by: uid, at },
+      pending: { card, by: uid, from: 'hand', picks: {}, needs: first, at },
+      deadline: Date.now() + PICK_MS
+    }, 'wreck.log.playHeld', { name: st.names?.[uid] })
+  };
+}
+
 /* ── ใช้ผลของการ์ดที่ค้างรออยู่ ────────────────────────────
    ตรวจเป้าด้วยรายชื่อชุดเดียวกับที่หน้าจอใช้ไฮไลท์
    จะได้ไม่มีทางที่สองที่ตัดสินไม่ตรงกัน */
@@ -358,24 +391,46 @@ function useCard(ctx, uid, { target }) {
   const st = ctx.state;
   const p = st.pending;
   if (p?.by !== uid) return null;
-  if (!targetsOf(st, uid, p.card).includes(target)) return null;
+
+  const picks = p.picks || {};
+  const step = p.needs || nextStep(p.card, picks);
+  if (!step) return null;
+  if (!targetsOf(st, uid, p.card, step, picks).includes(target)) return null;
+
+  /* เก็บคำตอบของขั้นนี้ แล้วดูว่ายังมีขั้นถัดไปอีกไหม
+     การ์ดที่ถามหลายขั้น (เช่นจดหมาย — เลือกคน แล้วเลือกเรือ)
+     จะวนกลับมาที่ฟังก์ชันนี้จนกว่าจะครบ ไม่ต้องมีทางแยกแยกต่างหาก */
+  const got = { ...picks, [step]: target };
+  const more = nextStep(p.card, got);
+  if (more) {
+    return { state: { ...st, pending: { ...p, picks: got, needs: more } } };
+  }
 
   const e = effectOf(p.card);
   const hands = handsOf(ctx);
-  const out = e.run(st, uid, target, hands);
+  const out = e.run(st, uid, got, hands);
 
-  /* ล้าง cardUp ด้วย ไม่งั้นพอฉากประกาศผลจบ ฉากเปิดการ์ดจะเด้งกลับมาเล่าซ้ำ
-     เพราะมันยังอยู่ในสถานะและยังไม่เคยถูกปิด */
+  /* การ์ดที่ใช้จากมือ ต้องถูกทิ้งออกจากมือหลังใช้ */
+  const mine = ctx.secrets?.[uid] || {};
+  const bag = p.from === 'hand'
+    ? (mine.held || []).filter((c, i, a) => i !== a.indexOf(p.card))
+    : (mine.held || []);
+
+  /* ล้าง cardUp ด้วย ไม่งั้นพอฉากประกาศผลจบ ฉากเปิดการ์ดจะเด้งกลับมาเล่าซ้ำ */
   const next = pushLog({ ...out.state, pending: null, cardUp: null,
+                         held: { ...out.state.held, [uid]: bag.length },
                          shout: { ...out.shout, beforePos: st.pos,
                                   at: (out.state.logSeq || 0) + 1 } },
                        'wreck.log.card.' + p.card,
-                       { name: st.names?.[uid], who: st.names?.[target] });
+                       { name: st.names?.[uid],
+                         who: st.names?.[got.player] || st.names?.[target] });
 
-  return {
-    state: passTurn(next),
-    secrets: out.hands === hands ? undefined : secretsFrom(ctx, out.hands)
+  const secrets = {
+    ...(out.hands === hands ? {} : secretsFrom(ctx, out.hands)),
+    [uid]: { ...mine, ...(out.hands === hands ? {} : { vote: out.hands[uid] }), held: bag }
   };
+
+  return { state: passTurn(next), secrets };
 }
 
 /* ── แอบดู ─────────────────────────────────────────────────

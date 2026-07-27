@@ -17,9 +17,9 @@
 
 | ชื่อไฟล์ | ชื่อการ์ด | ระดับ | จำนวนใบ |
 |---|---|---|---|
-| `pistol.png` | ปืนพก · Pistol | common | ×3 |
-| `blackspot.png` | จุดดำ · Black Spot | common | ×3 |
-| `albatross.png` | นกอัลบาทรอส · Albatross | common | ×3 |
+| `pistol.png` | ปืนพก · Pistol | common | ×3 | ✅
+| `blackspot.png` | จุดดำ · Black Spot | common | ×3 | ✅
+| `albatross.png` | นกอัลบาทรอส · Albatross | common | ×3 | ✅
 | `marque.png` | หนังสือตราตั้ง · Letter of Marque | common | ×3 |
 
 ### Map

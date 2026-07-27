@@ -286,7 +286,13 @@ function shoutNote(body, st) {
   }
 
   if (goto('collect')) {
-    const msg = sh.kind === 'shot'
+    const msg = sh.kind === 'marque'
+      ? t('wreck.scene.marque', {
+          name: st.names?.[sh.by] || '?',
+          who: st.names?.[sh.who] || '?',
+          place: t('wreck.place.' + sh.place)
+        })
+      : sh.kind === 'shot'
       ? t('wreck.scene.shot', {
           name: st.names?.[sh.by] || '?',
           who: st.names?.[sh.who] || '?'
@@ -374,7 +380,8 @@ function cardNote(body, st, ctx) {
   if (line) {
     const want = !st.pending ? ''
       : st.pending.by === ctx.me.uid
-        ? t('wreck.scene.pickTargetMe')
+        ? t(st.pending.needs === 'ship'
+            ? 'wreck.scene.pickShipWarp' : 'wreck.scene.pickTargetMe')
         : t('wreck.scene.pickTargetThem', { name: st.names?.[st.pending.by] || '?' });
     if (line.textContent !== want) line.textContent = want;
     line.hidden = !want || !parked;

@@ -17,7 +17,7 @@ import { mountSea, stopSea } from './sea.js';
 import { cardById as voteById, voteCard, iconSrc } from './vote.js';
 import { dieSvg, rollPose, HERO, ROLL_MS } from './die.js';
 import { actionsFor, occupants, placeOf, BOAT_IDS, canVoteNow } from './rules.js';
-import { targetsOf } from './effects.js';
+import { targetsOf, canUseCard } from './effects.js';
 import { BASE_CARDS, cardArt, cardArtAlt, CARD_BACK, CARD_BACK_ALT,
          tokenArt, tokenAlt } from './events.js';
 import { paintScene, stopScene, setPlanView, setPlanWire, VOTE_BACK,
@@ -150,8 +150,9 @@ function shell(el, ctx) {
       /* กำลังเลือกเป้าของการ์ดอยู่ = คลิกใครก็คือเลือกคนนั้น ไม่ใช่เปิดเมนูปกติ */
       const now = live?.state;
       const meUid = live?.me?.uid;
-      if (now?.pending?.by === meUid
-          && targetsOf(now, meUid, now.pending.card).includes(b.dataset.who)) {
+      const pn = now?.pending?.by === meUid ? now.pending : null;
+      if (pn?.needs === 'player'
+          && targetsOf(now, meUid, pn.card, pn.needs, pn.picks || {}).includes(b.dataset.who)) {
         plan = { act: 'useCard', target: b.dataset.who, via: 'menu' };
         openMenu(el, b, { kind: 'aim' });
         paint(el);
@@ -323,8 +324,14 @@ export function render(el, ctx) {
      กัปตันโดนปลดแล้วย้ายที่ทันทีตั้งแต่ก่อนฉากเริ่มเล่า */
   /* เป้าที่การ์ดใบที่ค้างอยู่เลือกได้ ใช้รายชื่อชุดเดียวกับฝั่งเซิร์ฟเวอร์
      หน้าจอกับกติกาจึงตัดสินตรงกันเสมอ ไม่มีทางไฮไลท์คนที่กดแล้วโดนปฏิเสธ */
-  const cardTargets = (st.pending?.by === ctx.me.uid)
-    ? targetsOf(st, ctx.me.uid, st.pending.card) : [];
+  /* เป้าของขั้นที่กำลังถามอยู่ — อาจเป็นคนหรือเรือ แล้วแต่การ์ด
+     จดหมายถามสองขั้น เลือกคนก่อนแล้วค่อยเลือกเรือ ใช้ตัวเดียวกันทั้งสองขั้น */
+  const pend = st.pending?.by === ctx.me.uid ? st.pending : null;
+  const pickStep = pend?.needs || null;
+  const pickable = pend
+    ? targetsOf(st, ctx.me.uid, pend.card, pickStep, pend.picks || {}) : [];
+  const cardTargets = pickStep === 'player' ? pickable : [];
+  const shipTargets = pickStep === 'ship' ? pickable : [];
 
   const who = Object.fromEntries(Object.entries(view.pos || {}).map(([uid, spot]) => [spot, uid]));
   const mine = view.pos?.[ctx.me.uid] || null;
@@ -393,7 +400,10 @@ export function render(el, ctx) {
 
 
   el.querySelectorAll('[data-piece]').forEach(node => {
-    const hot = aimMine && st.aim.options.includes(node.dataset.piece);
+    /* เรือที่เลือกได้ มาจากสองทาง — กัปตันเล็งเป้าหลังยิงติด กับการ์ดที่ให้เลือกเรือ
+       ใช้หน้าตาเดียวกันเพราะเป็นการกระทำแบบเดียวกันในสายตาคนเล่น */
+    const hot = (aimMine && st.aim.options.includes(node.dataset.piece))
+             || shipTargets.includes(node.dataset.piece);
     node.classList.toggle('aim-hot', !!hot);
     /* ใช้ onclick ทับตัวเดิมทุกครั้ง จะได้ไม่ผูกซ้อนกันหลายชั้นตอนวาดใหม่
        และตั้งเป็น null เมื่อไม่ใช่ช่วงเล็ง จะได้ไม่ค้างไว้กดได้ตอนอื่น */
@@ -401,7 +411,9 @@ export function render(el, ctx) {
       ? (e) => {
           e.stopPropagation();
           /* เปิดเมนูยืนยันติดกับเรือลำที่คลิก จะได้เห็นชัดว่ากำลังเล็งลำไหน */
-          plan = { act: 'aimAt', target: node.dataset.piece, via: 'menu' };
+          plan = shipTargets.includes(node.dataset.piece)
+            ? { act: 'useCard', target: node.dataset.piece, via: 'menu' }
+            : { act: 'aimAt', target: node.dataset.piece, via: 'menu' };
           openMenu(el, node, { kind: 'aim' });
           paint(el);
         }
@@ -502,8 +514,16 @@ function paintHand(el, st, ctx) {
     mine.map(id => (asking
       ? `<button class="wr-pick" data-card="${esc(id)}">${voteCard(voteById(id), lang)}</button>`
       : voteCard(voteById(id), lang))).join('') +
-    Array.from({ length: held }, () =>
-      `<div class="wr-card wr-held"><span class="wr-card-face">${esc(t('wreck.event'))}</span></div>`).join('') +
+    (ctx.secret?.held || []).map(id => {
+      const c = eventById(id);
+      const info = c ? (c[lang] || c.th) : null;
+      const usable = canUseCard(st, me, id) && actionsFor(st, me).includes('playHeld');
+      return `<button class="wr-card wr-held${usable ? ' ready' : ' off'}"
+        data-held="${esc(id)}"${usable ? '' : ' disabled'}
+        title="${esc(info ? `${info.name} — ${info.desc}` : id)}">
+          ${eventFace(id)}
+        </button>`;
+    }).join('') +
     (mine.length + held ? '' : `<p class="wr-empty">${esc(t('wreck.noCards'))}</p>`) +
     (spent ? `<p class="wr-spent">${esc(t('wreck.voteSpent'))}</p>` : '') +
     (sittingOut ? `<p class="wr-empty">${esc(t('wreck.sittingOut'))}</p>` : '');
@@ -516,7 +536,16 @@ function paintHand(el, st, ctx) {
   if (box.dataset.sig !== html) {
     box.dataset.sig = html;
     box.innerHTML = html;
-    box.querySelectorAll('[data-card]').forEach(b => {
+    box.querySelectorAll('[data-held]').forEach(b => {
+    b.onclick = () => {
+      if (b.disabled) return;
+      plan = { act: 'playHeld', card: b.dataset.held, via: 'menu' };
+      openMenu(el, b, { kind: 'aim' });
+      paint(el);
+    };
+  });
+
+  box.querySelectorAll('[data-card]').forEach(b => {
       b.onclick = () => ctx.send('voteCard', { card: b.dataset.card });
     });
   }
@@ -849,7 +878,17 @@ function pawnMenu(st, ctx) {
     const viaCards = ['activate', 'peek', 'force'];
     const acts = actionsFor(st, meUid)
       .filter(k => !['voteCard', 'toBoat'].includes(k) && !viaCards.includes(k));
-    acts.forEach(k => rows.push(btnRow(k, t('wreck.act.' + k), true)));
+    acts.forEach(k => {
+      if (k !== 'playHeld') { rows.push(btnRow(k, t('wreck.act.' + k), true)); return; }
+      /* การ์ดในมือแต่ละใบเป็นปุ่มของตัวเอง ทึบเมื่อใช้ตอนนี้ไม่ได้
+         เช่นจดหมายที่เรือเต็มทั้งสองลำ กดไปก็ส่งใครไม่ได้ */
+      for (const id of (ctx.secret?.held || [])) {
+        const c = eventById(id);
+        const nm = c ? (c[lang] || c.th).name : id;
+        rows.push(btnRow('held', t('wreck.act.playHeld', { card: nm }),
+                         canUseCard(st, meUid, id), id));
+      }
+    });
 
     const boats = boatsFrom(spot);
     if (boats.length === 1) {
@@ -902,6 +941,7 @@ function runMenu(el, ctx, act, arg) {
   if (act === 'force') { closeMenu(); forcing = arg; picks = []; paint(el); return; }
   if (act === 'move') plan = { act: 'toBoat', boat: String(arg).split(':')[0], via: 'menu' };
   else if (act === 'kick') plan = { act: 'kick', uid: arg, via: 'menu' };
+  else if (act === 'held') plan = { act: 'playHeld', card: arg, via: 'menu' };
   else if (act === 'shiftCargo' && arg) {
     const [, side] = String(arg).split(':');
     plan = { act: 'shiftCargo', from: side === 'f' ? 'F' : 'B', box: arg, via: 'menu' };
@@ -1044,6 +1084,10 @@ export function planBody(st, ctx) {
           <span class="wr-chip on">${esc(st.names?.[plan.uid] || '?')}</span></div>`
       : `<div class="wr-plan-row"><span>${esc(t('wreck.plan.who'))}</span>
           ${here.map(u => pick('uid', u, st.names?.[u] || '?')).join('')}</div>`;
+  } else if (plan.act === 'playHeld') {
+    const c = eventById(plan.card);
+    rows = `<div class="wr-plan-row"><span>${esc(t('wreck.plan.card'))}</span>
+      <span class="wr-chip on">${esc(c ? (c[lang] || c.th).name : plan.card)}</span></div>`;
   } else if (plan.act === 'useCard') {
     rows = `<div class="wr-plan-row"><span>${esc(t('wreck.plan.who'))}</span>
       <span class="wr-chip on">${esc(st.names?.[plan.target] || '?')}</span></div>`;
@@ -1146,8 +1190,9 @@ function paintLog(el, st) {
 /* ── รายชื่อผู้เล่นพร้อมบทบาท ─────────────────────────────── */
 function paintRoster(el, st, ctx) {
   const live_ = live?.state || st;
-  const hot = (live_.pending?.by === ctx.me.uid)
-    ? targetsOf(live_, ctx.me.uid, live_.pending.card) : [];
+  const pd = live_.pending?.by === ctx.me.uid ? live_.pending : null;
+  const hot = pd?.needs === 'player'
+    ? targetsOf(live_, ctx.me.uid, pd.card, pd.needs, pd.picks || {}) : [];
 
   const html = (st.seats || []).map(uid => {
     const role = roleOf(st.pos?.[uid]);
