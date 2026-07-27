@@ -1688,3 +1688,14 @@ button{ cursor:pointer; border:0; background:none; }
   transform:translateY(-2px);
 }
 .wr-held.off{ opacity:.42; cursor:not-allowed; filter:grayscale(.5); }
+
+/* ปุ่ม Action ที่มาจากการ์ดในมือ — มีภาพการ์ดนำหน้าให้รู้ว่าไม่ใช่ Action ปกติ */
+.wr-menu-card{
+  display:flex; align-items:center; gap:8px; text-align:left;
+  border-color:var(--lamp);
+}
+.wr-menu-card:disabled{ opacity:.4; border-color:var(--line); }
+.wr-menu-thumb{
+  width:22px; aspect-ratio:3/4; object-fit:cover; border-radius:4px; flex:0 0 auto;
+  box-shadow:0 1px 4px rgba(0,0,0,.7);
+}

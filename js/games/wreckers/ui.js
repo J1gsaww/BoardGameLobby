@@ -17,7 +17,7 @@ import { mountSea, stopSea } from './sea.js';
 import { cardById as voteById, voteCard, iconSrc } from './vote.js';
 import { dieSvg, rollPose, HERO, ROLL_MS } from './die.js';
 import { actionsFor, occupants, placeOf, BOAT_IDS, canVoteNow } from './rules.js';
-import { targetsOf, canUseCard } from './effects.js';
+import { targetsOf, canUseCard, askKey } from './effects.js';
 import { BASE_CARDS, cardArt, cardArtAlt, CARD_BACK, CARD_BACK_ALT,
          tokenArt, tokenAlt } from './events.js';
 import { paintScene, stopScene, setPlanView, setPlanWire, VOTE_BACK,
@@ -885,8 +885,13 @@ function pawnMenu(st, ctx) {
       for (const id of (ctx.secret?.held || [])) {
         const c = eventById(id);
         const nm = c ? (c[lang] || c.th).name : id;
-        rows.push(btnRow('held', t('wreck.act.playHeld', { card: nm }),
-                         canUseCard(st, meUid, id), id));
+        rows.push(`<button class="wr-menu-btn wr-menu-card" data-do="held" data-arg="${esc(id)}"
+          ${canUseCard(st, meUid, id) ? '' : 'disabled'}>
+            <img class="wr-menu-thumb" src="${esc(cardArt(id))}" alt="" draggable="false"
+              data-alt="${esc(cardArtAlt(id))}"
+              onerror="if(this.dataset.alt){this.src=this.dataset.alt;this.dataset.alt='';}else{this.remove();}">
+            ${esc(t('wreck.act.playHeld', { card: nm }))}
+          </button>`);
       }
     });
 
@@ -1089,15 +1094,24 @@ export function planBody(st, ctx) {
     rows = `<div class="wr-plan-row"><span>${esc(t('wreck.plan.card'))}</span>
       <span class="wr-chip on">${esc(c ? (c[lang] || c.th).name : plan.card)}</span></div>`;
   } else if (plan.act === 'useCard') {
-    rows = `<div class="wr-plan-row"><span>${esc(t('wreck.plan.who'))}</span>
-      <span class="wr-chip on">${esc(st.names?.[plan.target] || '?')}</span></div>`;
+    /* หัวข้อกับป้ายกำกับต้องเป็นของการ์ดใบนั้น ไม่ใช่ข้อความกลาง
+       ของเดิมยืมของปืนพกมาใช้ทุกใบ จดหมายเลยขึ้นว่า "ไล่ลงเรือ" ทั้งที่กำลังเชิญขึ้นเรือ */
+    const step = st.pending?.needs || 'player';
+    const isShip = step === 'ship';
+    rows = `<div class="wr-plan-row"><span>${esc(t(askKey(st.pending?.card, step)))}</span>
+      <span class="wr-chip on">${esc(isShip
+        ? t('wreck.place.' + plan.target)
+        : (st.names?.[plan.target] || '?'))}</span></div>`;
   } else if (plan.act === 'toBoat') {
     rows = `<div class="wr-plan-row"><span>${esc(t('wreck.act.toBoat'))}</span>
       <span class="wr-chip on">${esc(t('wreck.place.' + plan.boat))}</span></div>`;
   }
 
   const blocked = plan.act === 'kick' && !plan.uid;
-  return `<div class="wr-plan-head">${esc(t('wreck.act.' + plan.act))}</div>${rows}
+  const headKey = plan.act === 'useCard' && st.pending?.card
+    ? 'wreck.card.' + st.pending.card
+    : 'wreck.act.' + plan.act;
+  return `<div class="wr-plan-head">${esc(t(headKey))}</div>${rows}
     <div class="wr-plan-go">
       <button class="wr-act" data-plan="go"${blocked ? ' disabled' : ''}>
         ${esc(t('wreck.plan.confirm'))}</button>

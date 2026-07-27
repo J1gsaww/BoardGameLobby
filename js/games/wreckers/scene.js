@@ -16,6 +16,7 @@
 import { t } from '../../i18n.js';
 import { VOTE_ART, ICON_EXT } from './vote.js';
 import { takeSides, keepSides, SHIP_CARGO_CAP } from './rules.js';
+import { askKey } from './effects.js';
 import { BASE_CARDS, cardArt, eventArt, eventAlt } from './events.js';
 import { EXTRA_CARDS } from './cards.js';
 import { lang } from '../../i18n.js';
@@ -380,8 +381,7 @@ function cardNote(body, st, ctx) {
   if (line) {
     const want = !st.pending ? ''
       : st.pending.by === ctx.me.uid
-        ? t(st.pending.needs === 'ship'
-            ? 'wreck.scene.pickShipWarp' : 'wreck.scene.pickTargetMe')
+        ? t(askKey(st.pending.card, st.pending.needs))
         : t('wreck.scene.pickTargetThem', { name: st.names?.[st.pending.by] || '?' });
     if (line.textContent !== want) line.textContent = want;
     line.hidden = !want || !parked;

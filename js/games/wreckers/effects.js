@@ -40,6 +40,10 @@ export const EFFECTS = {
   /* ปืนพก — Maroon ใครก็ได้ยกเว้นตัวเอง ข้ามเรือข้ามเกาะได้ */
   pistol: {
     steps: ['player'],
+    /* ข้อความของขั้นถามแต่ละขั้น — ทุกใบต้องประกาศเอง
+       ถ้ายืมของใบอื่นมาใช้ จะได้ข้อความที่ผิดเรื่องอย่างสิ้นเชิง
+       เช่นจดหมายที่เชิญคนขึ้นเรือ แต่ขึ้นว่า "เลือกคนที่จะยิง" */
+    ask: { player: 'pistol.player' },
     targets: (st, uid, step) =>
       (st.seats || []).filter(u => u !== uid && st.pos?.[u]),
     run: (st, uid, picks, hands) => {
@@ -57,6 +61,7 @@ export const EFFECTS = {
   marque: {
     keep: true,
     steps: ['player', 'ship'],
+    ask: { player: 'marque.player', ship: 'marque.ship' },
     targets: (st, uid, step) => step === 'player'
       ? (st.seats || []).filter(u => st.pos?.[u])
       : shipsWithRoom(st),
@@ -96,6 +101,13 @@ export function targetsOf(st, uid, id, step, picks = {}) {
 
 /* ใช้การ์ดใบนี้ตอนนี้ได้ไหม — ต้องมีอย่างน้อยหนึ่งเป้าในขั้นแรก
    เรือเต็มทั้งสองลำก็ใช้จดหมายไม่ได้ เพราะไม่มีที่ให้ส่งใครไป */
+/* คีย์ข้อความของขั้นถาม — ใบไหนไม่ประกาศก็ตกไปใช้ของกลาง
+   ใช้เป็นสองที่: บรรทัดสั่งกลางกระดาน กับหัวข้อในกล่องยืนยัน */
+export const askKey = (id, step) => {
+  const k = effectOf(id)?.ask?.[step];
+  return k ? `wreck.ask.${k}` : `wreck.ask.any.${step}`;
+};
+
 export function canUseCard(st, uid, id) {
   const first = nextStep(id, {});
   if (!first) return true;
