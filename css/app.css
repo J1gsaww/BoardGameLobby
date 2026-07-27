@@ -1704,3 +1704,11 @@ button{ cursor:pointer; border:0; background:none; }
 .wr-save-yes{ color:var(--mint); }
 .wr-save-no{ color:var(--rose); }
 .wr-save-yes:hover, .wr-save-no:hover{ color:#241704; }
+
+/* ปุ่มการ์ดในคอลัมน์ Action — มีภาพนำหน้าให้แยกจาก Action ปกติ */
+.wr-act-card{ display:flex; align-items:center; gap:8px; text-align:left; border-color:var(--lamp); }
+.wr-act-card:disabled{ border-color:var(--line); }
+.wr-act-thumb{
+  width:20px; aspect-ratio:3/4; object-fit:cover; border-radius:3px; flex:0 0 auto;
+  box-shadow:0 1px 3px rgba(0,0,0,.7);
+}

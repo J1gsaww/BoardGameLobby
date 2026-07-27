@@ -1015,9 +1015,28 @@ function paintActions(el, st, ctx) {
   const common = ['activate', 'peek', 'force'].map(k => btn(k)).join('') + boatRow;
 
   const list = ['attack', 'kick', 'mutiny', 'islandVote', 'shiftCargo'].filter(k => can.includes(k));
-  const byRole = list.length
+
+  /* การ์ดในมือเป็นแถวของตัวเอง ต่อท้ายแถวตำแหน่ง
+     ต้องคิดแยกจาก actionsFor เพราะบางใบใช้ได้ในตาคนอื่น
+     ซึ่ง actionsFor จะคืนค่าว่างเสมอเพราะยังไม่ถึงตาเรา */
+  const anyNow = anytimeCards(st, me, ctx.secret?.held || []);
+  const cards = (ctx.secret?.held || []).map(id => {
+    const c = eventById(id);
+    const nm = c ? (c[lang] || c.th).name : id;
+    const on = canUseCard(st, me, id) && (anyNow.includes(id) || can.includes('playHeld'));
+    return `<button class="wr-act wr-act-card" data-held="${esc(id)}"${on ? '' : ' disabled'}
+      title="${esc(on ? '' : t('wreck.cardWait'))}">
+        <img class="wr-act-thumb" src="${esc(cardArt(id))}" alt="" draggable="false"
+          data-alt="${esc(cardArtAlt(id))}"
+          onerror="if(this.dataset.alt){this.src=this.dataset.alt;this.dataset.alt='';}else{this.remove();}">
+        ${esc(t('wreck.act.playHeld', { card: nm }))}
+      </button>`;
+  }).join('');
+
+  const byRole = (list.length
     ? `<span class="wr-act-role">${esc(t('wreck.role.' + role))}</span>` + list.map(k => btn(k)).join('')
-    : `<p class="wr-empty">${esc(t('wreck.noRoleAction'))}</p>`;
+    : (cards ? '' : `<p class="wr-empty">${esc(t('wreck.noRoleAction'))}</p>`))
+    + (cards ? `<span class="wr-act-role">${esc(t('wreck.act.held'))}</span>${cards}` : '');
 
   for (const [key, html] of [['common', common], ['role', byRole]]) {
     const box = el.querySelector(`[data-group="${key}"]`);
@@ -1029,6 +1048,14 @@ function paintActions(el, st, ctx) {
   });
   el.querySelectorAll('.wr-act[data-do]').forEach(b => {
     b.onclick = () => { if (!b.disabled) startAction(el, st, ctx, b.dataset.do); };
+  });
+  el.querySelectorAll('.wr-act[data-held]').forEach(b => {
+    b.onclick = () => {
+      if (b.disabled) return;
+      plan = { act: 'playHeld', card: b.dataset.held, via: 'menu' };
+      openMenu(el, b, { kind: 'aim' });
+      paint(el);
+    };
   });
 
   if (frozenNow) {
