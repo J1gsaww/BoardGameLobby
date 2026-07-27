@@ -773,8 +773,19 @@ export function birdStrike(st, hands = {}, rng = Math.random) {
    คนละเครื่องตั้งภาษาไม่เหมือนกัน แปลตอนวาดจึงถูกต้องทั้งสองฝั่ง */
 export const LOG_MAX = 8;
 
+/* Firestore ปฏิเสธค่า undefined ทั้งชุดคำสั่ง ไม่ใช่แค่ข้ามฟิลด์นั้น
+   คำสั่งทั้งก้อนจึงล้มโดยที่หน้าจอไม่มีอะไรบอก ปุ่มกดแล้วเงียบสนิท
+
+   ตัวที่ทำให้เกิดบ่อยคือช่องว่างในบรรทัดบันทึก เช่นการ์ดที่ไม่มีเป้าเป็นคน
+   แล้วโค้ดยังพยายามหาชื่อผู้เล่นของเป้ามาใส่ ตัดทิ้งตรงนี้ทีเดียวจบทุกใบ */
+const clean = (o) => {
+  const out = {};
+  for (const [k, v] of Object.entries(o || {})) if (v !== undefined) out[k] = v;
+  return out;
+};
+
 export const pushLog = (st, key, args = {}) => ({
   ...st,
-  log: [...(st.log || []), { key, args, at: (st.logSeq || 0) + 1 }].slice(-LOG_MAX),
+  log: [...(st.log || []), { key, args: clean(args), at: (st.logSeq || 0) + 1 }].slice(-LOG_MAX),
   logSeq: (st.logSeq || 0) + 1
 });

@@ -530,6 +530,14 @@ function giveMap(ctx, uid, p, target) {
   };
 }
 
+/* ตัดฟิลด์ที่เป็น undefined ออก — Firestore ปฏิเสธทั้งชุดคำสั่งถ้าเจอแม้ตัวเดียว
+   ผลคือกดปุ่มแล้วเงียบสนิทโดยไม่มีอะไรบอกว่าเกิดอะไรขึ้น */
+const noBlank = (o) => {
+  const out = {};
+  for (const [k, v] of Object.entries(o || {})) if (v !== undefined) out[k] = v;
+  return out;
+};
+
 /* ── หยิบการ์ดจากมือมาใช้ ──────────────────────────────────
    ใช้ได้ในตาตัวเองเท่านั้น และนับเป็น Action ของตานั้น
    ยังไม่ผ่านตาทันที เพราะต้องถามก่อนว่าจะใช้กับใครที่ไหน */
@@ -645,8 +653,8 @@ function useCard(ctx, uid, { target, cards }) {
                          /* การ์ดกัน Maroon ต้องรู้กันทั้งวง เพราะการยกแผนที่ประกาศอยู่แล้ว */
                          saves: giftSaves(out.state.saves, uid, bag, gift, theirBag),
                          ...(pausing || !out.shout ? {} : {
-                           shout: { ...out.shout, beforePos: st.pos,
-                                    at: (out.state.logSeq || 0) + 1 } }) },
+                           shout: noBlank({ ...out.shout, beforePos: st.pos,
+                                            at: (out.state.logSeq || 0) + 1 }) }) },
                        'wreck.log.card.' + p.card,
                        { name: st.names?.[uid],
                          who: st.names?.[got.player] || st.names?.[target] });
