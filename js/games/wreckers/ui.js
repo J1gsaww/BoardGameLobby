@@ -521,9 +521,12 @@ function paintHand(el, st, ctx) {
       const anytime = anytimeCards(st, me, ctx.secret?.held || []).includes(id);
       const usable = canUseCard(st, me, id)
         && (anytime || actionsFor(st, me).includes('playHeld'));
+      /* บอกเหตุผลเวลากดไม่ได้ ไม่งั้นจะดูเหมือนหน้าจอเสีย */
+      const why = usable ? (info ? `${info.name} — ${info.desc}` : id)
+        : !canUseCard(st, me, id) ? t('wreck.cardNoRoom') : t('wreck.cardWait');
       return `<button class="wr-card wr-held${usable ? ' ready' : ' off'}"
         data-held="${esc(id)}"${usable ? '' : ' disabled'}
-        title="${esc(info ? `${info.name} — ${info.desc}` : id)}">
+        title="${esc(why)}">
           ${eventFace(id)}
         </button>`;
     }).join('') +
@@ -1024,8 +1027,9 @@ function paintActions(el, st, ctx) {
     const c = eventById(id);
     const nm = c ? (c[lang] || c.th).name : id;
     const on = canUseCard(st, me, id) && (anyNow.includes(id) || can.includes('playHeld'));
+    const why = on ? '' : (!canUseCard(st, me, id) ? t('wreck.cardNoRoom') : t('wreck.cardWait'));
     return `<button class="wr-act wr-act-card" data-held="${esc(id)}"${on ? '' : ' disabled'}
-      title="${esc(on ? '' : t('wreck.cardWait'))}">
+      title="${esc(why)}">
         <img class="wr-act-thumb" src="${esc(cardArt(id))}" alt="" draggable="false"
           data-alt="${esc(cardArtAlt(id))}"
           onerror="if(this.dataset.alt){this.src=this.dataset.alt;this.dataset.alt='';}else{this.remove();}">
