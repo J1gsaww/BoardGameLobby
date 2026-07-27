@@ -931,7 +931,8 @@ function pawnMenu(st, ctx) {
        ของเดิมกัปตันอยู่คนเดียวก็ยังเห็นปุ่มไล่คนลงเรือ ทั้งที่ไม่มีใครให้ไล่ */
     /* Action ที่ทำผ่านแถวการ์ดด้านล่างอยู่แล้ว ไม่ต้องมาซ้ำในเมนูข้างตัว
        เพราะกดจากตรงนี้ก็ยังต้องไปเลือกช่องการ์ดอยู่ดี ไม่ได้ช่วยอะไร */
-    const viaCards = ['activate', 'peek', 'force'];
+    /* พวกนี้ตอบด้วยการคลิกของบนกระดานหรือผ่านแถวการ์ด ไม่ใช่ปุ่มในเมนู */
+    const viaCards = ['activate', 'peek', 'force', 'useCard', 'useSave'];
     const acts = actionsFor(st, meUid)
       .filter(k => !['voteCard', 'toBoat'].includes(k) && !viaCards.includes(k));
 
@@ -1071,6 +1072,9 @@ function paintActions(el, st, ctx) {
 
   const common = ['activate', 'peek', 'force'].map(k => btn(k)).join('') + boatRow;
 
+  /* useCard / useSave ไม่ใช่ปุ่ม — มันคือ "ตอบด้วยการคลิกของบนกระดาน"
+     ถ้าทำเป็นปุ่ม จะกดได้โดยไม่มีเป้าติดมาด้วย แล้วส่งคำสั่งเปล่าไปโดนปฏิเสธเงียบ ๆ
+     ตัวรายการ Action มีไว้บอกว่าทำอะไรได้ ไม่ได้แปลว่าทุกตัวต้องมีปุ่ม */
   const list = ['attack', 'kick', 'mutiny', 'islandVote', 'shiftCargo'].filter(k => can.includes(k));
 
   /* การ์ดในมือเป็นแถวของตัวเอง ต่อท้ายแถวตำแหน่ง
@@ -1190,18 +1194,21 @@ export function planBody(st, ctx) {
   } else if (plan.act === 'useCard') {
     /* หัวข้อกับป้ายกำกับต้องเป็นของการ์ดใบนั้น ไม่ใช่ข้อความกลาง
        ของเดิมยืมของปืนพกมาใช้ทุกใบ จดหมายเลยขึ้นว่า "ไล่ลงเรือ" ทั้งที่กำลังเชิญขึ้นเรือ */
+    /* เป้าเป็นคนก็ได้ เป็นของบนกระดานก็ได้ ดูจากว่ามีชื่อผู้เล่นไหม
+       เช็กแบบนี้แทนการไล่ชื่อขั้นทีละอัน จะได้ไม่ต้องแก้ทุกครั้งที่มีขั้นใหม่ */
     const step = st.pending?.needs || 'player';
-    const isShip = step === 'ship';
+    const label = st.names?.[plan.target] || (plan.target ? t('wreck.place.' + plan.target) : '');
     rows = `<div class="wr-plan-row"><span>${esc(t(askKey(st.pending?.card, step)))}</span>
-      <span class="wr-chip on">${esc(isShip
-        ? t('wreck.place.' + plan.target)
-        : (st.names?.[plan.target] || '?'))}</span></div>`;
+      <span class="wr-chip on">${esc(label || '—')}</span></div>`;
   } else if (plan.act === 'toBoat') {
     rows = `<div class="wr-plan-row"><span>${esc(t('wreck.act.toBoat'))}</span>
       <span class="wr-chip on">${esc(t('wreck.place.' + plan.boat))}</span></div>`;
   }
 
-  const blocked = plan.act === 'kick' && !plan.uid;
+  /* ไม่มีเป้าก็ยืนยันไม่ได้ กันส่งคำสั่งเปล่าที่จะโดนปฏิเสธเงียบ ๆ
+     ผู้เล่นจะได้ไม่นั่งงงว่าทำไมกดแล้วไม่มีอะไรเกิดขึ้น */
+  const blocked = (plan.act === 'kick' && !plan.uid)
+               || (plan.act === 'useCard' && !plan.target);
   const headKey = plan.act === 'useCard' && st.pending?.card
     ? 'wreck.card.' + st.pending.card
     : 'wreck.act.' + plan.act;
