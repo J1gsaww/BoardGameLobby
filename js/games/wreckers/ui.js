@@ -16,7 +16,7 @@ import { face as avatarFace } from '../../avatar.js';
 import { mountSea, stopSea } from './sea.js';
 import { cardById as voteById, voteCard, iconSrc } from './vote.js';
 import { dieSvg, rollPose, HERO, ROLL_MS } from './die.js';
-import { actionsFor, occupants, placeOf, BOAT_IDS, canVoteNow, anytimeCards } from './rules.js';
+import { actionsFor, occupants, placeOf, BOAT_IDS, canVoteNow } from './rules.js';
 import { targetsOf, canUseCard, askKey } from './effects.js';
 import { BASE_CARDS, cardArt, cardArtAlt, CARD_BACK, CARD_BACK_ALT,
          tokenArt, tokenAlt } from './events.js';
@@ -517,13 +517,14 @@ function paintHand(el, st, ctx) {
     (ctx.secret?.held || []).map(id => {
       const c = eventById(id);
       const info = c ? (c[lang] || c.th) : null;
-      /* ใบที่ใช้ได้ในตาคนอื่นด้วย ต้องกดได้แม้ยังไม่ถึงตาเรา */
-      const anytime = anytimeCards(st, me, ctx.secret?.held || []).includes(id);
-      const usable = canUseCard(st, me, id)
-        && (anytime || actionsFor(st, me).includes('playHeld'));
-      /* บอกเหตุผลเวลากดไม่ได้ ไม่งั้นจะดูเหมือนหน้าจอเสีย */
+      /* กดได้เสมอ ปิดเฉพาะตอนกติกาบอกว่าไม่มีเป้าให้เลือกจริง ๆ
+
+         เดิมหน้าจอเช็กเองว่าถึงตาหรือยัง ซึ่งเป็นการตัดสินซ้ำกับกติกา
+         พอสองฝั่งคิดไม่ตรงกัน ปุ่มตายทั้งที่กติกาไม่ได้ห้าม แล้วไล่หาสาเหตุไม่เจอ
+         ตอนนี้หน้าจอมีหน้าที่แค่ยิงคำขอ ฝั่งเซิร์ฟเวอร์เป็นคนบอกว่าได้หรือไม่ได้ */
+      const usable = canUseCard(st, me, id);
       const why = usable ? (info ? `${info.name} — ${info.desc}` : id)
-        : !canUseCard(st, me, id) ? t('wreck.cardNoRoom') : t('wreck.cardWait');
+        : t('wreck.cardNoRoom');
       return `<button class="wr-card wr-held${usable ? ' ready' : ' off'}"
         data-held="${esc(id)}"${usable ? '' : ' disabled'}
         title="${esc(why)}">
@@ -885,27 +886,22 @@ function pawnMenu(st, ctx) {
     const acts = actionsFor(st, meUid)
       .filter(k => !['voteCard', 'toBoat'].includes(k) && !viaCards.includes(k));
 
-    /* การ์ดที่ใช้ได้ในตาคนอื่น ต้องมีปุ่มแม้ยังไม่ถึงตาเรา
-       ไม่งั้นจะใช้ไม่ได้เลย เพราะโอกาสใช้คือตอนที่ยังไม่ถึงตาตัวเอง */
-    const anyNow = anytimeCards(st, meUid, ctx.secret?.held || []);
-    if (anyNow.length && !acts.includes('playHeld')) acts.push('playHeld');
+    acts.filter(k => k !== 'playHeld')
+        .forEach(k => rows.push(btnRow(k, t('wreck.act.' + k), true)));
 
-    acts.forEach(k => {
-      if (k !== 'playHeld') { rows.push(btnRow(k, t('wreck.act.' + k), true)); return; }
-      /* การ์ดในมือแต่ละใบเป็นปุ่มของตัวเอง ทึบเมื่อใช้ตอนนี้ไม่ได้
-         เช่นจดหมายที่เรือเต็มทั้งสองลำ กดไปก็ส่งใครไม่ได้ */
-      for (const id of (ctx.secret?.held || [])) {
-        const c = eventById(id);
-        const nm = c ? (c[lang] || c.th).name : id;
-        rows.push(`<button class="wr-menu-btn wr-menu-card" data-do="held" data-arg="${esc(id)}"
-          ${canUseCard(st, meUid, id) ? '' : 'disabled'}>
-            <img class="wr-menu-thumb" src="${esc(cardArt(id))}" alt="" draggable="false"
-              data-alt="${esc(cardArtAlt(id))}"
-              onerror="if(this.dataset.alt){this.src=this.dataset.alt;this.dataset.alt='';}else{this.remove();}">
-            ${esc(t('wreck.act.playHeld', { card: nm }))}
-          </button>`);
-      }
-    });
+    /* การ์ดในมือเป็นแถวของตัวเอง ไม่ผูกกับรายการ Action เลย
+       เพราะรายการ Action ว่างเปล่าเมื่อยังไม่ถึงตาเรา แต่การ์ดบางใบใช้ตอนนั้นได้ */
+    for (const id of (ctx.secret?.held || [])) {
+      const c = eventById(id);
+      const nm = c ? (c[lang] || c.th).name : id;
+      rows.push(`<button class="wr-menu-btn wr-menu-card" data-do="held" data-arg="${esc(id)}"
+        ${canUseCard(st, meUid, id) ? '' : 'disabled'}>
+          <img class="wr-menu-thumb" src="${esc(cardArt(id))}" alt="" draggable="false"
+            data-alt="${esc(cardArtAlt(id))}"
+            onerror="if(this.dataset.alt){this.src=this.dataset.alt;this.dataset.alt='';}else{this.remove();}">
+          ${esc(t('wreck.act.playHeld', { card: nm }))}
+        </button>`);
+    }
 
     const boats = boatsFrom(spot);
     if (boats.length === 1) {
@@ -1022,12 +1018,11 @@ function paintActions(el, st, ctx) {
   /* การ์ดในมือเป็นแถวของตัวเอง ต่อท้ายแถวตำแหน่ง
      ต้องคิดแยกจาก actionsFor เพราะบางใบใช้ได้ในตาคนอื่น
      ซึ่ง actionsFor จะคืนค่าว่างเสมอเพราะยังไม่ถึงตาเรา */
-  const anyNow = anytimeCards(st, me, ctx.secret?.held || []);
   const cards = (ctx.secret?.held || []).map(id => {
     const c = eventById(id);
     const nm = c ? (c[lang] || c.th).name : id;
-    const on = canUseCard(st, me, id) && (anyNow.includes(id) || can.includes('playHeld'));
-    const why = on ? '' : (!canUseCard(st, me, id) ? t('wreck.cardNoRoom') : t('wreck.cardWait'));
+    const on = canUseCard(st, me, id);
+    const why = on ? '' : t('wreck.cardNoRoom');
     return `<button class="wr-act wr-act-card" data-held="${esc(id)}"${on ? '' : ' disabled'}
       title="${esc(why)}">
         <img class="wr-act-thumb" src="${esc(cardArt(id))}" alt="" draggable="false"
