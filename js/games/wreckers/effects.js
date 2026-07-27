@@ -81,6 +81,27 @@ export const shipsWithRoom = (st, who) =>
     return line.includes(who) || line.length < capacityOf(s);
   });
 
+/* การ์ดแผนที่ทุกใบใช้กติกาเดียวกัน — เปิดแล้วต้องยกให้คนอื่น ให้ตัวเองไม่ได้
+   ผลของแต่ละใบต่างกันตอนถูกใช้ ไม่ใช่ตอนได้มา จึงประกาศรวมกันตรงนี้ได้ */
+export const MAP_CARDS = ['fountain', 'atlantis', 'eldorado', 'lyonesse', 'anthemoessa'];
+
+for (const id of MAP_CARDS) {
+  EFFECTS[id] = {
+    steps: ['player'],
+    ask: { player: 'map.player' },
+    targets: (st, uid) => (st.seats || []).filter(u => u !== uid && st.pos?.[u]),
+    /* ผลคือยกการ์ดให้คนที่เลือก ไม่ได้ทำอะไรกับกระดาน
+       ตัวจัดการคำสั่งเป็นคนเอาไปใส่มือให้ เพราะต้องแตะข้อมูลลับของคนอื่น */
+    give: true,
+    run: (st, uid, picks, hands) => ({
+      state: st,
+      hands,
+      give: { to: picks.player, card: id },
+      shout: { kind: 'gaveMap', by: uid, who: picks.player, card: id }
+    })
+  };
+}
+
 export const effectOf = (id) => EFFECTS[id] || null;
 
 /* การ์ดใบนี้เปิดแล้วเข้ามือไหม */

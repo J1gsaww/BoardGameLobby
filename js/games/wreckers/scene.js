@@ -95,7 +95,9 @@ function sceneKey(st) {
   if (st.shout && !dismissed.has('shout:' + st.shout.at)) return `shout:${st.shout.at}`;
   /* ช่วงรอให้คนเปิดเลือกเป้า — ค้างไว้จนกว่าจะเลือกเสร็จ ไม่มีนับถอยหลัง
      ทุกคนต้องรู้ว่ากำลังอยู่ในช่วงนี้ ไม่ใช่แค่คนที่ต้องเลือก */
-  if (st.pending) return `card:${st.pending.at}`;   /* กุญแจเดียวกับตอนเปิด ฉากจึงต่อเนื่อง ไม่กะพริบ */
+  if (st.pending) return `card:${st.pending.at}`;
+  /* ค้างรอคำตอบว่าจะใช้การ์ดกัน Maroon ไหม — ฉากของตัวเอง ไม่นับถอยหลัง */
+  if (st.saveAsk) return `save:${st.saveAsk.at}`;   /* กุญแจเดียวกับตอนเปิด ฉากจึงต่อเนื่อง ไม่กะพริบ */
   if (st.aim) return `ep:${st.aim.by}:${st.aim.place}`;
   if (st.lastVote && !dismissed.has(st.lastVote.at))
     return `ep:${st.lastVote.caller}:${st.lastVote.place}`;
@@ -193,6 +195,7 @@ function step(body, st, ctx) {
   if (key.startsWith('peek:')) return peekNote(body, st);
   if (key.startsWith('shout:')) return shoutNote(body, st);
   if (key.startsWith('card:')) return cardNote(body, st, ctx);
+  if (key.startsWith('save:')) return saveNote(body, st, ctx);
   if (st.vote) { goto('collect'); return collect(body, st); }
 
   /* เข้ามาตอนกัปตันกำลังเลือกอยู่แล้ว ก็ข้ามการเล่าย้อนหลังไปเลย */
@@ -287,7 +290,14 @@ function shoutNote(body, st) {
   }
 
   if (goto('collect')) {
-    const msg = sh.kind === 'marque'
+    const msg = sh.kind === 'saved'
+      ? t('wreck.scene.savedBy', {
+          name: st.names?.[sh.by] || '?', card: t('wreck.card.' + sh.card) })
+      : sh.kind === 'gaveMap'
+      ? t('wreck.scene.gaveMap', {
+          name: st.names?.[sh.by] || '?', who: st.names?.[sh.who] || '?',
+          card: t('wreck.card.' + sh.card) })
+      : sh.kind === 'marque'
       ? t('wreck.scene.marque', {
           name: st.names?.[sh.by] || '?',
           who: st.names?.[sh.who] || '?',
@@ -398,7 +408,44 @@ function cardNote(body, st, ctx) {
   return false;
 }
 
+/* ── ถามว่าจะใช้การ์ดกัน Maroon ไหม ───────────────────────
+   คนที่ถูกถามเห็นการ์ดใหญ่กลางจอพร้อมปุ่มสองปุ่ม
+   คนอื่นเห็นแค่ข้อความบอกว่ากำลังรออยู่ ตำแหน่งเดียวกับตอนเลือกเป้า */
+function saveNote(body, st, ctx) {
+  const mine = st.saveAsk.who === ctx.me.uid;
+  const want = 'save:' + (mine ? 'me' : 'them');
+  if (aimView === want) return false;
+  aimView = want;
+
+  if (!mine) {
+    body.innerHTML = `<p class="wr-scene-note">${esc(t('wreck.scene.saveWait', {
+      name: st.names?.[st.saveAsk.who] || '?' }))}</p>`;
+    return false;
+  }
+
+  const id = st.saveAsk.card;
+  const c = cardById(id);
+  const info = c ? (c[lang] || c.th) : null;
+  body.innerHTML = `<div class="wr-cardup">
+      <img class="wr-cardup-img" src="${esc(cardArt(id))}" alt=""
+        draggable="false" onerror="this.remove()">
+      <span class="wr-cardup-name">${esc(info?.name || id)}</span>
+      <span class="wr-cardup-desc">${esc(t('wreck.scene.saveAsk'))}</span>
+    </div>
+    <div class="wr-scene-btns">
+      <button class="wr-scene-btn wr-save-yes" data-save="1">${esc(t('wreck.scene.saveYes'))}</button>
+      <button class="wr-scene-btn wr-save-no" data-save="0">${esc(t('wreck.scene.saveNo'))}</button>
+    </div>`;
+  body.querySelectorAll('[data-save]').forEach(b => {
+    b.onclick = () => sendFn?.('useSave', { yes: b.dataset.save === '1' });
+  });
+  return false;
+}
+
 function titleOf(st, ph, me) {
+  if (st.saveAsk && key.startsWith('save:')) {
+    return { who: t('wreck.card.' + st.saveAsk.card), big: st.names?.[st.saveAsk.who] || '?' };
+  }
   if (key.startsWith('card:')) {
     return { who: t('wreck.scene.cardUp'), big: st.names?.[st.cardUp.by] || '?' };
   }

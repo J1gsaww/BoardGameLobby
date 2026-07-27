@@ -23,7 +23,7 @@ import {
   actionsFor, boatsOpen, maroon, pileOf, shuffle, redeal, advance, burnVoteBans, clearVoteWeights,
   buildEventDeck, refillSlots, emptyDeck,
   startVote, voteReady, tallyRow, attackPasses, mutinyPasses, brawlSplit,
-  moveBox, score, winningSide, winners, dealNations, pushLog, refill, birdStrike,
+  moveBox, score, winningSide, winners, dealNations, pushLog, refill, birdStrike, SAVE_CARDS,
   attackTargets, takeSides, keepSides, canAttack
 } from './rules.js';
 
@@ -157,6 +157,10 @@ export const turnDeadline = (st, now = Date.now()) =>
   st.turnSeconds ? now + st.turnSeconds * 1000 : null;
 
 export function passTurn(st, now = Date.now()) {
+  /* มีคนค้างตอบว่าจะใช้การ์ดกัน Maroon ไหม = ยังไม่จบตา
+     เช็กที่นี่จุดเดียวแทนที่จะไล่ใส่ทุกที่ที่เรียกผ่านตา ซึ่งมีสิบกว่าที่ */
+  if (st.saveAsk) return st;
+
   const { state, uid } = advance(st);        /* คนที่ติดหนี้ข้ามเทิร์นถูกหักหนี้แล้วข้ามไปในนี้ */
   return openTurn({
     ...state,
@@ -184,6 +188,10 @@ export async function onAction(ctx, action) {
   /* ส่งไพ่โหวตทำได้นอกตาตัวเอง เป็นทางเดียวที่ไม่ต้องรอถึงตา */
   if (type === 'voteCard') return submitVote(ctx, uid, payload.card);
   if (type === 'endGame') return finish(ctx);
+
+  /* ตอบว่าจะใช้การ์ดกัน Maroon ไหม ทำได้นอกตาตัวเอง
+     เพราะคนที่ถูกถามมักไม่ใช่คนที่ถึงตา เช่นโดนคนอื่นยิงหรือโดนนกถล่มทั้งลำ */
+  if (type === 'useSave') return settle(ctx, useSave(ctx, uid, payload));
 
   if (st.turn !== uid || st.vote) return null;
   if (!isPlaying(st, uid)) return null;
@@ -234,6 +242,7 @@ async function route(ctx, uid, type, payload) {
     case 'shiftCargo': return shiftCargo(ctx, uid, payload.from);
     case 'useCard':    return useCard(ctx, uid, payload);
     case 'playHeld':   return playHeld(ctx, uid, payload);
+    case 'useSave':    return useSave(ctx, uid, payload);
     case 'attack':     return callVote(ctx, uid, 'attack', payload);
     case 'aimAt':      return aimAt(ctx, uid, payload);
     case 'takeFrom':   return takeFrom(ctx, uid, payload);
@@ -363,6 +372,58 @@ function activate(ctx, uid, { slot }) {
   };
 }
 
+/* ── ตอบว่าจะใช้การ์ดกัน Maroon ไหม ───────────────────────
+   ตอบใช่  = ไม่โดน Maroon การ์ดถูกทิ้ง ประกาศให้ทั้งวงรู้
+   ตอบไม่  = โดนตามปกติ การ์ดยังอยู่ในมือ เก็บไว้ใช้ครั้งหน้าได้ */
+function useSave(ctx, uid, { yes }) {
+  const st = ctx.state;
+  const ask = st.saveAsk;
+  if (ask?.who !== uid) return null;
+
+  const clear = { ...st, saveAsk: null };
+  const hands = handsOf(ctx);
+
+  if (!yes) {
+    /* บังคับให้ Maroon จริง ไม่ต้องถามซ้ำ ไม่งั้นจะวนถามไม่จบ */
+    const out = maroon(clear, uid, hands, Math.random, true);
+    return {
+      state: passTurn(pushLog(out.state, 'wreck.log.saveNo', { name: st.names?.[uid] })),
+      secrets: out.hands === hands ? undefined : secretsFrom(ctx, out.hands)
+    };
+  }
+
+  const mine = ctx.secrets?.[uid] || {};
+  const bag = (mine.held || []).filter((c, i, a) => i !== a.indexOf(ask.card));
+  const saves = { ...clear.saves };
+  delete saves[uid];
+
+  const done = pushLog({ ...clear, saves,
+                         held: { ...clear.held, [uid]: bag.length },
+                         shout: { kind: 'saved', by: uid, card: ask.card,
+                                  at: (clear.logSeq || 0) + 1 } },
+                       'wreck.log.saveYes', { name: st.names?.[uid] });
+
+  return {
+    state: passTurn(done),
+    secrets: { [uid]: { ...mine, held: bag } }
+  };
+}
+
+/* ทะเบียนการ์ดกัน Maroon — ใครถืออยู่บ้าง เก็บเท่าที่จำเป็นเท่านั้น */
+function giftSaves(cur = {}, uid, bag, gift, theirBag) {
+  const out = { ...cur };
+  const pick = (list) => list.find(c => SAVE_CARDS.includes(c)) || null;
+
+  const mineSave = pick(bag);
+  if (mineSave) out[uid] = mineSave; else delete out[uid];
+
+  if (gift) {
+    const theirSave = pick(theirBag);
+    if (theirSave) out[gift.to] = theirSave; else delete out[gift.to];
+  }
+  return out;
+}
+
 /* ── หยิบการ์ดจากมือมาใช้ ──────────────────────────────────
    ใช้ได้ในตาตัวเองเท่านั้น และนับเป็น Action ของตานั้น
    ยังไม่ผ่านตาทันที เพราะต้องถามก่อนว่าจะใช้กับใครที่ไหน */
@@ -416,9 +477,17 @@ function useCard(ctx, uid, { target }) {
     ? (mine.held || []).filter((c, i, a) => i !== a.indexOf(p.card))
     : (mine.held || []);
 
+  /* การ์ดที่ยกให้คนอื่น — เข้ามือของเขา ไม่ใช่ของคนเปิด */
+  const gift = out.give || null;
+  const theirs = gift ? (ctx.secrets?.[gift.to]?.held || []) : [];
+  const theirBag = gift ? [...theirs, gift.card] : theirs;
+
   /* ล้าง cardUp ด้วย ไม่งั้นพอฉากประกาศผลจบ ฉากเปิดการ์ดจะเด้งกลับมาเล่าซ้ำ */
   const next = pushLog({ ...out.state, pending: null, cardUp: null,
-                         held: { ...out.state.held, [uid]: bag.length },
+                         held: { ...out.state.held, [uid]: bag.length,
+                                 ...(gift ? { [gift.to]: theirBag.length } : {}) },
+                         /* การ์ดกัน Maroon ต้องรู้กันทั้งวง เพราะการยกแผนที่ประกาศอยู่แล้ว */
+                         saves: giftSaves(out.state.saves, uid, bag, gift, theirBag),
                          shout: { ...out.shout, beforePos: st.pos,
                                   at: (out.state.logSeq || 0) + 1 } },
                        'wreck.log.card.' + p.card,
@@ -427,7 +496,8 @@ function useCard(ctx, uid, { target }) {
 
   const secrets = {
     ...(out.hands === hands ? {} : secretsFrom(ctx, out.hands)),
-    [uid]: { ...mine, ...(out.hands === hands ? {} : { vote: out.hands[uid] }), held: bag }
+    [uid]: { ...mine, ...(out.hands === hands ? {} : { vote: out.hands[uid] }), held: bag },
+    ...(gift ? { [gift.to]: { ...(ctx.secrets?.[gift.to] || {}), held: theirBag } } : {})
   };
 
   return { state: passTurn(next), secrets };

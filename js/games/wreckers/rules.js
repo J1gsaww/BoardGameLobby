@@ -118,7 +118,14 @@ export function advance(st, from = st.turn) {
 export const COMMON = ['activate', 'peek', 'force', 'toBoat'];
 
 export function actionsFor(st, uid) {
-  if (st.phase !== 'play' || st.turn !== uid || st.vote) return [];
+  if (st.phase !== 'play') return [];
+
+  /* ค้างรอคำตอบว่าจะใช้การ์ดกัน Maroon ไหม
+     ต้องเช็กก่อนด่านตรวจว่าถึงตาหรือยัง เพราะคนที่ถูกถามมักไม่ใช่คนที่ถึงตา
+     เช่นโดนคนอื่นยิงด้วยปืนพก หรือโดนนกถล่มพร้อมทั้งลำ */
+  if (st.saveAsk) return st.saveAsk.who === uid ? ['useSave'] : [];
+
+  if (st.turn !== uid || st.vote) return [];
   const spot = st.pos?.[uid];
   if (!spot) return [];
 
@@ -194,9 +201,30 @@ export const canCallVote = (st, place) =>
 
    คืน hands กลับมาด้วยเพราะการเสียไพ่ถาวรต้องทิ้งไพ่จริงจากมือ
    ไม่ใช่แค่ลดตัวเลขเพดาน ไม่งั้นมือจะเกินเพดานค้างอยู่ */
-export function maroon(st, uid, hands = {}, rng = Math.random) {
+/* การ์ดในมือที่กัน Maroon ได้ แต่ต้องถามเจ้าตัวก่อนว่าจะใช้ไหม
+   ต่างจากโล่ตรงที่โล่กันเองอัตโนมัติ ส่วนอันนี้เป็นการตัดสินใจ */
+export const SAVE_CARDS = ['fountain'];
+
+/* เก็บเฉพาะการ์ดที่กัน Maroon ได้ไว้ในสถานะสาธารณะ ไม่ใช่การ์ดในมือทั้งหมด
+   ทำได้เพราะแผนที่ถูกยกให้กันโดยประกาศให้ทุกคนรู้อยู่แล้ว จึงไม่ได้เปิดเผยอะไรใหม่
+   ส่วนการ์ดอย่างจดหมายยังเป็นความลับตามเดิม เห็นแค่จำนวนใบ */
+export const saveInHand = (st, uid) => st.saves?.[uid] || null;
+
+export function maroon(st, uid, hands = {}, rng = Math.random, force = false) {
   /* โล่กันได้ทุกกรณี รวมถึงกรณีที่ปกติจะกลายเป็นเสียไพ่ถาวร */
   if (hasShield(st, uid)) return { state: burnShield(st, uid), hands, kind: 'shielded' };
+
+  /* มีการ์ดกันอยู่ในมือ = หยุดไว้ก่อน ไปถามเจ้าตัวว่าจะใช้ไหม
+     ยังไม่แตะตำแหน่งอะไรทั้งนั้น รอคำตอบแล้วค่อยว่ากัน
+     ทำตรงนี้จุดเดียวเพราะ maroon ถูกเรียกจากสิบกว่าที่ ถ้าไล่ใส่จะลืมแน่ */
+  const save = force ? null : saveInHand(st, uid);
+  if (save) {
+    return {
+      state: { ...st, saveAsk: { who: uid, card: save, at: (st.logSeq || 0) + 1 } },
+      hands,
+      kind: 'ask'
+    };
+  }
 
   const pos = st.pos || {};
   const onIsland = placeOf(pos[uid]) === 'island';

@@ -1299,3 +1299,45 @@ group('การ์ด · หนังสือตราตั้ง');
   ok('พอมีที่ว่างหนึ่งลำก็ใช้ได้', canUseCard(room, 'z', 'marque'), true);
   ok('เลือกได้เฉพาะลำที่ว่าง', shipsWithRoom(room, 'z'), ['shipL']);
 }
+
+group('การ์ด · แผนที่ยกให้คนอื่น และน้ำพุอมตะ');
+{
+  const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+  const deck = { ...out.secrets._deck, slots: ['fountain', ...out.secrets._deck.slots.slice(1)] };
+  const base = { ...out.state, phase: 'play', turn: 'a', pos: filled().pos,
+                 seats: [...P], names: filled().names, out: [] };
+  const ctx = { ...ctxOf(base), secrets: { ...out.secrets, _deck: deck }, hostUid: 'a' };
+
+  const up = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+  ok('แผนที่ต้องเลือกคนรับก่อน', up.state.pending.needs, 'player');
+  ok('ยังไม่ผ่านตา', up.state.turn, 'a');
+
+  const c2 = { ...ctxOf(up.state), secrets: { ...out.secrets, _deck: deck }, hostUid: 'a' };
+  ok('ยกให้ตัวเองไม่ได้',
+     await onAction(c2, { uid: 'a', type: 'useCard', payload: { target: 'a' } }), null);
+
+  const gave = await onAction(c2, { uid: 'a', type: 'useCard', payload: { target: 'b' } });
+  ok('แผนที่เข้ามือคนที่เลือก', gave.secrets.b.held, ['fountain']);
+  ok('คนเปิดไม่ได้ถืออะไร', gave.secrets.a.held ?? [], []);
+  ok('ทะเบียนการ์ดกันบอกว่าใครถือ', gave.state.saves.b, 'fountain');
+  ok('ประกาศบอกว่ายกให้ใคร', [gave.state.shout.kind, gave.state.shout.who], ['gaveMap', 'b']);
+  ok('ยกเสร็จแล้วผ่านตา', gave.state.turn, 'b');
+}
+{
+  /* ถือน้ำพุแล้วโดน Maroon = หยุดถามก่อน ไม่ย้ายทันที */
+  const st = { ...filled(), saves: { b: 'fountain' }, held: { b: 1 } };
+  const asked = maroon(st, 'b', {}, zero);
+  ok('หยุดไว้ถามก่อน', asked.kind, 'ask');
+  ok('ตำแหน่งยังไม่ขยับ', asked.state.pos.b, st.pos.b);
+  ok('บันทึกว่าถามใครเรื่องการ์ดใบไหน',
+     [asked.state.saveAsk.who, asked.state.saveAsk.card], ['b', 'fountain']);
+  ok('คนที่ถูกถามทำได้อย่างเดียวคือตอบ', actionsFor(asked.state, 'b'), ['useSave']);
+  ok('คนอื่นทำอะไรไม่ได้เลย', actionsFor(asked.state, 'a'), []);
+
+  const forced = maroon(st, 'b', {}, zero, true);
+  ok('สั่งบังคับได้ ไม่ถามซ้ำ', forced.kind !== 'ask', true);
+  ok('บังคับแล้วย้ายจริง', forced.state.pos.b.startsWith('island'), true);
+
+  const none = maroon({ ...filled() }, 'b', {}, zero);
+  ok('ไม่มีการ์ดกันก็โดนตามปกติ', none.kind !== 'ask', true);
+}

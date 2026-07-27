@@ -1699,3 +1699,8 @@ button{ cursor:pointer; border:0; background:none; }
   width:22px; aspect-ratio:3/4; object-fit:cover; border-radius:4px; flex:0 0 auto;
   box-shadow:0 1px 4px rgba(0,0,0,.7);
 }
+
+/* ปุ่มตอบว่าจะใช้การ์ดกัน Maroon ไหม */
+.wr-save-yes{ color:var(--mint); }
+.wr-save-no{ color:var(--rose); }
+.wr-save-yes:hover, .wr-save-no:hover{ color:#241704; }
