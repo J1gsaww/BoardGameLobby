@@ -13,7 +13,7 @@
 
 import { maroon, occupants, placeOf, addMark, joinPlace, capacityOf, SHIP_IDS,
          insertBehind, nextSeat, swapSpots, shuffleQueue, pileOf,
-         BOAT_IDS, isWrecked } from './rules.js';
+         BOAT_IDS, isWrecked, addVoteBan } from './rules.js';
 
 /* การ์ดหนึ่งใบประกาศได้สี่อย่าง ใส่เท่าที่ต้องใช้
 
@@ -43,6 +43,16 @@ export const EFFECTS = {
          ไม่ใช่ประกาศเป็นฉาก แค่เรืองรอบตัวสองวินาที */
       return { state: { ...st, pos, glow: { uids: [uid, target], at: (st.logSeq || 0) + 1 } }, hands };
     }
+  },
+
+  /* ประมวลโจรสลัด — คนเปิดโดนห้ามโหวตสองครั้ง
+     ใช้กลไกเดียวกับโทษของเอลโดราโด แค่เปลี่ยนจำนวนครั้ง
+     ป้ายข้างชื่อจึงขึ้นเองโดยไม่ต้องเก็บอะไรเพิ่ม เพราะอ่านจากจำนวนครั้งที่เหลือ */
+  piratecode: {
+    run: (st, uid, _picks, hands) => ({
+      state: addVoteBan(st, uid, 2),
+      hands
+    })
   },
 
   /* ดินปืน — ระเบิดเรือเล็กทิ้งหนึ่งลำ ใช้ไม่ได้อีกตลอดเกม

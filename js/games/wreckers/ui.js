@@ -16,7 +16,8 @@ import { face as avatarFace } from '../../avatar.js';
 import { mountSea, stopSea } from './sea.js';
 import { cardById as voteById, voteCard, iconSrc } from './vote.js';
 import { dieSvg, rollPose, HERO, ROLL_MS } from './die.js';
-import { actionsFor, occupants, placeOf, BOAT_IDS, canVoteNow, isWrecked, boatsFromAll } from './rules.js';
+import { actionsFor, occupants, placeOf, BOAT_IDS, canVoteNow, isWrecked,
+         boatsFromAll, boatsOpen } from './rules.js';
 import { targetsOf, canUseCard, askKey, canPlayNow, playWindow } from './effects.js';
 import { BASE_CARDS, cardArt, cardArtAlt, CARD_BACK, CARD_BACK_ALT,
          tokenArt, tokenAlt } from './events.js';
@@ -178,7 +179,9 @@ function shell(el, ctx) {
     const boat = String(b.dataset.spot || '').split(':')[0];
     if (now && meUid && BOAT_IDS.includes(boat)
         && actionsFor(now, meUid).includes('toBoat')
-        && boatsFrom(now.pos?.[meUid]).includes(boat)) {
+        /* ถามกติกาว่าลำนี้ลงได้จริงไหม ไม่ใช่ถามแค่ว่ามีลำนี้อยู่ตรงนี้
+           ตัวเดิมเป็นรายชื่อเชิงเรขาคณิต ไม่รู้ว่าลำไหนมีคนอยู่หรือลำไหนโดนระเบิดไปแล้ว */
+        && boatsOpen(now, now.pos?.[meUid]).includes(boat)) {
       plan = { act: 'toBoat', boat, via: 'menu' };
       openMenu(el, b, { kind: 'aim' });
       paint(el);
@@ -1326,13 +1329,26 @@ function paintRoster(el, st, ctx) {
     const role = roleOf(st.pos?.[uid]);
     const turn = st.turn === uid;
     const pick = hot.includes(uid);
-    const birds = st.marks?.[uid]?.bird || 0;
-    const tok = birds
-      ? `<img class="wr-row-token" src="${esc(tokenArt('albatross_icon'))}" alt=""
-           draggable="false" title="${esc(t('wreck.token.bird'))}"
-           data-alt="${esc(tokenAlt('albatross_icon'))}"
-           onerror="if(this.dataset.alt){this.src=this.dataset.alt;this.dataset.alt='';}else{this.remove();}">`
-      : '';
+    /* ป้ายข้างชื่อมีได้หลายอันพร้อมกัน เช่นมีนกเกาะและติดโทษห้ามโหวตในเวลาเดียวกัน
+       จึงรวมไว้ในกล่องเดียวแล้วต่อกันไป ไม่ใช่ช่องเดียวที่ทับกันเอง */
+    const tags = [];
+
+    if (st.marks?.[uid]?.bird) {
+      tags.push(`<img class="wr-row-token" src="${esc(tokenArt('albatross_icon'))}" alt=""
+        draggable="false" title="${esc(t('wreck.token.bird'))}"
+        data-alt="${esc(tokenAlt('albatross_icon'))}"
+        onerror="if(this.dataset.alt){this.src=this.dataset.alt;this.dataset.alt='';}else{this.remove();}">`);
+    }
+
+    /* โทษห้ามโหวต — ป้ายอ่านจากจำนวนครั้งที่เหลือโดยตรง
+       พอครบแล้วเลขเป็นศูนย์ ป้ายก็หายเอง ไม่ต้องมีใครไปเก็บกวาด */
+    const banLeft = st.voteBan?.[uid] || 0;
+    if (banLeft) {
+      tags.push(`<span class="wr-row-ban" title="${esc(t('wreck.tag.voteBan', { n: banLeft }))}">
+        \u2298${banLeft > 1 ? banLeft : ''}</span>`);
+    }
+
+    const tok = tags.length ? `<span class="wr-row-tags">${tags.join('')}</span>` : '';
     return `<li class="wr-row${turn ? ' turn' : ''}${pick ? ' pick-target' : ''}"
       ${pick ? `data-pick="${esc(uid)}"` : ''}>${tok}
       ${avatarFace(uid, st.names?.[uid] || '', (ctx.avatars || {})[uid], 26)}

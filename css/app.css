@@ -1822,3 +1822,12 @@ button{ cursor:pointer; border:0; background:none; }
   transform:scale(.85);
   filter:saturate(.75) brightness(.92);
 }
+
+/* ป้ายข้างชื่อในรายชื่อ — มีได้หลายอันพร้อมกัน เช่นมีนกเกาะและติดโทษห้ามโหวต */
+.wr-row-tags{ display:flex; align-items:center; gap:3px; flex:0 0 auto; }
+.wr-row-ban{
+  font-family:var(--mono); font-size:11px; line-height:1;
+  padding:2px 5px; border-radius:999px;
+  color:var(--rose); border:1px solid var(--rose);
+  background:rgba(242,100,126,.12);
+}

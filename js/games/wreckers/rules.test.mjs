@@ -1754,3 +1754,42 @@ group('การ์ด · ดินปืน');
   ok('คนบนเรือลำนั้นขึ้นเกาะ', placeOf(boom.state.pos.c), 'island');
   ok('ประกาศบอกว่าใครตกน้ำ', boom.state.shout.who, 'c');
 }
+
+group('การ์ด · ประมวลโจรสลัด');
+{
+  const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+  const deck = { ...out.secrets._deck, slots: ['piratecode', ...out.secrets._deck.slots.slice(1)] };
+  const pos = { a: 'shipL:C', b: 'shipL:F', c: 'shipL:3', d: 'shipR:C', e: 'island:G', f: 'island:2' };
+  const base = { ...out.state, phase: 'play', turn: 'a', pos, seats: [...P],
+                 names: filled().names, out: [] };
+  const ctx = { ...ctxOf(base), secrets: { ...out.secrets, _deck: deck }, hostUid: 'a' };
+
+  const r = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+  ok('เปิดแล้วติดโทษสองครั้ง', r.state.voteBan.a, 2);
+  ok('ไม่มีประกาศเป็นฉาก ตัวการ์ดบอกครบแล้ว', r.state.shout ?? null, null);
+  ok('เปิดแล้วผ่านตาไปเลย', r.state.turn, 'b');
+
+  /* ป้ายข้างชื่ออ่านจากจำนวนครั้งที่เหลือ ไม่ต้องเก็บสถานะแยก */
+  ok('รอบที่หนึ่ง · ไม่ถูกนับเป็นผู้ร่วมโหวต',
+     startVote({ ...r.state, vote: null }, { kind: 'attack', place: 'shipL', caller: 'b' })
+       .vote.voters.includes('a'), false);
+
+  /* เดินสามรอบเต็ม โทษต้องหมดพอดีหลังรอบที่สอง */
+  let cur = r.state;
+  const seen = [];
+  for (let i = 0; i < 3; i++) {
+    const v = startVote({ ...cur, vote: null }, { kind: 'attack', place: 'shipL', caller: 'b' });
+    seen.push({ joined: v.vote.voters.includes('a'), left: v.voteBan?.a || 0 });
+    let c2 = { ...ctx, state: v };
+    let rr = { state: v, secrets: {} };
+    for (const u of v.vote.voters) {
+      c2 = { ...c2, state: rr.state, secrets: { ...c2.secrets, ...(rr.secrets || {}) } };
+      rr = await onAction(c2, { uid: u, type: 'voteCard', payload: { card: c2.secrets[u].vote[0] } });
+    }
+    cur = rr.state;
+  }
+  ok('รอบ 1 กับ 2 ร่วมไม่ได้ · รอบ 3 กลับมาร่วมได้',
+     seen.map(s => s.joined), [false, false, true]);
+  ok('จำนวนครั้งที่เหลือไล่ลงถูกต้อง', seen.map(s => s.left), [2, 1, 0]);
+  ok('โทษหมดแล้วป้ายหายเอง เพราะอ่านจากตัวเลขนี้โดยตรง', cur.voteBan?.a || 0, 0);
+}
