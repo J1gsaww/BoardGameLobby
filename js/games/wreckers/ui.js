@@ -281,6 +281,22 @@ function preload(el) {
    ปล่อยกลับเป็นสถานะจริงเมื่อฉากเล่าจบ */
 let frozen = null;
 
+/* ไฮไลท์คนที่เพิ่งโดนสลับ — เริ่มจับเวลาตอนกระดานได้วาดจริง ไม่ใช่ตอนเกิดเหตุ */
+const GLOW_MS = 2000;
+let glowAt = 0;
+let glowKey = 0;
+let glowEl = null;   /* เก็บ element ไว้เพื่อสั่งวาดใหม่ตอนไฟดับ */
+
+function glowList(st, holding) {
+  const g = st.glow;
+  if (!g || holding) return [];
+  if (glowKey !== g.at) { glowKey = g.at; glowAt = Date.now(); }
+  if (Date.now() - glowAt > GLOW_MS) return [];
+  /* ยังอยู่ในช่วงเรือง ขอวาดใหม่อีกรอบเพื่อให้มันดับเองตรงเวลา */
+  if (glowEl) setTimeout(() => paint(glowEl), GLOW_MS - (Date.now() - glowAt) + 50);
+  return g.uids || [];
+}
+
 function boardView(st) {
   /* ตัวเหตุการณ์บอกมาเองว่าควรวาดผังไหน ใช้อันนั้นก่อนเสมอ */
   const told = scenePos(st);
@@ -333,6 +349,12 @@ export function render(el, ctx) {
   const cardTargets = pickStep === 'player' ? pickable : [];
   const shipTargets = pickStep === 'ship' ? pickable : [];
 
+  /* คนที่เพิ่งโดนสลับที่ — เริ่มนับสองวินาทีตอนที่กระดานวาดจริงเป็นครั้งแรก
+     นับจากเวลาที่เกิดเหตุไม่ได้ เพราะกระดานถูกค้างไว้ระหว่างฉากเล่า
+     กว่าจะได้วาดจริงเวลาก็หมดไปแล้ว ไฮไลท์จะไม่ทันได้ขึ้นเลย */
+  glowEl = el;
+  const glowNow = glowList(st, sceneHolding(st));
+
   const who = Object.fromEntries(Object.entries(view.pos || {}).map(([uid, spot]) => [spot, uid]));
   const mine = view.pos?.[ctx.me.uid] || null;
   const canMove = (st.seats || []).includes(ctx.me.uid);
@@ -359,6 +381,8 @@ export function render(el, ctx) {
     b.classList.toggle('turn', !!uid && uid === view.turn && view.phase === 'play');
     /* การ์ดกำลังรอให้เราเลือกเป้า — ทุกคนที่เลือกได้จะเรืองส้ม ชี้แล้วเป็นแดง */
     b.classList.toggle('pick-target', !!uid && cardTargets.includes(uid));
+    /* เพิ่งโดนสลับที่ — เรืองม่วงสองวินาทีให้เห็นว่าเกิดอะไรกับใคร */
+    b.classList.toggle('swapped', !!uid && glowNow.includes(uid));
 
     // เขียนทับเฉพาะตอนคนในช่องเปลี่ยนจริง ไม่งั้นรูปประจำตัวจะโหลดใหม่ทุกรอบ
     if (uid) b.dataset.who = uid; else b.removeAttribute('data-who');

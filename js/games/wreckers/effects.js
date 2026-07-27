@@ -12,7 +12,7 @@
    ───────────────────────────────────────────────────────────── */
 
 import { maroon, occupants, placeOf, addMark, joinPlace, capacityOf, SHIP_IDS,
-         insertBehind, nextSeat, swapSpots } from './rules.js';
+         insertBehind, nextSeat, swapSpots, shuffleQueue } from './rules.js';
 
 /* การ์ดหนึ่งใบประกาศได้สี่อย่าง ใส่เท่าที่ต้องใช้
 
@@ -37,7 +37,25 @@ export const EFFECTS = {
     run: (st, uid, _picks, hands) => {
       const target = nextSeat(st);
       const pos = swapSpots(st.pos, uid, target);
-      return pos ? { state: { ...st, pos }, hands } : { state: st, hands };
+      if (!pos) return { state: st, hands };
+      /* บอกหน้าจอว่าใครเพิ่งสลับ จะได้ไฮไลท์ให้เห็นว่าเกิดอะไรขึ้นกับใคร
+         ไม่ใช่ประกาศเป็นฉาก แค่เรืองรอบตัวสองวินาที */
+      return { state: { ...st, pos, glow: { uids: [uid, target], at: (st.logSeq || 0) + 1 } }, hands };
+    }
+  },
+
+  /* ระฆังแปดครั้ง — ทุกคนในสถานที่เดียวกับคนเปิดสุ่มที่ยืนใหม่หมด
+     ผลออกมาเป็นลำดับใหม่ ซึ่งหน้าจอเอาไปเล่าทีละคนก่อนกระดานจะขยับจริง */
+  eightbell: {
+    run: (st, uid, _picks, hands, rng = Math.random) => {
+      const place = placeOf(st.pos[uid]);
+      const pos = shuffleQueue(st.pos, place, rng);
+      const order = occupants(pos, place);
+      return {
+        state: { ...st, pos },
+        hands,
+        shout: { kind: 'bells', by: uid, place, order, card: 'eightbell' }
+      };
     }
   },
 

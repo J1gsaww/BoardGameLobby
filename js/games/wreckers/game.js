@@ -398,7 +398,7 @@ function activate(ctx, uid, { slot }) {
        ค่าที่เติมจึงไม่ติดไปด้วย หน้าจอเลยไม่มีอะไรบอกให้ค้างกระดาน */
     const before = { ...said, cardUp: { ...said.cardUp, beforePos: st.pos } };
     const hands = handsOf(ctx);
-    const out = eff.run(before, uid, {}, hands);
+    const out = eff.run(before, uid, {}, hands, ctx.rng || Math.random);
     /* การ์ดที่ไม่คืน shout มา แปลว่าไม่ต้องประกาศผล อย่าสร้างประกาศเปล่าขึ้นมา
        ไม่งั้นฉากจะขึ้นกล่องว่าง ๆ ให้รออ่านโดยไม่มีอะไรอยู่ข้างใน */
     const done = pushLog(out.shout

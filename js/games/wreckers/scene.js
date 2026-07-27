@@ -150,7 +150,8 @@ export function paintScene(el, st, ctx) {
         <strong class="wr-scene-big"></strong>
       </div>
       <div class="wr-scene-body" hidden></div>
-      <p class="wr-scene-line" hidden></p>`;
+      <p class="wr-scene-line" hidden></p>
+      <div class="wr-scene-stage" hidden></div>`;
   }
 
   namesRef = st.names || {};
@@ -364,7 +365,10 @@ function cardNote(body, st, ctx) {
   /* ย่อไปมุมเฉพาะการ์ดที่ต้องให้เลือกเป้า เพราะต้องเปิดกระดานให้คลิก
      การ์ดที่ผลเกิดทันทีไม่ต้องย่อ ขึ้นกลางจอให้อ่านแล้วปิดไปเลย
      ย่อไปมุมทั้งที่ไม่มีอะไรให้ทำต่อ มีแต่ทำให้ดูเหมือนเกมยังรออะไรอยู่ */
-  const parked = !!st.pending && ms > CARD_READ;
+  /* ย้ายไปมุมเมื่อยังมีอะไรให้เล่าต่อ — รอเลือกเป้า หรือมีผลที่ต้องเล่าเป็นลำดับ
+     การ์ดที่จบในตัวเองไม่ต้องย้าย ขึ้นกลางจอให้อ่านแล้วปิดไปเลย */
+  const seq = st.shout?.kind === 'bells' && !dismissed.has('shout:' + st.shout.at);
+  const parked = (!!st.pending || seq) && ms > CARD_READ;
 
   /* ย่อไปมุม — ต้องเล่นเป็นการเคลื่อนที่จริง ไม่ใช่กระโดด
 
@@ -404,6 +408,17 @@ function cardNote(body, st, ctx) {
         : t('wreck.scene.pickTargetThem', { name: st.names?.[st.pending.by] || '?' });
     if (line.textContent !== want) line.textContent = want;
     line.hidden = !want || !parked;
+  }
+
+  /* มีผลที่ต้องเล่าเป็นลำดับ — เล่าต่อจนจบแล้วค่อยปิดทั้งคู่พร้อมกัน */
+  if (seq) {
+    const stage = body.parentElement.querySelector('.wr-scene-stage');
+    const done = bellsStage(stage, st, ms - CARD_READ);
+    if (!done) return true;
+    dismissed.add('shout:' + st.shout.at);
+    dismissed.add('card:' + st.cardUp.at);
+    closing = true;
+    return false;
   }
 
   /* ยังต้องเลือกอยู่ = ค้างไว้ ไม่นับถอยหลัง
@@ -449,6 +464,36 @@ function saveNote(body, st, ctx) {
     b.onclick = () => sendFn?.('useSave', { yes: b.dataset.save === '1' });
   });
   return false;
+}
+
+/* ── ผลที่เล่าเป็นลำดับ — โปรไฟล์โผล่ทีละคน ────────────────
+   ใช้กับระฆังแปดครั้ง ที่ผลคือลำดับใหม่ของทุกคนในที่นั้น
+   ต้องเล่าให้จบก่อนกระดานขยับ ไม่งั้นเห็นผลก่อนเรื่อง */
+const BELL_LEAD = 500;    // เว้นก่อนคนแรกโผล่
+const BELL_STEP = 620;    // ระยะห่างของแต่ละคน
+const BELL_HOLD = 1400;   // ค้างหลังคนสุดท้าย
+
+function bellsStage(stage, st, ms) {
+  if (!stage) return true;
+  const order = st.shout.order || [];
+
+  if (stage.dataset.sig !== st.shout.at + '') {
+    stage.dataset.sig = st.shout.at + '';
+    stage.hidden = false;
+    stage.innerHTML = `<p class="wr-bells-head">${esc(t('wreck.scene.bells'))}</p>
+      <div class="wr-bells-row">${
+        order.map((uid, i) => `<span class="wr-bell" data-i="${i}">
+            <span class="wr-bell-no">${i + 1}</span>
+            <span class="wr-bell-face">${esc((st.names?.[uid] || '?').slice(0, 2))}</span>
+            <span class="wr-bell-name">${esc(st.names?.[uid] || '?')}</span>
+          </span>`).join('')
+      }</div>`;
+  }
+
+  const shown = Math.floor((ms - BELL_LEAD) / BELL_STEP) + 1;
+  stage.querySelectorAll('.wr-bell').forEach((el, i) => el.classList.toggle('in', i < shown));
+
+  return ms > BELL_LEAD + order.length * BELL_STEP + BELL_HOLD;
 }
 
 function titleOf(st, ph, me) {

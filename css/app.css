@@ -1734,3 +1734,44 @@ button{ cursor:pointer; border:0; background:none; }
   max-width:280px; text-align:center; font-size:12.5px; line-height:1.5; color:#fdf6e6;
 }
 .wr-ban-note{ color:var(--rose); }
+
+/* คนที่เพิ่งโดนสลับที่ — เรืองม่วงสองวินาที ให้เห็นว่าเกิดอะไรกับใคร
+   ม่วงเพราะสีอื่นถูกใช้ไปแล้ว — ส้มคือถึงตา แดงคือกำลังเล็ง เขียวคือมีนกเกาะ */
+.wr-slot.swapped .wr-pawn{
+  box-shadow:0 0 0 3px #b06cff, 0 0 20px rgba(176,108,255,.85);
+  border-radius:50%;
+  animation:wr-swap-glow .9s ease-in-out infinite;
+}
+@keyframes wr-swap-glow{
+  0%,100%{ box-shadow:0 0 0 3px #b06cff, 0 0 14px rgba(176,108,255,.6); }
+  50%    { box-shadow:0 0 0 4px #c98cff, 0 0 28px rgba(176,108,255,1); }
+}
+
+/* ── ผลที่เล่าเป็นลำดับ (ระฆังแปดครั้ง) ────────────────── */
+.wr-scene-stage{ display:grid; justify-items:center; gap:10px; margin-top:6px; }
+.wr-bells-head{
+  margin:0; font-family:var(--mono); font-size:11px; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--lamp);
+  text-shadow:0 2px 5px rgba(0,0,0,.8);
+}
+.wr-bells-row{ display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+.wr-bell{
+  display:grid; justify-items:center; gap:3px; width:72px;
+  opacity:0; transform:scale(.6) translateY(14px);
+  transition:opacity .3s, transform .38s cubic-bezier(.2,1.4,.4,1);
+}
+.wr-bell.in{ opacity:1; transform:none; }
+.wr-bell-no{
+  font-family:var(--mono); font-size:10px; color:var(--lamp);
+}
+.wr-bell-face{
+  width:46px; height:46px; border-radius:50%;
+  display:grid; place-items:center;
+  font-family:var(--display); font-size:16px; font-weight:700; color:#241704;
+  background:var(--lamp); box-shadow:0 4px 14px rgba(0,0,0,.7);
+}
+.wr-bell-name{
+  font-size:11px; font-weight:600; color:#fdf6e6; max-width:72px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  text-shadow:0 2px 5px rgba(0,0,0,.9);
+}

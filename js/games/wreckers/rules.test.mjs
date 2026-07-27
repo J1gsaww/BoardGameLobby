@@ -1613,3 +1613,38 @@ group('การ์ด · หน้ากาก');
   ok('จำนวนคนในแต่ละที่ไม่เปลี่ยน',
      [occupants(r.state.pos, 'shipL').length, occupants(r.state.pos, 'island').length], [3, 2]);
 }
+
+group('การ์ด · ระฆังแปดครั้ง');
+{
+  const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+  const deck = { ...out.secrets._deck, slots: ['eightbell', ...out.secrets._deck.slots.slice(1)] };
+  const pos = { a: 'shipL:C', b: 'shipL:F', c: 'shipL:3', d: 'shipL:4',
+                e: 'shipR:C', f: 'island:G' };
+  const base = { ...out.state, phase: 'play', turn: 'a', pos, seats: [...P],
+                 names: filled().names, out: [] };
+  const ctx = { ...ctxOf(base), secrets: { ...out.secrets, _deck: deck },
+                hostUid: 'a', rng: zero };
+
+  const r = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+  const line = occupants(r.state.pos, 'shipL');
+
+  ok('คนเดิมครบเท่าเดิม แค่สลับที่ยืน', [...line].sort(), ['a', 'b', 'c', 'd']);
+  ok('ผลบอกลำดับใหม่ตรงกับกระดาน', r.state.shout.order, line);
+  ok('ประกาศบอกว่าเกิดที่ไหน', r.state.shout.place, 'shipL');
+  ok('ที่อื่นไม่ขยับ', [r.state.pos.e, r.state.pos.f], ['shipR:C', 'island:G']);
+  ok('พาผังก่อนสุ่มไปด้วย ฉากจะได้เล่าจบก่อนกระดานขยับ',
+     r.state.cardUp.beforePos.a, 'shipL:C');
+  ok('เปิดแล้วผ่านตาไปเลย', r.state.turn, 'b');
+}
+{
+  /* หน้ากากบอกหน้าจอว่าใครเพิ่งสลับ เพื่อไฮไลท์สองวินาที */
+  const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+  const deck = { ...out.secrets._deck, slots: ['facade', ...out.secrets._deck.slots.slice(1)] };
+  const base = { ...out.state, phase: 'play', turn: 'a', pos: filled().pos,
+                 seats: [...P], names: filled().names, out: [] };
+  const ctx = { ...ctxOf(base), secrets: { ...out.secrets, _deck: deck }, hostUid: 'a' };
+
+  const r = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+  ok('บอกว่าใครเพิ่งสลับ', [...r.state.glow.uids].sort(), ['a', 'b']);
+  ok('ยังไม่มีประกาศเป็นฉาก', r.state.shout ?? null, null);
+}
