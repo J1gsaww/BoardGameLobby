@@ -12,7 +12,7 @@
    ───────────────────────────────────────────────────────────── */
 
 import { maroon, occupants, placeOf, addMark, joinPlace, capacityOf, SHIP_IDS,
-         insertBehind, nextSeat } from './rules.js';
+         insertBehind, nextSeat, swapSpots } from './rules.js';
 
 /* การ์ดหนึ่งใบประกาศได้สี่อย่าง ใส่เท่าที่ต้องใช้
 
@@ -28,6 +28,17 @@ export const EFFECTS = {
      ไม่ได้ตรวจแค่ตอนเปิดการ์ด เพราะคนย้ายที่ก็ทำให้ครบได้ */
   albatross: {
     run: (st, uid, _picks, hands) => ({ state: addMark(st, uid, 'bird'), hands })
+  },
+
+  /* หน้ากาก — สลับที่ยืนกับคนที่จะเล่นตาถัดไป ผลเกิดทันทีตอนเปิด
+     ไม่มีประกาศผลตามหลัง เพราะตัวการ์ดบอกครบแล้วว่าจะเกิดอะไร ไม่มีอะไรให้ลุ้น
+     สลับที่ยืนอาจเปลี่ยนบทบาททั้งคู่ — ลูกเรือกลายเป็นกัปตันได้ในทันที */
+  facade: {
+    run: (st, uid, _picks, hands) => {
+      const target = nextSeat(st);
+      const pos = swapSpots(st.pos, uid, target);
+      return pos ? { state: { ...st, pos }, hands } : { state: st, hands };
+    }
   },
 
   /* จุดดำ — คนที่เปิดโดน Maroon เอง ไม่ต้องเลือกอะไร ผลเกิดทันที */

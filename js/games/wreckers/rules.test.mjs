@@ -1588,3 +1588,28 @@ group('เอลโดราโด · หน้าจอต้องวาดไ
   ok('จำนวนรวมตรงกับไพ่ในหม้อ (บวกใบจากกองกลาง)', total + 1, r.state.lastVote.pot.length);
   ok('ทุกคนที่ส่งมีชื่ออยู่ในผล', Object.keys(r.state.lastVote.sent).sort(), ['a', 'b', 'c']);
 }
+
+group('การ์ด · หน้ากาก');
+{
+  const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+  const deck = { ...out.secrets._deck, slots: ['facade', ...out.secrets._deck.slots.slice(1)] };
+  const pos = { a: 'island:G', b: 'shipL:C', c: 'shipL:F', d: 'shipL:3',
+                e: 'shipR:C', f: 'island:2' };
+  const base = { ...out.state, phase: 'play', turn: 'a', pos, seats: [...P],
+                 names: filled().names, out: [] };
+  const ctx = { ...ctxOf(base), secrets: { ...out.secrets, _deck: deck }, hostUid: 'a' };
+
+  ok('คนถัดไปคือ b', nextSeat(base), 'b');
+  const r = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+
+  ok('คนเปิดไปยืนที่เดิมของคนถัดไป', r.state.pos.a, 'shipL:C');
+  ok('คนถัดไปมายืนที่เดิมของคนเปิด', r.state.pos.b, 'island:G');
+  ok('บทบาทเปลี่ยนตามที่ยืนทันที', roleAt(r.state.pos, 'a'), 'captain');
+  ok('คนอื่นไม่ขยับ', [r.state.pos.c, r.state.pos.d, r.state.pos.e], ['shipL:F', 'shipL:3', 'shipR:C']);
+  ok('ไม่มีประกาศผลตามหลัง เพราะตัวการ์ดบอกครบแล้ว', r.state.shout ?? null, null);
+  ok('พาผังก่อนสลับไปด้วย ฉากจะได้เล่าจบก่อนกระดานขยับ',
+     r.state.cardUp.beforePos.a, 'island:G');
+  ok('เปิดแล้วผ่านตาไปเลย', r.state.turn, 'b');
+  ok('จำนวนคนในแต่ละที่ไม่เปลี่ยน',
+     [occupants(r.state.pos, 'shipL').length, occupants(r.state.pos, 'island').length], [3, 2]);
+}
