@@ -1558,3 +1558,33 @@ group('เอลโดราโด · โทษห้ามโหวตต้อ
   ok('รอบ 3 · กลับมาร่วมโหวตได้', three3.vote.voters.includes('b'), true);
   ok('รอบ 3 · หน้าจอก็ปลดล็อกให้', canVoteNow(three3, 'b'), true);
 }
+
+group('เอลโดราโด · หน้าจอต้องวาดไพ่ครบพร้อมชื่อ');
+{
+  /* ไพ่ใบสุดท้ายปิดหม้อทันทีในการเขียนครั้งเดียว
+     หน้าจอคนอื่นจึงไม่เคยเห็นสถานะระหว่างทาง ต้องสร้างย้อนหลังจากผล
+     ถ้าผลไม่บอกว่าใครส่งกี่ใบ ใบที่สองจะถูกเติมแบบไม่มีชื่อและเตี้ยกว่าเพื่อน */
+  const seats = ['a', 'b', 'c'];
+  const base = { ...board({ a: 'shipL:C', b: 'shipL:F', c: 'shipL:3' }),
+                 seats, held: { b: 1 }, names: { a: 'Fox', b: 'Chorme', c: 'Kai' } };
+  let ctx = { state: startVote(base, { kind: 'attack', place: 'shipL', caller: 'a' }),
+              members: members.slice(0, 3), settings: { turnSeconds: 0 },
+              secrets: { a: { vote: ['v01', 'v02'] },
+                         b: { vote: ['v04', 'v05'], held: ['eldorado'] },
+                         c: { vote: ['v07', 'v08'] } },
+              hostUid: 'a' };
+
+  let r = await onAction(ctx, { uid: 'b', type: 'useDorado', payload: { yes: true } });
+  const seen = [];
+  for (const [u, card] of [['b', 'v04'], ['a', 'v01'], ['c', 'v07'], ['b', 'v05']]) {
+    ctx = { ...ctx, state: r.state, secrets: { ...ctx.secrets, ...(r.secrets || {}) } };
+    r = await onAction(ctx, { uid: u, type: 'voteCard', payload: { card } });
+    if (r.state.vote) seen.push({ ...r.state.vote.sent });
+  }
+
+  ok('ระหว่างทางนับสะสมทีละใบ', seen.map(s => s.b ?? 0), [1, 1, 1]);
+  ok('ผลบอกจำนวนใบของแต่ละคน', r.state.lastVote.sent, { a: 1, b: 2, c: 1 });
+  const total = Object.values(r.state.lastVote.sent).reduce((n, x) => n + x, 0);
+  ok('จำนวนรวมตรงกับไพ่ในหม้อ (บวกใบจากกองกลาง)', total + 1, r.state.lastVote.pot.length);
+  ok('ทุกคนที่ส่งมีชื่ออยู่ในผล', Object.keys(r.state.lastVote.sent).sort(), ['a', 'b', 'c']);
+}

@@ -838,6 +838,15 @@ export function reveal(ctx, st, hands, picks, rng = Math.random) {
     voteDeck: fresh.pile.length,
     /* เก็บผลไว้ให้หน้าจอโชว์ต่อ เพราะ passTurn จะล้าง vote ทิ้ง */
     lastVote: { kind: v.kind, place: v.place, caller: v.caller,
+                /* ใครส่งไปกี่ใบ — หน้าจอต้องรู้เพื่อวาดไพ่ให้ครบพร้อมชื่อ
+                   ไพ่ใบสุดท้ายปิดหม้อทันทีในการเขียนครั้งเดียว
+                   คนอื่นจึงไม่เคยเห็นสถานะระหว่างทาง ต้องสร้างย้อนหลังจากตรงนี้ */
+                sent: v.voters.reduce((m, u) => {
+                  const p = picks[u];
+                  const n = Array.isArray(p) ? p.length : (p ? 1 : 0);
+                  if (n) m[u] = n;
+                  return m;
+                }, {}),
                 pot, counts, won: passed(v.kind, counts),
                 split: next.lastSplit || null, at: (next.logSeq || 0) }
   };

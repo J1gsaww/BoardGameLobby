@@ -618,13 +618,19 @@ function pot(body, v) {
     /* คนที่ส่งไพ่เป็นคนสุดท้ายไม่เคยโผล่ในช่วงรอไพ่เลย
        เพราะพอเขาส่ง เกมเปิดหม้อทันทีในจังหวะเดียวกัน หน้าจอจึงไม่เคยเห็นรายชื่อที่มีเขา
        ต้องไล่เติมให้ครบตามจำนวนไพ่ในหม้อก่อน เว้นที่ไว้ให้ใบจากกองอีกหนึ่ง */
-    /* เข้ามาไม่ทันเห็นบางใบ ก็เติมให้ครบตามจำนวนไพ่ในหม้อ */
-    for (const uid of voterList) {
-      if (row.children.length >= cards.length - 1) break;
+    /* เติมไพ่ที่ยังไม่ได้วาง ให้ครบตามจำนวนจริงของแต่ละคน พร้อมชื่อ
+
+       ไพ่ใบสุดท้ายปิดหม้อทันทีในการเขียนครั้งเดียว หน้าจอคนอื่นจึงไม่เคยเห็น
+       สถานะระหว่างทาง ต้องสร้างย้อนหลังจากจำนวนที่ผลส่งมาให้
+       ของเดิมเติมได้คนละหนึ่งใบและไม่ใส่ชื่อ ใบที่สองของเอลโดราโดเลยโล้นและเตี้ยกว่าเพื่อน */
+    const sent = v.sent || {};
+    for (const uid of Object.keys(sent)) {
       const have = seen[uid] || 0;
-      if (have) continue;
-      seen[uid] = 1;
-      row.appendChild(voteBack(nameOf(uid)));
+      for (let i = have; i < sent[uid]; i++) {
+        if (row.children.length >= cards.length - 1) break;
+        row.appendChild(voteBack(nameOf(uid)));
+      }
+      seen[uid] = Math.max(have, sent[uid]);
     }
     while (row.children.length < cards.length - 1) row.appendChild(voteBack(''));
     row.classList.remove('wiggle');
