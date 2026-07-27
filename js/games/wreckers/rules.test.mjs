@@ -1517,3 +1517,44 @@ group('การ์ด · เอลโดราโด');
   ok('ตอบแล้วถามซ้ำไม่ได้',
      await onAction({ ...ctx, state: off.state }, { uid: 'b', type: 'useDorado', payload: { yes: true } }), null);
 }
+
+group('เอลโดราโด · โทษห้ามโหวตต้องหมดหลังหนึ่งรอบ');
+{
+  /* บั๊กที่เคยเกิด: หักโทษให้เฉพาะคนที่ได้ร่วมโหวต
+     แต่คนติดโทษถูกตัดออกจากรายชื่อผู้ร่วมไปแล้ว โทษจึงไม่มีวันถูกหัก
+     กลายเป็นห้ามโหวตตลอดกาล ต้องหักให้ทุกคนที่อยู่ในสถานที่นั้น */
+  const seats = ['a', 'b', 'c'];
+  const base = { ...board({ a: 'shipL:C', b: 'shipL:F', c: 'shipL:3' }),
+                 seats, held: { b: 1 }, names: { a: 'a', b: 'b', c: 'c' } };
+  const sec = () => ({ a: { vote: ['v01', 'v02', 'v03'] },
+                       b: { vote: ['v04', 'v05', 'v06'], held: ['eldorado'] },
+                       c: { vote: ['v07', 'v08', 'v09'] } });
+  const three = members.slice(0, 3);
+
+  /* รอบ 1 — ใช้การ์ด */
+  let ctx = { state: startVote(base, { kind: 'attack', place: 'shipL', caller: 'a' }),
+              members: three, settings: { turnSeconds: 0 }, secrets: sec(), hostUid: 'a' };
+  let r = await onAction(ctx, { uid: 'b', type: 'useDorado', payload: { yes: true } });
+  for (const [u, card] of [['b', 'v04'], ['b', 'v05'], ['a', 'v01'], ['c', 'v07']]) {
+    ctx = { ...ctx, state: r.state, secrets: { ...ctx.secrets, ...(r.secrets || {}) } };
+    r = await onAction(ctx, { uid: u, type: 'voteCard', payload: { card } });
+  }
+  ok('รอบ 1 · ติดโทษหนึ่งครั้ง', r.state.voteBan.b, 1);
+
+  /* รอบ 2 — โหวตไม่ได้ */
+  const two = startVote({ ...r.state, vote: null }, { kind: 'attack', place: 'shipL', caller: 'a' });
+  ok('รอบ 2 · ไม่ถูกนับเป็นผู้ร่วม', two.vote.voters, ['a', 'c']);
+
+  ctx = { ...ctx, state: two, secrets: { ...sec(), b: { vote: ['v05', 'v06'] } } };
+  let r2 = { state: two, secrets: {} };
+  for (const [u, card] of [['a', 'v02'], ['c', 'v08']]) {
+    ctx = { ...ctx, state: r2.state, secrets: { ...ctx.secrets, ...(r2.secrets || {}) } };
+    r2 = await onAction(ctx, { uid: u, type: 'voteCard', payload: { card } });
+  }
+  ok('รอบ 2 จบ · โทษถูกหักจนหมด', r2.state.voteBan.b ?? 0, 0);
+
+  /* รอบ 3 — กลับมาโหวตได้ */
+  const three3 = startVote({ ...r2.state, vote: null }, { kind: 'attack', place: 'shipL', caller: 'a' });
+  ok('รอบ 3 · กลับมาร่วมโหวตได้', three3.vote.voters.includes('b'), true);
+  ok('รอบ 3 · หน้าจอก็ปลดล็อกให้', canVoteNow(three3, 'b'), true);
+}
