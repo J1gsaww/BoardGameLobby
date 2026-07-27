@@ -8,7 +8,7 @@
 
 import { onAction, init } from './game.js';
 import { actionsFor } from './rules.js';
-import { usableAnytime } from './effects.js';
+import { playWindow, canPlayNow } from './effects.js';
 
 let pass = 0, fail = 0;
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -41,7 +41,7 @@ console.log('\nใช้การ์ดในตาคนอื่น');
   const st = ctx.state;
 
   ok('ยังไม่ถึงตาของคนถือการ์ด', st.turn !== 'e', true);
-  ok('กติกาบอกว่าใบนี้ใช้ได้ทุกตา', usableAnytime('atlantis'), true);
+  ok('กติกาบอกว่าใบนี้ใช้ได้ทุกตา', playWindow('atlantis'), 'any');
   ok('รายการ Action ปกติว่างเปล่าเพราะยังไม่ถึงตา', actionsFor(st, 'e'), []);
 
   /* ด่านที่คำขอต้องผ่าน — จุดที่เคยตกคือด่านนี้ ไม่ใช่ตัวผลการ์ด */
@@ -72,6 +72,47 @@ console.log('\nใช้การ์ดในตาคนอื่น');
   const done = await onAction(ctx2, { uid: 'b', type: 'toBoat', payload: { boat: 'boatL' } });
   ok('จบตาแล้วผลเกิดจริง', done?.state?.pos?.e?.startsWith('shipR'), true);
   ok('ล้างของที่จองไว้', done?.state?.queued, null);
+}
+
+console.log('\nหน้าต่างเวลาของแต่ละใบ');
+{
+  const ctx = table('e', 'atlantis');
+  const other = ctx.state;                       /* ตาของ b */
+  const own = { ...other, turn: 'e' };           /* ตาของ e */
+
+  ok('น้ำพุ — เล่นเองไม่ได้เลย', playWindow('fountain'), 'never');
+  ok('  ตาตัวเองก็กดไม่ได้', canPlayNow(own, 'e', 'fountain').why, 'passive');
+  ok('  ตาคนอื่นก็กดไม่ได้', canPlayNow(other, 'e', 'fountain').why, 'passive');
+
+  ok('จดหมาย — เฉพาะตาตัวเอง', playWindow('marque'), 'own');
+  ok('  ตาตัวเองกดได้', canPlayNow(own, 'e', 'marque').ok, true);
+  ok('  ตาคนอื่นกดไม่ได้', canPlayNow(other, 'e', 'marque').why, 'notTurn');
+
+  ok('แอตแลนติส — ตาไหนก็ได้', playWindow('atlantis'), 'any');
+  ok('  ตาตัวเองกดได้', canPlayNow(own, 'e', 'atlantis').ok, true);
+  ok('  ตาคนอื่นกดได้', canPlayNow(other, 'e', 'atlantis').ok, true);
+}
+{
+  /* ใช้แอตแลนติสในตาตัวเอง — ทำ Action ต่อได้ แล้วผลเกิดตอนจบตา */
+  const ctx = table('e', 'atlantis');
+  const own = { ...ctx.state, turn: 'e' };
+  const c1 = { ...ctx, state: own };
+
+  const q = await onAction(c1, { uid: 'e', type: 'playHeld', payload: { card: 'atlantis' } });
+  ok('ตาตัวเอง · จองไว้ได้', q?.state?.queued?.card, 'atlantis');
+  ok('ตาตัวเอง · ยังทำ Action ต่อได้', q?.state?.turn, 'e');
+
+  const c2 = { ...ctx, state: q.state, secrets: { ...ctx.secrets, e: q.secrets.e } };
+  const done = await onAction(c2, { uid: 'e', type: 'toBoat', payload: { boat: 'boatL' } });
+  ok('ตาตัวเอง · ทำ Action เสร็จแล้วผลเกิด', done?.state?.queued, null);
+}
+
+{
+  /* น้ำพุยิงคำขอตรง ๆ ก็ต้องถูกปฏิเสธ ไม่ใช่กันแค่ที่ปุ่ม */
+  const ctx = table('e', 'fountain');
+  const own = { ...ctx.state, turn: 'e' };
+  const r = await onAction({ ...ctx, state: own }, { uid: 'e', type: 'playHeld', payload: { card: 'fountain' } });
+  ok('น้ำพุ · เซิร์ฟเวอร์ปฏิเสธด้วย ไม่ใช่กันแค่ปุ่ม', r, null);
 }
 
 console.log('');

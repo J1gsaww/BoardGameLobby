@@ -16,7 +16,7 @@ import {
 import { deal } from './vote.js';
 import { BASE_CARDS, ENDER, ENDER_ZONE } from './events.js';
 import { effectOf, targetsOf, nextStep, keepsInHand, canUseCard,
-         usableAnytime, isDeferred, isGift, giftTargets } from './effects.js';
+         isDeferred, isGift, giftTargets, canPlayNow } from './effects.js';
 import { EXTRA_CARDS } from './cards.js';
 import {
   SHIP_IDS, BOAT_IDS, BOAT_LINK, VOTE_ROW,
@@ -194,11 +194,9 @@ export async function onAction(ctx, action) {
      เพราะคนที่ถูกถามมักไม่ใช่คนที่ถึงตา เช่นโดนคนอื่นยิงหรือโดนนกถล่มทั้งลำ */
   if (type === 'useSave') return settle(ctx, useSave(ctx, uid, payload));
 
-  /* การ์ดบางใบใช้ได้ในตาของใครก็ได้ (เช่นแอตแลนติสที่ใช้แทรกตาคนอื่น)
-     จึงต้องผ่านด่านนี้ก่อนถึงการตรวจว่าถึงตาหรือยัง */
-  if (type === 'playHeld' && usableAnytime(payload.card)) {
-    return settle(ctx, playHeld(ctx, uid, payload));
-  }
+  /* การ์ดในมือมีด่านของตัวเอง เพราะบางใบใช้ได้ในตาของใครก็ได้
+     ตัดสินด้วยฟังก์ชันเดียวกับที่หน้าจอใช้ จึงไม่มีทางคิดไม่ตรงกัน */
+  if (type === 'playHeld') return settle(ctx, playHeld(ctx, uid, payload));
 
   if (st.turn !== uid || st.vote) return null;
   if (!isPlaying(st, uid)) return null;
@@ -507,7 +505,7 @@ function playHeld(ctx, uid, { card }) {
   const st = ctx.state;
   const mine = ctx.secrets?.[uid] || {};
   if (!(mine.held || []).includes(card)) return null;
-  if (!canUseCard(st, uid, card)) return null;
+  if (!canPlayNow(st, uid, card).ok) return null;
 
   const first = nextStep(card, {});
   const at = (st.logSeq || 0) + 1;

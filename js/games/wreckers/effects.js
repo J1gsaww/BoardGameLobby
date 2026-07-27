@@ -166,6 +166,33 @@ export const askKey = (id, step) => {
   return k ? `wreck.ask.${k}` : `wreck.ask.any.${step}`;
 };
 
+/* ── หน้าต่างเวลาที่เล่นการ์ดใบนี้ได้ ────────────────────────
+     any    ตาไหนก็ได้ (แอตแลนติส — รวมตาตัวเองด้วย)
+     own    เฉพาะตาตัวเอง (จดหมาย)
+     never  หยิบมาเล่นเองไม่ได้เลย (น้ำพุ — ทำงานเองตอนโดน Maroon)
+
+   อ่านจากสิ่งที่การ์ดประกาศไว้ ไม่ต้องมีรายชื่อแยกให้ลืมอัปเดต
+   ใบที่ไม่มี run แปลว่าไม่มีผลตอนถูกเล่น จึงเล่นเองไม่ได้โดยธรรมชาติ */
+export function playWindow(id) {
+  const e = effectOf(id);
+  if (!e?.run) return 'never';
+  return e.whenever ? 'any' : 'own';
+}
+
+/* เล่นใบนี้ตอนนี้ได้ไหม พร้อมเหตุผลถ้าไม่ได้
+
+   **ฟังก์ชันเดียวที่ตอบคำถามนี้** ใช้ทั้งฝั่งหน้าจอและฝั่งเซิร์ฟเวอร์
+   เคยพลาดมาแล้วสองแบบ — ให้หน้าจอตัดสินเองจนคิดไม่ตรงกับกติกา
+   แล้วพอถอดออกหมดก็กลายเป็นกดได้ทุกใบทุกเวลา ซึ่งผิดอีกทาง */
+export function canPlayNow(st, uid, id) {
+  const w = playWindow(id);
+  if (w === 'never') return { ok: false, why: 'passive' };
+  if (st.phase !== 'play') return { ok: false, why: 'phase' };
+  if (w === 'own' && st.turn !== uid) return { ok: false, why: 'notTurn' };
+  if (!canUseCard(st, uid, id)) return { ok: false, why: 'noTarget' };
+  return { ok: true, why: '' };
+}
+
 export function canUseCard(st, uid, id) {
   const first = nextStep(id, {});
   if (!first) return true;

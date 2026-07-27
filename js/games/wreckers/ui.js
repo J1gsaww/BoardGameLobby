@@ -17,7 +17,7 @@ import { mountSea, stopSea } from './sea.js';
 import { cardById as voteById, voteCard, iconSrc } from './vote.js';
 import { dieSvg, rollPose, HERO, ROLL_MS } from './die.js';
 import { actionsFor, occupants, placeOf, BOAT_IDS, canVoteNow } from './rules.js';
-import { targetsOf, canUseCard, askKey } from './effects.js';
+import { targetsOf, canUseCard, askKey, canPlayNow, playWindow } from './effects.js';
 import { BASE_CARDS, cardArt, cardArtAlt, CARD_BACK, CARD_BACK_ALT,
          tokenArt, tokenAlt } from './events.js';
 import { paintScene, stopScene, setPlanView, setPlanWire, VOTE_BACK,
@@ -517,16 +517,20 @@ function paintHand(el, st, ctx) {
     (ctx.secret?.held || []).map(id => {
       const c = eventById(id);
       const info = c ? (c[lang] || c.th) : null;
-      /* กดได้เสมอ ปิดเฉพาะตอนกติกาบอกว่าไม่มีเป้าให้เลือกจริง ๆ
+      /* ถามฟังก์ชันเดียวกับที่กติกาใช้ จึงไม่มีทางคิดไม่ตรงกัน */
+      const res = canPlayNow(st, me, id);
+      const label = info ? `${info.name} — ${info.desc}` : id;
+      const why = res.ok ? label : `${label}\n${t('wreck.why.' + res.why)}`;
 
-         เดิมหน้าจอเช็กเองว่าถึงตาหรือยัง ซึ่งเป็นการตัดสินซ้ำกับกติกา
-         พอสองฝั่งคิดไม่ตรงกัน ปุ่มตายทั้งที่กติกาไม่ได้ห้าม แล้วไล่หาสาเหตุไม่เจอ
-         ตอนนี้หน้าจอมีหน้าที่แค่ยิงคำขอ ฝั่งเซิร์ฟเวอร์เป็นคนบอกว่าได้หรือไม่ได้ */
-      const usable = canUseCard(st, me, id);
-      const why = usable ? (info ? `${info.name} — ${info.desc}` : id)
-        : t('wreck.cardNoRoom');
-      return `<button class="wr-card wr-held${usable ? ' ready' : ' off'}"
-        data-held="${esc(id)}"${usable ? '' : ' disabled'}
+      /* ใบที่เล่นเองไม่ได้เลย (เช่นน้ำพุที่ทำงานเองตอนโดน Maroon)
+         ไม่ทำเป็นปุ่ม เพราะไม่มีอะไรให้กด ทำเป็นปุ่มแล้วจะชวนให้เข้าใจผิด */
+      if (playWindow(id) === 'never') {
+        return `<div class="wr-card wr-held wr-held-auto" title="${esc(why)}">
+          ${eventFace(id)}</div>`;
+      }
+
+      return `<button class="wr-card wr-held${res.ok ? ' ready' : ' off'}"
+        data-held="${esc(id)}"${res.ok ? '' : ' disabled'}
         title="${esc(why)}">
           ${eventFace(id)}
         </button>`;
@@ -892,10 +896,12 @@ function pawnMenu(st, ctx) {
     /* การ์ดในมือเป็นแถวของตัวเอง ไม่ผูกกับรายการ Action เลย
        เพราะรายการ Action ว่างเปล่าเมื่อยังไม่ถึงตาเรา แต่การ์ดบางใบใช้ตอนนั้นได้ */
     for (const id of (ctx.secret?.held || [])) {
+      if (playWindow(id) === 'never') continue;   /* เล่นเองไม่ได้ ไม่ต้องมีปุ่ม */
       const c = eventById(id);
       const nm = c ? (c[lang] || c.th).name : id;
+      const res = canPlayNow(st, meUid, id);
       rows.push(`<button class="wr-menu-btn wr-menu-card" data-do="held" data-arg="${esc(id)}"
-        ${canUseCard(st, meUid, id) ? '' : 'disabled'}>
+        ${res.ok ? '' : 'disabled'} title="${esc(res.ok ? '' : t('wreck.why.' + res.why))}">
           <img class="wr-menu-thumb" src="${esc(cardArt(id))}" alt="" draggable="false"
             data-alt="${esc(cardArtAlt(id))}"
             onerror="if(this.dataset.alt){this.src=this.dataset.alt;this.dataset.alt='';}else{this.remove();}">
@@ -1018,11 +1024,12 @@ function paintActions(el, st, ctx) {
   /* การ์ดในมือเป็นแถวของตัวเอง ต่อท้ายแถวตำแหน่ง
      ต้องคิดแยกจาก actionsFor เพราะบางใบใช้ได้ในตาคนอื่น
      ซึ่ง actionsFor จะคืนค่าว่างเสมอเพราะยังไม่ถึงตาเรา */
-  const cards = (ctx.secret?.held || []).map(id => {
+  const cards = (ctx.secret?.held || []).filter(id => playWindow(id) !== 'never').map(id => {
     const c = eventById(id);
     const nm = c ? (c[lang] || c.th).name : id;
-    const on = canUseCard(st, me, id);
-    const why = on ? '' : t('wreck.cardNoRoom');
+    const res = canPlayNow(st, me, id);
+    const on = res.ok;
+    const why = on ? '' : t('wreck.why.' + res.why);
     return `<button class="wr-act wr-act-card" data-held="${esc(id)}"${on ? '' : ' disabled'}
       title="${esc(why)}">
         <img class="wr-act-thumb" src="${esc(cardArt(id))}" alt="" draggable="false"
