@@ -1341,3 +1341,35 @@ group('การ์ด · แผนที่ยกให้คนอื่น �
   const none = maroon({ ...filled() }, 'b', {}, zero);
   ok('ไม่มีการ์ดกันก็โดนตามปกติ', none.kind !== 'ask', true);
 }
+
+group('การ์ดกัน Maroon · ไม่ประกาศผลที่ยังไม่เกิด');
+{
+  const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+  const deck = { ...out.secrets._deck, slots: ['pistol', ...out.secrets._deck.slots.slice(1)] };
+  const base = { ...filled(), phase: 'play', turn: 'c',
+                 saves: { b: 'fountain' }, held: { b: 1 },
+                 voteDeck: out.state.voteDeck, log: [], logSeq: 0 };
+  const sec = { ...ctxOf(base).secrets, b: { ...ctxOf(base).secrets.b, held: ['fountain'] } };
+  const ctx = { ...ctxOf(base), secrets: { ...sec, _deck: deck }, hostUid: 'a' };
+
+  const up = await onAction(ctx, { uid: 'c', type: 'activate', payload: { slot: 0 } });
+  const shot = await onAction({ ...ctx, state: up.state },
+                              { uid: 'c', type: 'useCard', payload: { target: 'b' } });
+
+  ok('ยังไม่ประกาศผล เพราะยังไม่รู้ว่าจะรอดไหม', shot.state.shout ?? null, null);
+  ok('ตำแหน่งยังไม่ขยับ', shot.state.pos.b, base.pos.b);
+  ok('กำลังถามเจ้าตัวอยู่', shot.state.saveAsk.who, 'b');
+  ok('ตายังไม่ผ่าน', shot.state.turn, 'c');
+
+  const ctx2 = { ...ctx, state: shot.state };
+  const no = await onAction(ctx2, { uid: 'b', type: 'useSave', payload: { yes: false } });
+  ok('ตอบไม่ใช้ = โดนตามปกติ', no.state.pos.b.startsWith('island'), true);
+  ok('การ์ดยังอยู่ในมือ เก็บไว้ใช้ครั้งหน้าได้', no.state.saves.b, 'fountain');
+  ok('ตอบแล้วผ่านตา', no.state.turn !== 'c', true);
+
+  const yes = await onAction(ctx2, { uid: 'b', type: 'useSave', payload: { yes: true } });
+  ok('ตอบใช้ = ไม่โดน', yes.state.pos.b, base.pos.b);
+  ok('การ์ดถูกใช้ไปแล้ว', yes.state.saves.b ?? null, null);
+  ok('ประกาศตอนนี้แหละ ไม่ใช่ก่อนหน้า', yes.state.shout.kind, 'saved');
+  ok('ประกาศบอกว่าใช้ใบไหน', yes.state.shout.card, 'fountain');
+}

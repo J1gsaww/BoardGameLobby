@@ -728,6 +728,9 @@ export function birdStrike(st, hands = {}, rng = Math.random) {
     for (const uid of crew) {
       const out = maroon(cur, uid, h, rng);
       cur = out.state; h = out.hands;
+      /* เจอคนที่มีการ์ดกัน = หยุดทั้งขบวนไว้ก่อน รอเขาตอบแล้วค่อยทำต่อ
+         เงื่อนไขนกยังเป็นจริงอยู่ ตัวกวาดหลังคำสั่งจะเรียกซ้ำให้เอง */
+      if (out.kind === 'ask') break;
     }
     return { state: cur, hands: h, place: ship, who: crew };
   }

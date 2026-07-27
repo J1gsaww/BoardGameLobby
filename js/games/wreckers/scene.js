@@ -92,12 +92,13 @@ function sceneKey(st) {
   /* การ์ดมาก่อนประกาศผลเสมอ — ต้องรู้ว่าเปิดเจออะไรก่อนถึงจะเข้าใจว่าทำไมถึงเกิดผลนั้น
      ถ้าสลับลำดับ จะเห็นผลลอย ๆ ก่อนแล้วค่อยรู้ว่ามาจากการ์ดใบไหน */
   if (st.cardUp && !dismissed.has('card:' + st.cardUp.at)) return `card:${st.cardUp.at}`;
+  /* ค้างรอคำตอบว่าจะใช้การ์ดกันไหม ต้องมาก่อนประกาศผลเสมอ
+     เพราะตอนนี้ผลยังไม่เกิด คนที่ถูกถามอาจรอดก็ได้ */
+  if (st.saveAsk) return `save:${st.saveAsk.at}`;
   if (st.shout && !dismissed.has('shout:' + st.shout.at)) return `shout:${st.shout.at}`;
   /* ช่วงรอให้คนเปิดเลือกเป้า — ค้างไว้จนกว่าจะเลือกเสร็จ ไม่มีนับถอยหลัง
      ทุกคนต้องรู้ว่ากำลังอยู่ในช่วงนี้ ไม่ใช่แค่คนที่ต้องเลือก */
   if (st.pending) return `card:${st.pending.at}`;
-  /* ค้างรอคำตอบว่าจะใช้การ์ดกัน Maroon ไหม — ฉากของตัวเอง ไม่นับถอยหลัง */
-  if (st.saveAsk) return `save:${st.saveAsk.at}`;   /* กุญแจเดียวกับตอนเปิด ฉากจึงต่อเนื่อง ไม่กะพริบ */
   if (st.aim) return `ep:${st.aim.by}:${st.aim.place}`;
   if (st.lastVote && !dismissed.has(st.lastVote.at))
     return `ep:${st.lastVote.caller}:${st.lastVote.place}`;
@@ -453,8 +454,18 @@ function titleOf(st, ph, me) {
     if (st.shout.kind === 'birds') {
       return { who: t('wreck.card.albatross'), big: t('wreck.scene.birdsBig') };
     }
+    /* หัวข้อต้องตรงกับเรื่องที่ประกาศ ของเดิมตกไปเป็น "กัปตัน" ทุกกรณีที่ไม่ใช่ย้ายกล่อง
+       การใช้การ์ดกันหรือการยกแผนที่จึงขึ้นหัวว่ากัปตัน ซึ่งไม่เกี่ยวอะไรเลย */
+    const HEAD = {
+      shift:   'wreck.act.shiftCargo',
+      kick:    'wreck.role.captain',
+      shot:    'wreck.card.pistol',
+      marque:  'wreck.card.marque',
+      saved:   'wreck.card.' + (st.shout.card || 'fountain'),
+      gaveMap: 'wreck.card.' + (st.shout.card || 'fountain')
+    };
     return {
-      who: t(st.shout.kind === 'shift' ? 'wreck.act.shiftCargo' : 'wreck.role.captain'),
+      who: t(HEAD[st.shout.kind] || 'wreck.event'),
       big: st.names?.[st.shout.by] || '?'
     };
   }

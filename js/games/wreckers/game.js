@@ -483,13 +483,18 @@ function useCard(ctx, uid, { target }) {
   const theirBag = gift ? [...theirs, gift.card] : theirs;
 
   /* ล้าง cardUp ด้วย ไม่งั้นพอฉากประกาศผลจบ ฉากเปิดการ์ดจะเด้งกลับมาเล่าซ้ำ */
+  /* ผลถูกพักไว้เพราะเป้ามีการ์ดกันอยู่ในมือ — ยังไม่ประกาศอะไรทั้งนั้น
+     ประกาศตอนนี้จะกลายเป็นบอกผลที่ยังไม่เกิด แล้วคนอาจรอดก็ได้ */
+  const pausing = !!out.state.saveAsk;
+
   const next = pushLog({ ...out.state, pending: null, cardUp: null,
                          held: { ...out.state.held, [uid]: bag.length,
                                  ...(gift ? { [gift.to]: theirBag.length } : {}) },
                          /* การ์ดกัน Maroon ต้องรู้กันทั้งวง เพราะการยกแผนที่ประกาศอยู่แล้ว */
                          saves: giftSaves(out.state.saves, uid, bag, gift, theirBag),
-                         shout: { ...out.shout, beforePos: st.pos,
-                                  at: (out.state.logSeq || 0) + 1 } },
+                         ...(pausing || !out.shout ? {} : {
+                           shout: { ...out.shout, beforePos: st.pos,
+                                    at: (out.state.logSeq || 0) + 1 } }) },
                        'wreck.log.card.' + p.card,
                        { name: st.names?.[uid],
                          who: st.names?.[got.player] || st.names?.[target] });
