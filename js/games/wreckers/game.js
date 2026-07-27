@@ -25,6 +25,7 @@ import {
   buildEventDeck, refillSlots, emptyDeck,
   startVote, voteReady, tallyRow, attackPasses, mutinyPasses, brawlSplit,
   moveBox, score, winningSide, winners, dealNations, pushLog, refill, birdStrike, SAVE_CARDS, nextSeat,
+  voteWeight, setVoteWeight, addVoteBan,
   attackTargets, takeSides, keepSides, canAttack
 } from './rules.js';
 
@@ -188,6 +189,7 @@ export async function onAction(ctx, action) {
 
   /* ส่งไพ่โหวตทำได้นอกตาตัวเอง เป็นทางเดียวที่ไม่ต้องรอถึงตา */
   if (type === 'voteCard') return submitVote(ctx, uid, payload.card);
+  if (type === 'useDorado') return useDorado(ctx, uid, payload);
   if (type === 'endGame') return finish(ctx);
 
   /* ตอบว่าจะใช้การ์ดกัน Maroon ไหม ทำได้นอกตาตัวเอง
@@ -281,6 +283,7 @@ async function route(ctx, uid, type, payload) {
     case 'useCard':    return useCard(ctx, uid, payload);
     case 'playHeld':   return playHeld(ctx, uid, payload);
     case 'useSave':    return useSave(ctx, uid, payload);
+    case 'useDorado':  return useDorado(ctx, uid, payload);
     case 'attack':     return callVote(ctx, uid, 'attack', payload);
     case 'aimAt':      return aimAt(ctx, uid, payload);
     case 'takeFrom':   return takeFrom(ctx, uid, payload);
@@ -419,6 +422,35 @@ function activate(ctx, uid, { slot }) {
           deadline: Date.now() + PICK_MS }
       : passTurn(said),
     secrets: { _deck: next, ...cleared }
+  };
+}
+
+/* ── ตอบว่าจะใช้เอลโดราโดไหม ──────────────────────────────
+   ถามทุกครั้งที่เจ้าของการ์ดอยู่ในวงโหวต ไม่ต้องหยิบมาเล่นเอง
+   ตอบใช่ = ส่งไพ่ได้สองใบรอบนี้ แล้วรอบหน้าห้ามโหวตหนึ่งครั้ง
+   ตอบไม่ = ส่งใบเดียวตามปกติ การ์ดยังอยู่ในมือ */
+function useDorado(ctx, uid, { yes }) {
+  const st = ctx.state;
+  const v = st.vote;
+  if (!v || !v.voters.includes(uid)) return null;
+  if (v.done.includes(uid)) return null;
+  if ((v.asked || []).includes(uid)) return null;
+
+  const mine = ctx.secrets?.[uid] || {};
+  if (!(mine.held || []).includes('eldorado')) return null;
+
+  const asked = { ...v, asked: [...(v.asked || []), uid] };
+
+  if (!yes) return { state: { ...st, vote: asked } };
+
+  /* ใช้แล้วการ์ดหายจากมือทันที กันกดซ้ำและกันเก็บไว้ใช้รอบหน้า */
+  const bag = (mine.held || []).filter((c, i, a) => i !== a.indexOf('eldorado'));
+  const next = setVoteWeight({ ...st, vote: asked, held: { ...st.held, [uid]: bag.length } },
+                             uid, 2);
+
+  return {
+    state: pushLog(next, 'wreck.log.dorado', { name: st.names?.[uid] }),
+    secrets: { [uid]: { ...mine, held: bag } }
   };
 }
 
@@ -734,13 +766,22 @@ function submitVote(ctx, uid, cardId) {
   if (!(hands[uid] || []).includes(cardId)) return null;
 
   const picks = pickMap(ctx);
-  picks[uid] = cardId;
+  /* หนึ่งคนส่งได้หลายใบ (เอลโดราโดให้ส่งสองใบ) เก็บเป็นรายการเสมอ
+     ใบเดียวก็เป็นรายการที่มีสมาชิกเดียว จะได้ไม่ต้องมีสองทางในโค้ด */
+  const prev = picks[uid];
+  const mineNow = [...(Array.isArray(prev) ? prev : (prev ? [prev] : [])), cardId];
+  picks[uid] = mineNow;
+
   const left = { ...hands, [uid]: hands[uid].filter(c => c !== cardId) };
+
+  /* ส่งครบตามสิทธิ์ของตัวเองแล้วถึงนับว่าเสร็จ */
+  const need = voteWeight(st, uid);
+  const done = mineNow.length >= need ? [...st.vote.done, uid] : st.vote.done;
 
   const next = {
     ...st,
     votes: countHands(left),
-    vote: { ...st.vote, done: [...st.vote.done, uid] }
+    vote: { ...st.vote, done, sent: { ...(st.vote.sent || {}), [uid]: mineNow.length } }
   };
 
   if (!voteReady(next)) return { state: next, secrets: secretsFrom(ctx, left, picks) };
@@ -755,7 +796,10 @@ function submitVote(ctx, uid, cardId) {
    แล้วแจกคืนทุกคนตามเพดานของแต่ละคน */
 export function reveal(ctx, st, hands, picks, rng = Math.random) {
   const v = st.vote;
-  const submitted = v.voters.map(u => picks[u]).filter(Boolean);
+  const submitted = v.voters.flatMap(u => {
+    const p = picks[u];
+    return Array.isArray(p) ? p : (p ? [p] : []);
+  });
   const bonus = shuffle(pileOf(hands, submitted), rng).slice(0, v.extra || 1);
   const pot = shuffle([...submitted, ...bonus], rng);
 
@@ -771,7 +815,15 @@ export function reveal(ctx, st, hands, picks, rng = Math.random) {
 
   /* ตัวนับห้ามโหวตหักตรงนี้ ไม่ใช่ตอนสั่งโหวต — คนที่ถูกกันจึงเสียสิทธิ์ครบตามจำนวนครั้งจริง
      ส่วนน้ำหนักเสียงพิเศษใช้ได้ครั้งเดียว จบหม้อนี้ก็ล้างทิ้ง */
-  next = clearVoteWeights(burnVoteBans(next, Object.keys(next.voteBan || {})));
+  /* หักโทษเก่าก่อน แล้วค่อยบวกโทษใหม่
+     ถ้าบวกก่อน โทษที่เพิ่งได้จากเอลโดราโดจะโดนหักทิ้งในรอบเดียวกัน กลายเป็นไม่มีโทษเลย
+     หักเฉพาะคนที่อยู่ในวงโหวตรอบนี้ คนที่ไม่ได้ร่วมไม่ควรได้หักโทษฟรี */
+  next = burnVoteBans(next, next.vote.voters);
+
+  for (const u of Object.keys(next.voteWeight || {})) {
+    if (voteWeight(next, u) > 1) next = addVoteBan(next, u, 1);
+  }
+  next = clearVoteWeights(next);
 
   /* จั่วทดแทนเฉพาะใบที่ลงไป มือที่เหลืออยู่กับที่
      ไพ่ที่ส่งเข้าหม้อถูกตัดออกจากมือไปแล้วตอนส่ง จึงกลับเข้ากองเองโดยอัตโนมัติ */

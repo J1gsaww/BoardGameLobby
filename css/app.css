@@ -1715,3 +1715,19 @@ button{ cursor:pointer; border:0; background:none; }
 
 /* การ์ดที่ทำงานเองตอนจำเป็น — ไม่ใช่ปุ่ม จึงไม่ชวนให้กด */
 .wr-held-auto{ cursor:default; border-style:dashed; opacity:.9; }
+
+/* กล่องถามเอลโดราโด — อยู่ในฉากโหวตเดียวกัน ไม่แยกฉากใหม่ */
+.wr-vote-extra{ display:grid; gap:10px; justify-items:center; }
+.wr-dorado{
+  display:grid; gap:8px; justify-items:center;
+  padding:12px 16px; border-radius:14px;
+  background:rgba(10,8,22,.94); border:2px solid var(--lamp);
+}
+.wr-dorado-img{
+  width:96px; aspect-ratio:3/4; object-fit:cover; border-radius:9px;
+  border:1px solid var(--lamp); box-shadow:0 6px 18px rgba(0,0,0,.7);
+}
+.wr-dorado-ask{
+  max-width:280px; text-align:center; font-size:12.5px; line-height:1.5; color:#fdf6e6;
+}
+.wr-ban-note{ color:var(--rose); }

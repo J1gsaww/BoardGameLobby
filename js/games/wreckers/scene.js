@@ -15,7 +15,7 @@
 
 import { t } from '../../i18n.js';
 import { VOTE_ART, ICON_EXT } from './vote.js';
-import { takeSides, keepSides, SHIP_CARGO_CAP } from './rules.js';
+import { takeSides, keepSides, SHIP_CARGO_CAP, occupants } from './rules.js';
 import { askKey } from './effects.js';
 import { BASE_CARDS, cardArt, eventArt, eventAlt } from './events.js';
 import { EXTRA_CARDS } from './cards.js';
@@ -80,6 +80,7 @@ const dismissed = new Set();
 let seen = new Set();
 let voterList = [];  // รายชื่อผู้ร่วมโหวตล่าสุด ใช้เติมไพ่ที่ตกหล่น
 let sendFn = null;
+let sceneCtx = null;   /* เก็บไว้ให้ส่วนย่อยที่ต้องรู้ว่าใครกำลังดูอยู่ */
 
 const now = () => performance.now();
 
@@ -129,6 +130,7 @@ export function paintScene(el, st, ctx) {
   const box = el.querySelector('.wr-scene');
   if (!box) return;
   sendFn = ctx.send;
+  sceneCtx = ctx;
 
   const want = sceneKey(st);
   if (!want) {
@@ -494,6 +496,37 @@ function titleOf(st, ph, me) {
 }
 
 /* ── รอไพ่ ─────────────────────────────────────────────── */
+/* ถามเจ้าของเอลโดราโดว่าจะใช้ไหม — อยู่ในฉากโหวตเดียวกัน ไม่แยกฉากใหม่
+   คนอื่นไม่เห็นว่ามีการถาม เพราะการตัดสินใจนี้เป็นความลับจนกว่าจะส่งไพ่ */
+function doradoBox(st, ctx) {
+  const v = st.vote;
+  const me = ctx.me.uid;
+  if (!v || !v.voters.includes(me) || v.done.includes(me)) return '';
+  if ((v.asked || []).includes(me)) return '';
+  if (!(ctx.secret?.held || []).includes('eldorado')) return '';
+
+  return `<div class="wr-dorado">
+      <img class="wr-dorado-img" src="${esc(cardArt('eldorado'))}" alt=""
+        draggable="false" onerror="this.remove()">
+      <span class="wr-dorado-ask">${esc(t('wreck.scene.doradoAsk'))}</span>
+      <div class="wr-scene-btns">
+        <button class="wr-scene-btn wr-save-yes" data-dorado="1">${esc(t('wreck.scene.saveYes'))}</button>
+        <button class="wr-scene-btn wr-save-no" data-dorado="0">${esc(t('wreck.scene.saveNo'))}</button>
+      </div>
+    </div>`;
+}
+
+/* คนที่ห้ามโหวตรอบนี้เพราะใช้เอลโดราโดไปรอบก่อน — บอกทั้งวงให้รู้ */
+function banLine(st) {
+  const v = st.vote;
+  if (!v) return '';
+  const here = occupants(st.pos, v.place)
+    .filter(u => (st.voteBan?.[u] || 0) > 0 && !v.voters.includes(u));
+  if (!here.length) return '';
+  return `<p class="wr-scene-note wr-ban-note">${esc(t('wreck.scene.voteBanned', {
+    who: here.map(u => st.names?.[u] || '?').join(', ') }))}</p>`;
+}
+
 function collect(body, st) {
   if (goto('collect') || !body.querySelector('.wr-vb-row')) {
     body.innerHTML = `<div class="wr-vb-row wiggle"></div><p class="wr-scene-note"></p>`;
@@ -513,6 +546,23 @@ function collect(body, st) {
     ? t('wreck.scene.waiting', { who: left.map(u => st.names?.[u] || '?').join(', ') })
     : t('wreck.scene.allIn');
   if (note.textContent !== text) note.textContent = text;
+
+  /* กล่องถามเอลโดราโด กับบรรทัดบอกคนที่โดนห้ามโหวต
+     ทั้งคู่อยู่ในฉากโหวตเดียวกัน ไม่แยกฉากใหม่ตามที่ตกลงกันไว้ */
+  const extraHtml = doradoBox(st, sceneCtx) + banLine(st);
+  let extra = body.querySelector('.wr-vote-extra');
+  if (!extra) {
+    extra = document.createElement('div');
+    extra.className = 'wr-vote-extra';
+    body.appendChild(extra);
+  }
+  if (extra.dataset.sig !== extraHtml) {
+    extra.dataset.sig = extraHtml;
+    extra.innerHTML = extraHtml;
+    extra.querySelectorAll('[data-dorado]').forEach(b => {
+      b.onclick = () => sendFn?.('useDorado', { yes: b.dataset.dorado === '1' });
+    });
+  }
   return false;    // รอคนกด ไม่ต้องขอเฟรมถี่ ๆ
 }
 

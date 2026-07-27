@@ -24,7 +24,7 @@ import {
 } from './rules.js';
 import { onAction, init, tick, finish, passTurn, openTurn } from './game.js';
 import { DECK } from './vote.js';
-import { shipsWithRoom, canUseCard, MAP_CARDS } from './effects.js';
+import { shipsWithRoom, canUseCard, MAP_CARDS, playWindow } from './effects.js';
 import { BASE_CARDS, BASE_TOTAL, baseById, ENDER } from './events.js';
 import { EXTRA_CARDS } from './cards.js';
 
@@ -628,7 +628,8 @@ group('ต่อสาย · โหวตโจมตีเต็มรอบ');
   const one = await onAction(ctx, { uid: 'a', type: 'voteCard', payload: { card: 'v03' } });
   ok('ส่งไพ่แล้วขึ้นชื่อว่าส่งแล้ว', one.state.vote.done, ['a']);
   ok('คนอื่นเห็นแค่จำนวนใบที่ลดลง ไม่เห็นว่าใบไหน', one.state.votes.a, 2);
-  ok('ไพ่ที่เลือกเก็บในข้อมูลลับของเจ้าตัว', one.secrets.a.pick, 'v03');
+  /* เก็บเป็นรายการเสมอ เพราะเอลโดราโดให้ส่งสองใบ ใบเดียวก็เป็นรายการสมาชิกเดียว */
+  ok('ไพ่ที่เลือกเก็บในข้อมูลลับของเจ้าตัว', one.secrets.a.pick, ['v03']);
 
   const dup = await onAction(ctxOf(one.state, { ...hands, a: ['v01', 'v02'] }, {}, { a: 'v03' }),
                              { uid: 'a', type: 'voteCard', payload: { card: 'v01' } });
@@ -1466,4 +1467,53 @@ group('การ์ดที่ใช้ได้ในตาคนอื่น 
      anytimeCards({ ...base, phase: 'reveal' }, 'e', ['atlantis']), []);
   ok('การ์ดที่ไม่ใช่แบบใช้ได้ตลอด ไม่โผล่',
      anytimeCards(base, 'e', ['marque', 'fountain']), []);
+}
+
+group('การ์ด · เอลโดราโด');
+{
+  const seats = ['a', 'b', 'c'];
+  const base = { ...board({ a: 'shipL:C', b: 'shipL:F', c: 'shipL:3' }),
+                 seats, held: { b: 1 }, names: { a: 'a', b: 'b', c: 'c' } };
+  const st = startVote(base, { kind: 'attack', place: 'shipL', caller: 'a' });
+  const sec = { a: { vote: ['v01', 'v02', 'v03'] },
+                b: { vote: ['v04', 'v05', 'v06'], held: ['eldorado'] },
+                c: { vote: ['v07', 'v08', 'v09'] } };
+  let ctx = { state: st, members: members.slice(0, 3), settings: { turnSeconds: 0 },
+              secrets: sec, hostUid: 'a' };
+
+  ok('หยิบมาเล่นเองไม่ได้', playWindow('eldorado'), 'never');
+
+  const on = await onAction(ctx, { uid: 'b', type: 'useDorado', payload: { yes: true } });
+  ok('ตอบใช้แล้วได้สิทธิ์สองเสียง', voteWeight(on.state, 'b'), 2);
+  ok('การ์ดหายจากมือทันที กันกดซ้ำ', on.secrets.b.held, []);
+
+  let r = on;
+  for (const [u, card] of [['b', 'v04'], ['b', 'v05'], ['a', 'v01'], ['c', 'v07']]) {
+    ctx = { ...ctx, state: r.state, secrets: { ...ctx.secrets, ...(r.secrets || {}) } };
+    r = await onAction(ctx, { uid: u, type: 'voteCard', payload: { card } });
+  }
+  ok('หม้อได้ไพ่ครบ สามคนสี่ใบบวกกองกลาง', r.state.lastVote.pot.length, 5);
+  ok('ใช้แล้วติดโทษห้ามโหวตหนึ่งครั้ง', r.state.voteBan.b, 1);
+  ok('สิทธิ์พิเศษถูกล้างหลังจบ', voteWeight(r.state, 'b'), 1);
+
+  const nextVote = startVote({ ...r.state, vote: null },
+                             { kind: 'attack', place: 'shipL', caller: 'a' });
+  ok('รอบถัดไปไม่นับเขาเป็นผู้ร่วมโหวต', nextVote.vote.voters, ['a', 'c']);
+  ok('หน้าจอก็บอกว่าเขาส่งไพ่ไม่ได้', canVoteNow(nextVote, 'b'), false);
+}
+{
+  /* ตอบไม่ใช้ = ส่งใบเดียวตามปกติ การ์ดยังอยู่ */
+  const seats = ['a', 'b', 'c'];
+  const base = { ...board({ a: 'shipL:C', b: 'shipL:F', c: 'shipL:3' }),
+                 seats, held: { b: 1 }, names: { a: 'a', b: 'b', c: 'c' } };
+  const st = startVote(base, { kind: 'attack', place: 'shipL', caller: 'a' });
+  const sec = { a: { vote: ['v01'] }, b: { vote: ['v04'], held: ['eldorado'] }, c: { vote: ['v07'] } };
+  const ctx = { state: st, members: members.slice(0, 3), settings: { turnSeconds: 0 },
+                secrets: sec, hostUid: 'a' };
+
+  const off = await onAction(ctx, { uid: 'b', type: 'useDorado', payload: { yes: false } });
+  ok('ตอบไม่ใช้ · สิทธิ์เท่าเดิม', voteWeight(off.state, 'b'), 1);
+  ok('ตอบไม่ใช้ · การ์ดยังอยู่ในมือ', off.secrets?.b?.held ?? sec.b.held, ['eldorado']);
+  ok('ตอบแล้วถามซ้ำไม่ได้',
+     await onAction({ ...ctx, state: off.state }, { uid: 'b', type: 'useDorado', payload: { yes: true } }), null);
 }
