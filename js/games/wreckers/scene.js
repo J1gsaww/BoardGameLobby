@@ -15,7 +15,7 @@
 
 import { t } from '../../i18n.js';
 import { VOTE_ART, ICON_EXT } from './vote.js';
-import { takeSides, keepSides, SHIP_CARGO_CAP, occupants } from './rules.js';
+import { takeSides, keepSides, SHIP_CARGO_CAP, occupants, placeOf } from './rules.js';
 import { askKey, pickCountOf } from './effects.js';
 import { voteCard, cardById as voteById } from './vote.js';
 import { BASE_CARDS, cardArt, eventArt, eventAlt } from './events.js';

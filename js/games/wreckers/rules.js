@@ -104,12 +104,16 @@ export function nextSeat(st, from = st.turn) {
 export function advance(st, from = st.turn) {
   let cur = st;
   let uid = nextSeat(cur, from);
+  /* เก็บรายชื่อคนที่โดนข้ามไว้ด้วย เพื่อประกาศให้ทั้งวงรู้ว่าใครหยุดอยู่
+     ถ้าไม่บอก คนเล่นจะเห็นแค่ตากระโดดข้ามหัวไปเฉย ๆ แล้วงงว่าทำไม */
+  const skipped = [];
   for (let guard = 0; guard < cur.seats.length + 1; guard++) {
-    if (!owesSkip(cur, uid)) return { state: cur, uid };
+    if (!owesSkip(cur, uid)) return { state: cur, uid, skipped };
+    skipped.push(uid);
     cur = burnSkip(cur, uid);
     uid = nextSeat(cur, uid);
   }
-  return { state: cur, uid };
+  return { state: cur, uid, skipped };
 }
 
 /* ── Action ที่ทำได้ในตานี้ ─────────────────────────────────

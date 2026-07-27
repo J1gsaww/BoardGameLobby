@@ -163,11 +163,19 @@ export function passTurn(st, now = Date.now()) {
      เช็กที่นี่จุดเดียวแทนที่จะไล่ใส่ทุกที่ที่เรียกผ่านตา ซึ่งมีสิบกว่าที่ */
   if (st.saveAsk) return st;
 
-  const { state, uid } = advance(st);        /* คนที่ติดหนี้ข้ามเทิร์นถูกหักหนี้แล้วข้ามไปในนี้ */
+  const { state, uid, skipped = [] } = advance(st);        /* คนที่ติดหนี้ข้ามเทิร์นถูกหักหนี้แล้วข้ามไปในนี้ */
+  /* มีคนโดนข้ามตา = ประกาศให้ทั้งวงรู้ว่าใครหยุดอยู่
+     ไม่งั้นจะเห็นแค่ตากระโดดข้ามหัวไปเฉย ๆ แล้วงงว่าเกิดอะไรขึ้น */
+  const said = skipped.length
+    ? pushLog({ ...state,
+                shout: { kind: 'skip', who: skipped, at: (state.logSeq || 0) + 1 } },
+              'wreck.log.skipped', { who: skipped.map(u => st.names?.[u] || '?').join(', ') })
+    : state;
+
   return openTurn({
-    ...state,
+    ...said,
     turn: uid,
-    deadline: turnDeadline(state, now),
+    deadline: turnDeadline(said, now),
     graced: false,
     vote: null,
     peek: null,           /* แอบดูค้างอยู่แล้วหมดเวลา ก็ทิ้งไปพร้อมตา */

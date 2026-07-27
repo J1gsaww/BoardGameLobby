@@ -1793,3 +1793,43 @@ group('การ์ด · ประมวลโจรสลัด');
   ok('จำนวนครั้งที่เหลือไล่ลงถูกต้อง', seen.map(s => s.left), [2, 1, 0]);
   ok('โทษหมดแล้วป้ายหายเอง เพราะอ่านจากตัวเลขนี้โดยตรง', cur.voteBan?.a || 0, 0);
 }
+
+group('การ์ด · ลักปิดลักเปิด');
+{
+  const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+  const deck = { ...out.secrets._deck, slots: ['scurvy', ...out.secrets._deck.slots.slice(1)] };
+  const pos = { a: 'shipL:C', b: 'shipL:F', c: 'shipL:3', d: 'shipR:C', e: 'island:G', f: 'island:2' };
+  const base = { ...out.state, phase: 'play', turn: 'a', pos, seats: [...P],
+                 names: filled().names, out: [] };
+  const ctx = { ...ctxOf(base), secrets: { ...out.secrets, _deck: deck }, hostUid: 'a' };
+
+  const r = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+
+  ok('ทุกคนในที่เดียวกันติดหนี้ข้ามตา',
+     ['a', 'b', 'c'].map(u => r.state.skip?.[u] ?? 0), [1, 0, 0]);
+  ok('คนที่อยู่ที่อื่นไม่โดน', [r.state.skip?.d ?? 0, r.state.skip?.e ?? 0], [0, 0]);
+
+  /* b อยู่ที่เดียวกันและถึงตาทันที จึงถูกข้ามและหักหนี้ไปแล้วในจังหวะเดียวกัน */
+  ok('คนถัดไปที่ป่วยถูกข้ามทันที', r.state.turn, 'c');
+  ok('หนี้ของคนที่ถูกข้ามถูกหักแล้ว', r.state.skip?.b ?? 0, 0);
+  ok('ประกาศบอกว่าใครถูกข้าม', [r.state.shout.kind, r.state.shout.who], ['skip', ['b']]);
+
+  /* คนเปิดยังติดหนี้อยู่ ตาที่กำลังเปิดไม่นับ จะโดนตอนถึงตาครั้งถัดไป */
+  ok('คนเปิดยังติดหนี้ค้างไว้ ตาที่เปิดไม่นับ', r.state.skip?.a, 1);
+}
+{
+  /* เดินจนครบรอบ ยืนยันว่าคนเปิดโดนข้ามในตาถัดไปของตัวเอง แล้วหนี้หมด */
+  const st = { ...board({ a: 'shipL:C', b: 'shipR:C', c: 'island:G' }),
+               seats: ['a', 'b', 'c'], turn: 'a', skip: { a: 1 } };
+  const one = advance(st, 'a');
+  ok('ตาถัดไปข้ามไปที่ b ตามปกติ', one.uid, 'b');
+  ok('ยังไม่มีใครถูกข้าม', one.skipped, []);
+
+  const two = advance(one.state, 'b');
+  ok('ยังไม่ถึงตา a', two.uid, 'c');
+
+  const three = advance(two.state, 'c');
+  ok('ถึงตา a แล้วโดนข้าม ไปที่ b แทน', three.uid, 'b');
+  ok('รายงานว่า a ถูกข้าม', three.skipped, ['a']);
+  ok('หนี้ของ a หมดแล้ว', three.state.skip?.a ?? 0, 0);
+}

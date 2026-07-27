@@ -1340,12 +1340,35 @@ function paintRoster(el, st, ctx) {
         onerror="if(this.dataset.alt){this.src=this.dataset.alt;this.dataset.alt='';}else{this.remove();}">`);
     }
 
+    /* ป่วยจนข้ามตา — ป้ายสีม่วง อ่านจากจำนวนรอบที่เหลือโดยตรง
+       ใช้ภาพการ์ดย่อเล็กเหมือนป้ายอื่น ถ้าภาพยังไม่มีก็ตกไปเป็นสัญลักษณ์แทน */
+    const sick = st.skip?.[uid] || 0;
+    if (sick) {
+      const tip = t('wreck.tag.skip', { n: sick });
+      tags.push(`<span class="wr-row-sick" title="${esc(tip)}">
+        <img class="wr-row-ban-img" src="${esc(cardArt('scurvy'))}" alt=""
+          draggable="false" data-alt="${esc(cardArtAlt('scurvy'))}"
+          onerror="if(this.dataset.alt){this.src=this.dataset.alt;this.dataset.alt='';}
+                   else{this.replaceWith(Object.assign(document.createElement('span'),
+                     {className:'wr-row-ban-mark',textContent:'\u2620'}));}">
+        <span class="wr-row-ban-n">${sick}</span></span>`);
+    }
+
     /* โทษห้ามโหวต — ป้ายอ่านจากจำนวนครั้งที่เหลือโดยตรง
-       พอครบแล้วเลขเป็นศูนย์ ป้ายก็หายเอง ไม่ต้องมีใครไปเก็บกวาด */
+       พอครบแล้วเลขเป็นศูนย์ ป้ายก็หายเอง ไม่ต้องมีใครไปเก็บกวาด
+
+       ใช้ภาพการ์ดย่อเล็กเป็นไอคอน ถ้าภาพยังไม่มีก็ตกไปเป็นวงกลมขีด
+       จะได้เห็นป้ายเสมอ ไม่ว่าไฟล์ภาพจะมาถึงหรือยัง */
     const banLeft = st.voteBan?.[uid] || 0;
     if (banLeft) {
-      tags.push(`<span class="wr-row-ban" title="${esc(t('wreck.tag.voteBan', { n: banLeft }))}">
-        \u2298${banLeft > 1 ? banLeft : ''}</span>`);
+      const tip = t('wreck.tag.voteBan', { n: banLeft });
+      tags.push(`<span class="wr-row-ban" title="${esc(tip)}">
+        <img class="wr-row-ban-img" src="${esc(cardArt('piratecode'))}" alt=""
+          draggable="false" data-alt="${esc(cardArtAlt('piratecode'))}"
+          onerror="if(this.dataset.alt){this.src=this.dataset.alt;this.dataset.alt='';}
+                   else{this.replaceWith(Object.assign(document.createElement('span'),
+                     {className:'wr-row-ban-mark',textContent:'\u2298'}));}">
+        <span class="wr-row-ban-n">${banLeft}</span></span>`);
     }
 
     const tok = tags.length ? `<span class="wr-row-tags">${tags.join('')}</span>` : '';

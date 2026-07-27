@@ -13,7 +13,7 @@
 
 import { maroon, occupants, placeOf, addMark, joinPlace, capacityOf, SHIP_IDS,
          insertBehind, nextSeat, swapSpots, shuffleQueue, pileOf,
-         BOAT_IDS, isWrecked, addVoteBan } from './rules.js';
+         BOAT_IDS, isWrecked, addVoteBan, addSkip } from './rules.js';
 
 /* การ์ดหนึ่งใบประกาศได้สี่อย่าง ใส่เท่าที่ต้องใช้
 
@@ -42,6 +42,21 @@ export const EFFECTS = {
       /* บอกหน้าจอว่าใครเพิ่งสลับ จะได้ไฮไลท์ให้เห็นว่าเกิดอะไรขึ้นกับใคร
          ไม่ใช่ประกาศเป็นฉาก แค่เรืองรอบตัวสองวินาที */
       return { state: { ...st, pos, glow: { uids: [uid, target], at: (st.logSeq || 0) + 1 } }, hands };
+    }
+  },
+
+  /* ลักปิดลักเปิด — ทุกคนที่อยู่ในสถานที่เดียวกับคนเปิด โดนข้ามตาคนละหนึ่งรอบ
+     รวมคนเปิดเองด้วย แต่ตาที่กำลังเปิดอยู่ไม่นับ เพราะหนี้ถูกหักตอนถึงตาครั้งถัดไป
+     ซึ่งเป็นพฤติกรรมที่กลไกหนี้ข้ามตาทำให้เองอยู่แล้ว ไม่ต้องเขียนกรณีพิเศษ */
+  scurvy: {
+    run: (st, uid, _picks, hands) => {
+      const here = occupants(st.pos, placeOf(st.pos[uid]));
+      let cur = st;
+      for (const u of here) cur = addSkip(cur, u, 1);
+      return {
+        state: cur, hands,
+        shout: { kind: 'scurvy', by: uid, who: here, card: 'scurvy' }
+      };
     }
   },
 

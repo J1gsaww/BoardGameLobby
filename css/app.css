@@ -1825,9 +1825,44 @@ button{ cursor:pointer; border:0; background:none; }
 
 /* ป้ายข้างชื่อในรายชื่อ — มีได้หลายอันพร้อมกัน เช่นมีนกเกาะและติดโทษห้ามโหวต */
 .wr-row-tags{ display:flex; align-items:center; gap:3px; flex:0 0 auto; }
+/* ป้ายโทษห้ามโหวต — ภาพการ์ดย่อเล็กพร้อมเลขครั้งที่เหลือ
+   ถ้าภาพยังไม่มีจะตกไปเป็นวงกลมขีด ป้ายจึงเห็นเสมอ */
 .wr-row-ban{
+  position:relative; display:inline-flex; align-items:center; flex:0 0 auto;
+}
+.wr-row-ban-img{
+  width:20px; aspect-ratio:3/4; object-fit:cover; border-radius:3px;
+  border:1px solid var(--rose);
+  box-shadow:0 0 0 1px rgba(242,100,126,.4), 0 1px 4px rgba(0,0,0,.7);
+}
+.wr-row-ban-mark{
+  display:grid; place-items:center; width:18px; height:18px; border-radius:50%;
+  font-family:var(--mono); font-size:11px; line-height:1;
+  color:var(--rose); border:1px solid var(--rose); background:rgba(242,100,126,.14);
+}
+.wr-row-ban-n{
+  position:absolute; right:-5px; bottom:-4px;
+  min-width:13px; height:13px; padding:0 3px; border-radius:999px;
+  display:grid; place-items:center;
+  font-family:var(--mono); font-size:9px; line-height:1;
+  color:#241704; background:var(--rose);
+  box-shadow:0 1px 3px rgba(0,0,0,.8);
+}
+
+/* ป่วยจนข้ามตา — สีม่วง แยกจากโทษห้ามโหวตที่เป็นสีแดง
+   สองอันนี้ติดพร้อมกันได้ จึงต้องแยกสีให้ชัด */
+.wr-row-sick{
   font-family:var(--mono); font-size:11px; line-height:1;
   padding:2px 5px; border-radius:999px;
-  color:var(--rose); border:1px solid var(--rose);
-  background:rgba(242,100,126,.12);
+  color:#c98cff; border:1px solid #b06cff;
+  background:rgba(176,108,255,.14);
 }
+
+/* ป้ายป่วยข้ามตา — ม่วง แยกจากโทษห้ามโหวตที่เป็นแดง เพราะติดพร้อมกันได้ */
+.wr-row-sick{
+  display:inline-flex; align-items:center; gap:2px; flex:0 0 auto;
+  padding:1px 4px 1px 1px; border-radius:999px;
+  border:1px solid #b06cff; background:rgba(176,108,255,.14);
+}
+.wr-row-sick .wr-row-ban-n{ color:#c98cff; }
+.wr-row-sick .wr-row-ban-mark{ color:#c98cff; font-size:11px; line-height:1; padding:0 2px; }
