@@ -536,15 +536,20 @@ function poolPanel(stage, st, ctx) {
   stage.dataset.pool = sig;
   stage.hidden = false;
 
+  /* หน้าต่างลอยเต็มจอ ไม่ใช่กล่องในกระดาน
+     กระดานตั้ง overflow:hidden ไว้ ถ้าวางไว้ข้างในแผงจะถูกตัดที่ขอบ
+     ปุ่มยืนยันอยู่ใต้เส้นตัดพอดีจนกดไม่ได้ */
   stage.innerHTML = `<div class="wr-pool">
-      <p class="wr-pool-head">${esc(t('wreck.scene.crowPick', {
-        n: need, left: need - poolPick.length }))}</p>
-      <div class="wr-pool-grid">${
-        pool.map(id => `<button class="wr-pool-card${poolPick.includes(id) ? ' on' : ''}"
-          data-pool="${esc(id)}">${voteCard(voteById(id), lang)}</button>`).join('')
-      }</div>
-      <button class="wr-scene-btn wr-pool-go"${poolPick.length === need ? '' : ' disabled'}>
-        ${esc(t('wreck.plan.confirm'))}</button>
+      <div class="wr-pool-box">
+        <p class="wr-pool-head">${esc(t('wreck.scene.crowPick', {
+          n: need, left: need - poolPick.length }))}</p>
+        <div class="wr-pool-grid">${
+          pool.map(id => `<button class="wr-pool-card${poolPick.includes(id) ? ' on' : ''}"
+            data-pool="${esc(id)}">${voteCard(voteById(id), lang)}</button>`).join('')
+        }</div>
+        <button class="wr-scene-btn wr-pool-go"${poolPick.length === need ? '' : ' disabled'}>
+          ${esc(t('wreck.plan.confirm'))}</button>
+      </div>
     </div>`;
 
   stage.querySelectorAll('[data-pool]').forEach(b => {
