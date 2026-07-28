@@ -2086,3 +2086,25 @@ button{ cursor:pointer; border:0; background:none; }
   box-shadow:0 0 8px rgba(150,230,90,.9);
   pointer-events:none;
 }
+
+/* ตะขอเกี่ยวกระชากสลับที่ — แดง แยกจากม่วงของการสลับแบบอื่น
+   ใบนี้เป็นการกระชากมา ไม่ใช่การสลับด้วยความสมัครใจ */
+.wr-slot.hooked .wr-pawn{
+  box-shadow:0 0 0 4px var(--rose), 0 0 26px rgba(242,100,126,.95);
+  border-radius:50%;
+  animation:wr-hook-glow .8s ease-in-out infinite;
+}
+@keyframes wr-hook-glow{
+  0%,100%{ box-shadow:0 0 0 3px var(--rose), 0 0 16px rgba(242,100,126,.7); }
+  50%    { box-shadow:0 0 0 5px #ff8fa6, 0 0 34px rgba(242,100,126,1); }
+}
+
+/* ป้ายกระซิบ — ดำขอบขาว ตั้งใจให้ต่างจากป้ายอื่นที่มีสีประจำตัว
+   เพราะใบนี้เป็นความลับ ไม่ใช่สถานะที่อยากประกาศ */
+.wr-row-whisper{
+  display:inline-flex; align-items:center; gap:2px; flex:0 0 auto;
+  font-size:11px; line-height:1; padding:2px 6px; border-radius:999px;
+  color:#fff; background:#0c0a16; border:1px solid #fff;
+  box-shadow:0 0 8px rgba(255,255,255,.45);
+}
+.wr-row-whisper-n{ font-family:var(--mono); font-size:10px; font-weight:700; }

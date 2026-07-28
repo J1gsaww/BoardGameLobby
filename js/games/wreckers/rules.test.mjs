@@ -2070,3 +2070,80 @@ group('นกอัลบาทรอส · คนเดียวถือได
   ok('เก็บคืนแล้วไม่เหลือสักตัว', markCount(swept, 'a', 'bird'), 0);
   ok('เก็บคืนแล้วไม่ล่มอีก', birdStrike(swept, {}, zero), null);
 }
+
+group('การ์ดพิเศษ · ตะขอเกี่ยว · หนูท้องเรือ · กระซิบ');
+{
+  const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+  const mk = (id) => ({ ...out.secrets._deck, slots: [id, ...out.secrets._deck.slots.slice(1)] });
+  const cargo = { shipL: { B: 2, F: 1 }, shipR: { B: 0, F: 1 },
+                  island: { B: 1, F: 1 }, merchant: 4 };
+  const at = (pos, turn) => ({ ...out.state, phase: 'play', turn, pos, cargo,
+                               seats: [...P], names: filled().names, out: [] });
+
+  /* ตะขอเกี่ยว — สลับกับคนข้างหน้า */
+  {
+    const st = at({ a: 'shipL:C', b: 'shipL:F', c: 'island:G' }, 'b');
+    const ctx = { ...ctxOf(st), secrets: { ...out.secrets, _deck: mk('grapple') }, hostUid: 'a' };
+    const r = await onAction(ctx, { uid: 'b', type: 'activate', payload: { slot: 0 } });
+    ok('สลับกับคนข้างหน้า', [r.state.pos.a, r.state.pos.b], ['shipL:F', 'shipL:C']);
+    ok('บอกหน้าจอว่าใครโดนกระชาก', [...r.state.hook.uids].sort(), ['a', 'b']);
+  }
+
+  /* อยู่หัวแถวแล้วสลับกับคนท้ายแถว */
+  {
+    const st = at({ a: 'shipL:C', b: 'shipL:F', c: 'shipL:3' }, 'a');
+    const ctx = { ...ctxOf(st), secrets: { ...out.secrets, _deck: mk('grapple') }, hostUid: 'a' };
+    const r = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+    ok('หัวแถวสลับกับท้ายแถว', occupants(r.state.pos, 'shipL'), ['c', 'b', 'a']);
+  }
+
+  /* กฎใหม่ — อยู่คนเดียวในที่นั้นแล้วโดน Maroon เอง */
+  {
+    const st = at({ a: 'shipL:C', b: 'shipL:F', c: 'island:G' }, 'c');
+    const ctx = { ...ctxOf(st), secrets: { ...out.secrets, _deck: mk('grapple') }, hostUid: 'a' };
+    const r = await onAction(ctx, { uid: 'c', type: 'activate', payload: { slot: 0 } });
+    ok('อยู่คนเดียวบนเกาะ = เสียไพ่โหวตถาวร', r.state.maxVote.c, 2);
+    ok('ประกาศบอกว่าตะขอไม่ติดอะไร', r.state.shout.kind, 'hookMiss');
+    ok('ไม่มีใครถูกสลับ', r.state.hook ?? null, null);
+  }
+
+  /* หนูท้องเรือ — ย้ายกล่องข้ามฝั่งในที่ที่ยืน */
+  {
+    const st = at({ a: 'shipL:C', b: 'shipL:F', c: 'island:G' }, 'a');
+    const ctx = { ...ctxOf(st), secrets: { ...out.secrets, _deck: mk('bilgerat') }, hostUid: 'a' };
+    const up = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+    ok('ขั้นแรกถามฝั่งต้นทาง', up.state.pending.needs, 'from');
+    ok('เลือกได้เฉพาะฝั่งที่มีกล่อง',
+       targetsOf(up.state, 'a', 'bilgerat', 'from', {}), ['B', 'F']);
+
+    const f = await onAction({ ...ctx, state: up.state }, { uid: 'a', type: 'useCard', payload: { target: 'B' } });
+    ok('ขั้นสองถามฝั่งปลายทาง', f.state.pending.needs, 'to');
+    ok('ปลายทางต้องไม่ใช่ฝั่งเดิม',
+       targetsOf(f.state, 'a', 'bilgerat', 'to', { from: 'B' }), ['F']);
+
+    const done = await onAction({ ...ctx, state: f.state }, { uid: 'a', type: 'useCard', payload: { target: 'F' } });
+    ok('กล่องย้ายข้ามฝั่งจริง', done.state.cargo.shipL, { B: 1, F: 2 });
+    ok('จำนวนกล่องรวมไม่เปลี่ยน',
+       done.state.cargo.shipL.B + done.state.cargo.shipL.F, 3);
+    ok('ที่อื่นไม่ถูกแตะ', done.state.cargo.island, { B: 1, F: 1 });
+  }
+
+  /* กระซิบ — เติมกองกลางในโหวตครั้งถัดไป แล้วป้ายหายเอง */
+  {
+    const st = at({ a: 'shipL:C', b: 'shipL:F', c: 'shipL:3' }, 'a');
+    const ctx = { ...ctxOf(st), secrets: { ...out.secrets, _deck: mk('whisper') }, hostUid: 'a' };
+    const r = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+    ok('ติดป้ายไว้กับคนเปิด', markCount(r.state, 'a', 'whisper'), 1);
+    ok('ไม่มีผลอะไรทันที', r.state.shout ?? null, null);
+
+    const v = startVote({ ...r.state, vote: null }, { kind: 'attack', place: 'shipL', caller: 'b' });
+    let c2 = { ...ctx, state: v };
+    let rr = { state: v, secrets: {} };
+    for (const u of v.vote.voters) {
+      c2 = { ...c2, state: rr.state, secrets: { ...c2.secrets, ...(rr.secrets || {}) } };
+      rr = await onAction(c2, { uid: u, type: 'voteCard', payload: { card: c2.secrets[u].vote[0] } });
+    }
+    ok('หม้อได้ไพ่เพิ่มจากกองกลางอีกใบ', rr.state.lastVote.pot.length, v.vote.voters.length + 2);
+    ok('ป้ายถูกเก็บคืนหลังใช้', markCount(rr.state, 'a', 'whisper'), 0);
+  }
+}

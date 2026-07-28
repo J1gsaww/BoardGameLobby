@@ -25,7 +25,7 @@ import {
   buildEventDeck, refillSlots, emptyDeck,
   startVote, voteReady, tallyRow, attackPasses, mutinyPasses, brawlSplit,
   moveBox, score, winningSide, winners, dealNations, pushLog, refill, birdStrike, SAVE_CARDS, nextSeat,
-  voteWeight, setVoteWeight, addVoteBan,
+  voteWeight, setVoteWeight, addVoteBan, markCount, addMark,
   attackTargets, takeSides, keepSides, canAttack
 } from './rules.js';
 
@@ -924,7 +924,11 @@ export function reveal(ctx, st, hands, picks, rng = Math.random) {
     const p = picks[u];
     return Array.isArray(p) ? p : (p ? [p] : []);
   });
-  const bonus = shuffle(pileOf(hands, submitted), rng).slice(0, v.extra || 1);
+  /* กระซิบ — คนที่ติดป้ายอยู่และได้ร่วมโหวตรอบนี้ ทำให้กองกลางเติมเพิ่มคนละใบ
+     ติดซ้อนกันได้ นับเพิ่มใบละหนึ่ง แล้วป้ายถูกเก็บคืนทั้งหมดหลังใช้
+     ทำที่นี่เพราะเป็นจุดเดียวที่รู้ว่ามีใครร่วมโหวตจริงบ้าง */
+  const heard = v.voters.reduce((n, u) => n + markCount(st, u, 'whisper'), 0);
+  const bonus = shuffle(pileOf(hands, submitted), rng).slice(0, (v.extra || 1) + heard);
   const pot = shuffle([...submitted, ...bonus], rng);
 
   const counts = tallyRow(pot, VOTE_ROW[v.kind]);
@@ -945,6 +949,12 @@ export function reveal(ctx, st, hands, picks, rng = Math.random) {
      หักให้ **ทุกคนที่อยู่ในสถานที่นั้น** ไม่ใช่เฉพาะคนที่ได้ร่วมโหวต
      เพราะคนที่ติดโทษถูกตัดออกจากรายชื่อผู้ร่วมไปแล้วตั้งแต่ต้น
      ถ้าหักเฉพาะผู้ร่วม โทษของเขาจะไม่มีวันถูกหัก กลายเป็นห้ามโหวตตลอดกาล */
+  /* ป้ายกระซิบของคนที่ได้ร่วมรอบนี้ถูกใช้ไปแล้ว เก็บคืนให้หมด */
+  for (const u of v.voters) {
+    const n = markCount(next, u, 'whisper');
+    if (n) next = addMark(next, u, 'whisper', -n);
+  }
+
   next = burnVoteBans(next, occupants(next.pos, next.vote.place));
 
   for (const u of Object.keys(next.voteWeight || {})) {

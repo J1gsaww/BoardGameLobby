@@ -316,7 +316,14 @@ function shoutNote(body, st) {
     const nameOf2 = (u) => st.names?.[u] || '?';
     /* สายนี้เคยหลุดหายไปตอนแก้ข้อความ ทำให้ไหลไปจบที่ข้อความไล่คนลงเรือ
        ซึ่งเป็นอันสุดท้ายของสาย เลยขึ้นผิดเรื่องทั้งหัวข้อและเนื้อความ */
-    const msg = sh.kind === 'storm'
+    const msg = sh.kind === 'hookMiss'
+      ? t('wreck.scene.hookMiss', { name: st.names?.[sh.by] || '?' })
+      : sh.kind === 'rat'
+      ? t('wreck.scene.rat', {
+          from: t(sh.from === 'B' ? 'wreck.british' : 'wreck.france'),
+          to: t(sh.to === 'B' ? 'wreck.british' : 'wreck.france')
+        })
+      : sh.kind === 'storm'
       ? (sh.place === 'island' ? t('wreck.scene.stormIsle')
         : !sh.n ? t('wreck.scene.stormNone', { place: t('wreck.place.' + sh.place) })
         : t('wreck.scene.storm', { n: sh.n, place: t('wreck.place.' + sh.place) }))
@@ -725,6 +732,8 @@ function titleOf(st, ph, me) {
       scurvy:  'wreck.card.scurvy',
       fever:   'wreck.card.cabinfever',
       storm:   'wreck.card.stormyseas',
+      hookMiss: 'wreck.card.grapple',
+      rat:     'wreck.card.bilgerat',
       skip:    'wreck.card.scurvy',
       wreck:   'wreck.card.shipwreck',
       calm:    'wreck.card.doldrums',

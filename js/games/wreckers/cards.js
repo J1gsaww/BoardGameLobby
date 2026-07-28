@@ -53,8 +53,8 @@ export const EXTRA_CARDS = [
   /* ── Common ชนิดละ 3 ใบ ─────────────────────────────────── */
   {
     id: 'grapple', rarity: 'common', count: 3,
-    th: { name: 'ตะขอเกี่ยว', desc: 'สลับตำแหน่งกับคนที่อยู่ข้างหน้าคุณ ถ้าคุณอยู่หัวแถวอยู่แล้ว ให้สลับกับคนสุดท้ายของแถวแทน' },
-    en: { name: 'Grapple Hook', desc: 'Swap places with the player ahead of you. If you are already first, swap with the last player in the queue instead.' }
+    th: { name: 'ตะขอเกี่ยว', desc: 'สลับตำแหน่งกับคนที่อยู่ข้างหน้าคุณ ถ้าคุณอยู่หัวแถวอยู่แล้ว ให้สลับกับคนสุดท้ายของแถวแทน · ถ้าคุณอยู่คนเดียวในที่นั้น ตะขอเกี่ยวไม่ติดอะไรเลย คุณโดน Maroon' },
+    en: { name: 'Grapple Hook', desc: 'Swap places with the player ahead of you. If you are already first, swap with the last player in the queue instead. If you stand there alone, the hook catches nothing and you are marooned.' }
   },
   {
     id: 'bilgerat', rarity: 'common', count: 2,

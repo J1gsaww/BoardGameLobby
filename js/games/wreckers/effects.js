@@ -60,6 +60,60 @@ export const EFFECTS = {
     }
   },
 
+  /* ตะขอเกี่ยว — สลับกับคนข้างหน้า อยู่หัวแถวก็สลับกับคนท้ายแถวแทน
+     อยู่คนเดียวในที่นั้น = ไม่มีอะไรให้เกี่ยว โดน Maroon เอง */
+  grapple: {
+    run: (st, uid, _picks, hands) => {
+      const line = occupants(st.pos, placeOf(st.pos[uid]));
+
+      if (line.length < 2) {
+        const out = maroon(st, uid, hands);
+        return { state: out.state, hands: out.hands,
+                 shout: { kind: 'hookMiss', by: uid, card: 'grapple' } };
+      }
+
+      const i = line.indexOf(uid);
+      const mate = i > 0 ? line[i - 1] : line[line.length - 1];
+      const pos = swapSpots(st.pos, uid, mate);
+      if (!pos) return { state: st, hands };
+
+      return {
+        state: { ...st, pos, hook: { uids: [uid, mate], at: (st.logSeq || 0) + 1 } },
+        hands
+      };
+    }
+  },
+
+  /* หนูท้องเรือ — ย้ายกล่องหนึ่งใบในที่ที่ยืน จากฝั่งประเทศหนึ่งไปอีกฝั่ง
+     ถามฝั่งต้นทางก่อน แล้วค่อยถามฝั่งปลายทาง ใช้กลไกถามหลายขั้นเหมือนใบอื่น */
+  bilgerat: {
+    steps: ['from', 'to'],
+    ask: { from: 'rat.from', to: 'rat.to' },
+    targets: (st, uid, step, picks) => {
+      const place = placeOf(st.pos[uid]);
+      const box = st.cargo?.[place] || {};
+      if (step === 'from') return ['B', 'F'].filter(k => (box[k] || 0) > 0);
+      return ['B', 'F'].filter(k => k !== picks.from);
+    },
+    run: (st, uid, picks, hands) => {
+      const place = placeOf(st.pos[uid]);
+      const box = st.cargo[place];
+      const cargo = { ...st.cargo,
+        [place]: { ...box, [picks.from]: box[picks.from] - 1, [picks.to]: box[picks.to] + 1 } };
+      return { state: { ...st, cargo }, hands,
+               shout: { kind: 'rat', by: uid, place, from: picks.from, to: picks.to, card: 'bilgerat' } };
+    }
+  },
+
+  /* กระซิบ — ติดตัวไว้ ทำงานเองในการโหวตครั้งถัดไปที่เจ้าตัวมีสิทธิ์ร่วม
+     ตัวผลไม่ได้อยู่ตรงนี้ อยู่ที่ตอนเปิดหม้อ ซึ่งเป็นคนนับว่ามีกี่ใบต้องเติม */
+  whisper: {
+    run: (st, uid, _picks, hands) => ({
+      state: addMark(st, uid, 'whisper'),
+      hands
+    })
+  },
+
   /* ผลัดเวร — สลับที่กับคนที่ยืนอยู่ข้างหลังเราโดยตรงในที่เดียวกัน
      ใช้ถอยลงจากตำแหน่งที่กำลังตกเป็นเป้า ถ้าไม่มีใครอยู่ข้างหลังก็ไม่เกิดอะไร */
   relief: {

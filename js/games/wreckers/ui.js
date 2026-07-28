@@ -314,6 +314,20 @@ function glowList(st, holding) {
   return g.uids || [];
 }
 
+/* ไฮไลท์แดงตอนโดนตะขอเกี่ยว — ใช้ตัวจับเวลาแบบเดียวกับไฮไลท์ม่วง
+   เพราะการสลับที่ไม่ทิ้งสถานะอะไรไว้ให้อ่าน ต่างจากหนี้ข้ามตาที่อ่านได้ */
+let hookAt = 0;
+let hookKey = 0;
+
+function hookList(st, holding) {
+  const h = st.hook;
+  if (!h || holding) return [];
+  if (hookKey !== h.at) { hookKey = h.at; hookAt = Date.now(); }
+  if (Date.now() - hookAt > GLOW_MS) return [];
+  if (glowEl) setTimeout(() => paint(glowEl), GLOW_MS - (Date.now() - hookAt) + 50);
+  return h.uids || [];
+}
+
 function boardView(st) {
   /* ตัวเหตุการณ์บอกมาเองว่าควรวาดผังไหน ใช้อันนั้นก่อนเสมอ */
   const told = scenePos(st);
@@ -473,6 +487,7 @@ export function render(el, ctx) {
      กว่าจะได้วาดจริงเวลาก็หมดไปแล้ว ไฮไลท์จะไม่ทันได้ขึ้นเลย */
   glowEl = el;
   const glowNow = glowList(st, sceneHolding(st));
+  const hookNow = hookList(st, sceneHolding(st));
 
   const who = Object.fromEntries(Object.entries(view.pos || {}).map(([uid, spot]) => [spot, uid]));
   const mine = view.pos?.[ctx.me.uid] || null;
@@ -503,6 +518,9 @@ export function render(el, ctx) {
     /* เพิ่งโดนสลับที่ — เรืองม่วงสั้น ๆ ให้เห็นว่าเกิดอะไรกับใคร
        ใช้ตัวจับเวลาเพราะการสลับที่ไม่ทิ้งสถานะอะไรไว้ให้อ่าน */
     b.classList.toggle('swapped', !!uid && glowNow.includes(uid));
+    /* ตะขอเกี่ยว — เรืองแดงสั้น ๆ แยกจากม่วงของการสลับแบบอื่น
+       เพราะใบนี้เป็นการกระชากมา ไม่ใช่การสลับด้วยความสมัครใจ */
+    b.classList.toggle('hooked', !!uid && hookNow.includes(uid));
 
     /* ป่วยจนติดหนี้ข้ามตา — เรืองค้างไว้จนกว่าจะถูกข้ามจริงแล้วหนี้หมด
        อ่านจากหนี้โดยตรง ไม่ใช้ตัวจับเวลา เพราะสถานะบอกอยู่แล้วว่ายังติดอยู่ไหม
@@ -1489,6 +1507,13 @@ function paintRoster(el, st, ctx) {
           onerror="if(this.dataset.alt){this.src=this.dataset.alt;this.dataset.alt='';}else{this.remove();}">
         ${birdN > 1 ? `<span class="wr-row-bird-n">\u00d7${birdN}</span>` : ''}
       </span>`);
+    }
+
+    /* กระซิบ — ป้ายดำขอบขาว ติดซ้อนกันได้ ใช้แล้วหายเองตอนโหวตจบ */
+    const heard = st.marks?.[uid]?.whisper || 0;
+    if (heard) {
+      tags.push(`<span class="wr-row-whisper" title="${esc(t('wreck.token.whisper', { n: heard }))}">
+        \u2767${heard > 1 ? `<span class="wr-row-whisper-n">\u00d7${heard}</span>` : ''}</span>`);
     }
 
     /* ป่วยจนข้ามตา — ป้ายสีม่วง อ่านจากจำนวนรอบที่เหลือโดยตรง

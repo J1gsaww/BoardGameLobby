@@ -59,7 +59,7 @@ console.log('\nไม่มีค่า undefined หลุดไปถึง Fi
 
 /* การ์ดที่ผลเกิดทันทีตอนเปิด */
 for (const card of ['blackspot', 'albatross', 'facade', 'eightbell', 'piratecode', 'scurvy',
-                     'relief', 'shipwreck', 'doldrums', 'aground', 'vegan', 'blackflag', 'stormyseas']) {
+                     'relief', 'shipwreck', 'doldrums', 'aground', 'vegan', 'blackflag', 'stormyseas', 'grapple', 'whisper']) {
   const ctx = table(card);
   check(card + ' · เปิดแล้วจบในตัว',
         await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } }));
