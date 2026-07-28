@@ -2108,3 +2108,26 @@ button{ cursor:pointer; border:0; background:none; }
   box-shadow:0 0 8px rgba(255,255,255,.45);
 }
 .wr-row-whisper-n{ font-family:var(--mono); font-size:10px; font-weight:700; }
+
+/* ── แผงปุ่มตัวเลือกกลางจอ (หนูท้องเรือ) ────────────────────
+   ตัวเลือกที่ใช้ไม่ได้ขึ้นแบบทึบ ไม่ใช่หายไป
+   เพราะการเห็นว่า "มีทางนี้อยู่แต่ตอนนี้ใช้ไม่ได้" บอกสถานะกระดานให้ด้วย */
+.wr-choice{
+  display:grid; justify-items:center; gap:12px;
+  padding:16px 18px; border-radius:16px;
+  background:rgba(10,8,22,.95); border:2px solid var(--lamp);
+}
+.wr-choice-head{
+  margin:0; font-family:var(--display); font-size:15px; font-weight:700; color:#fdf6e6;
+}
+.wr-choice-row{ display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+.wr-choice-btn{
+  min-width:170px; padding:11px 16px; border-radius:11px;
+  font-family:var(--display); font-size:15px; font-weight:700;
+  background:var(--sunk); border:2px solid currentColor;
+}
+.wr-choice-btn:not(:disabled):hover{ background:currentColor; color:#241704; }
+.wr-choice-btn:disabled{ opacity:.35; border-color:var(--line); color:var(--muted); cursor:not-allowed; }
+
+/* ไพ่ที่เกินมาจากกระซิบ — ขอบขาวจาง ๆ ให้ต่างจากใบกองกลางปกติ */
+.wr-vb.from-whisper .vote-card{ box-shadow:0 0 0 2px rgba(255,255,255,.6); }

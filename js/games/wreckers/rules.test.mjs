@@ -24,7 +24,7 @@ import {
 } from './rules.js';
 import { onAction, init, tick, finish, passTurn, openTurn } from './game.js';
 import { DECK } from './vote.js';
-import { shipsWithRoom, canUseCard, MAP_CARDS, playWindow, pickCountOf, targetsOf } from './effects.js';
+import { shipsWithRoom, canUseCard, MAP_CARDS, playWindow, pickCountOf, targetsOf, isChoice } from './effects.js';
 import { BASE_CARDS, BASE_TOTAL, baseById, ENDER } from './events.js';
 import { EXTRA_CARDS, randomSets } from './cards.js';
 
@@ -2107,25 +2107,45 @@ group('การ์ดพิเศษ · ตะขอเกี่ยว · ห�
     ok('ไม่มีใครถูกสลับ', r.state.hook ?? null, null);
   }
 
-  /* หนูท้องเรือ — ย้ายกล่องข้ามฝั่งในที่ที่ยืน */
+  /* หนูท้องเรือ — ถามครั้งเดียวว่าจะย้ายทางไหน */
   {
     const st = at({ a: 'shipL:C', b: 'shipL:F', c: 'island:G' }, 'a');
     const ctx = { ...ctxOf(st), secrets: { ...out.secrets, _deck: mk('bilgerat') }, hostUid: 'a' };
     const up = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
-    ok('ขั้นแรกถามฝั่งต้นทาง', up.state.pending.needs, 'from');
-    ok('เลือกได้เฉพาะฝั่งที่มีกล่อง',
-       targetsOf(up.state, 'a', 'bilgerat', 'from', {}), ['B', 'F']);
+    ok('ถามครั้งเดียว ไม่ใช่สองขั้น', up.state.pending.needs, 'dir');
+    ok('ตอบด้วยปุ่มกลางจอ ไม่ใช่คลิกกระดาน', isChoice('bilgerat'), true);
+    ok('มีกล่องทั้งสองฝั่ง เลือกได้ทั้งคู่',
+       targetsOf(up.state, 'a', 'bilgerat', 'dir', {}), ['B', 'F']);
 
-    const f = await onAction({ ...ctx, state: up.state }, { uid: 'a', type: 'useCard', payload: { target: 'B' } });
-    ok('ขั้นสองถามฝั่งปลายทาง', f.state.pending.needs, 'to');
-    ok('ปลายทางต้องไม่ใช่ฝั่งเดิม',
-       targetsOf(f.state, 'a', 'bilgerat', 'to', { from: 'B' }), ['F']);
-
-    const done = await onAction({ ...ctx, state: f.state }, { uid: 'a', type: 'useCard', payload: { target: 'F' } });
-    ok('กล่องย้ายข้ามฝั่งจริง', done.state.cargo.shipL, { B: 1, F: 2 });
+    const done = await onAction({ ...ctx, state: up.state }, { uid: 'a', type: 'useCard', payload: { target: 'B' } });
+    ok('British ไป France จริง', done.state.cargo.shipL, { B: 1, F: 2 });
     ok('จำนวนกล่องรวมไม่เปลี่ยน',
        done.state.cargo.shipL.B + done.state.cargo.shipL.F, 3);
     ok('ที่อื่นไม่ถูกแตะ', done.state.cargo.island, { B: 1, F: 1 });
+  }
+
+  /* มีกล่องฝั่งเดียว — อีกฝั่งเลือกไม่ได้ */
+  {
+    const st = { ...at({ a: 'shipL:C', b: 'shipL:F', c: 'island:G' }, 'a'),
+                 cargo: { ...cargo, shipL: { B: 0, F: 2 } } };
+    const ctx = { ...ctxOf(st), secrets: { ...out.secrets, _deck: mk('bilgerat') }, hostUid: 'a' };
+    const up = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+    ok('ฝั่งที่ไม่มีกล่องเลือกไม่ได้',
+       targetsOf(up.state, 'a', 'bilgerat', 'dir', {}), ['F']);
+    ok('ยิงคำสั่งฝั่งที่ว่างตรง ๆ ก็ไม่ผ่าน',
+       await onAction({ ...ctx, state: up.state }, { uid: 'a', type: 'useCard', payload: { target: 'B' } }), null);
+  }
+
+  /* ไม่มีกล่องเลย — การ์ดเป็นโมฆะ ไม่ค้างรอ */
+  {
+    const st = { ...at({ a: 'shipL:C', b: 'shipL:F', c: 'island:G' }, 'a'),
+                 cargo: { ...cargo, shipL: { B: 0, F: 0 } } };
+    const ctx = { ...ctxOf(st), secrets: { ...out.secrets, _deck: mk('bilgerat') }, hostUid: 'a' };
+    const r = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+    ok('ไม่ค้างรอให้เลือก', r.state.pending ?? null, null);
+    ok('ประกาศว่าเป็นโมฆะ', r.state.shout.kind, 'fizzle');
+    ok('ผ่านตาไปตามปกติ', r.state.turn, 'b');
+    ok('กล่องไม่เปลี่ยนที่ไหนเลย', r.state.cargo.shipL, { B: 0, F: 0 });
   }
 
   /* กระซิบ — เติมกองกลางในโหวตครั้งถัดไป แล้วป้ายหายเอง */

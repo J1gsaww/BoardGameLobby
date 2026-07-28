@@ -59,7 +59,7 @@
   console.info('[env] ใช้โปรเจกต์', env, '·', PROJECTS[env].projectId);
   window.DB_ENV = env;
 
-  window.BUILD = '2026-07-28.19';
+  window.BUILD = '2026-07-28.20';
   window.APP_ENV = env;
   window.FIREBASE_CONFIG = PROJECTS[env];
   window.MAX_IN_ROOM = 15;

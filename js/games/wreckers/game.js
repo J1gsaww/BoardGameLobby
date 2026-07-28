@@ -418,6 +418,18 @@ function activate(ctx, uid, { slot }) {
   const eff = effectOf(id);
   const needs = nextStep(id, {});
 
+  /* ต้องเลือกเป้า แต่ไม่มีอะไรให้เลือกเลย = การ์ดใบนั้นเป็นโมฆะ
+     เช่นหนูท้องเรือตอนที่ทั้งสองฝั่งไม่มีกล่องสักใบ
+     ถ้าปล่อยให้ค้างรอ เกมจะแข็งจนกว่าจะหมดเวลา ทั้งที่ไม่มีอะไรให้ทำ */
+  if (needs && !targetsOf(said, uid, id, needs, {}).length) {
+    return {
+      state: passTurn(pushLog({ ...said, shout: { kind: 'fizzle', by: uid, card: id,
+                                                  at: (said.logSeq || 0) + 1 } },
+                              'wreck.log.fizzle', { name: st.names?.[uid] })),
+      secrets: { _deck: next, ...cleared }
+    };
+  }
+
   /* การ์ดแผนที่ — เปิดแล้วต้องยกให้คนอื่น เก็บเองไม่ได้ ตรวจก่อนทุกกรณี
      ผลของแผนที่จะเกิดก็ต่อเมื่อคนที่ได้รับหยิบมาใช้ทีหลัง ไม่ใช่ตอนเปิด */
   if (isGift(id)) {
@@ -972,6 +984,8 @@ export function reveal(ctx, st, hands, picks, rng = Math.random) {
     voteDeck: fresh.pile.length,
     /* เก็บผลไว้ให้หน้าจอโชว์ต่อ เพราะ passTurn จะล้าง vote ทิ้ง */
     lastVote: { kind: v.kind, place: v.place, caller: v.caller,
+                /* ไพ่ที่เกินมาจากกระซิบกี่ใบ — หน้าจอต้องรู้เพื่อใส่ชื่อให้ถูก */
+                heard,
                 /* ใครส่งไปกี่ใบ — หน้าจอต้องรู้เพื่อวาดไพ่ให้ครบพร้อมชื่อ
                    ไพ่ใบสุดท้ายปิดหม้อทันทีในการเขียนครั้งเดียว
                    คนอื่นจึงไม่เคยเห็นสถานะระหว่างทาง ต้องสร้างย้อนหลังจากตรงนี้ */

@@ -16,7 +16,7 @@
 import { t } from '../../i18n.js';
 import { VOTE_ART, ICON_EXT } from './vote.js';
 import { takeSides, keepSides, SHIP_CARGO_CAP, occupants, placeOf } from './rules.js';
-import { askKey, pickCountOf } from './effects.js';
+import { askKey, pickCountOf, isChoice, targetsOf } from './effects.js';
 import { voteCard, cardById as voteById } from './vote.js';
 import { BASE_CARDS, cardArt, eventArt, eventAlt, CARD_ART, CARD_EXT, CARD_ALT } from './events.js';
 
@@ -316,7 +316,9 @@ function shoutNote(body, st) {
     const nameOf2 = (u) => st.names?.[u] || '?';
     /* สายนี้เคยหลุดหายไปตอนแก้ข้อความ ทำให้ไหลไปจบที่ข้อความไล่คนลงเรือ
        ซึ่งเป็นอันสุดท้ายของสาย เลยขึ้นผิดเรื่องทั้งหัวข้อและเนื้อความ */
-    const msg = sh.kind === 'hookMiss'
+    const msg = sh.kind === 'fizzle'
+      ? t('wreck.scene.fizzle')
+      : sh.kind === 'hookMiss'
       ? t('wreck.scene.hookMiss', { name: st.names?.[sh.by] || '?' })
       : sh.kind === 'rat'
       ? t('wreck.scene.rat', {
@@ -486,6 +488,7 @@ function cardNote(body, st, ctx) {
      คนอื่นได้ข้อความรอเฉย ๆ ไม่เห็นว่ากองมีอะไรบ้าง */
   if (stage) {
     if (many && mineNow) poolPanel(stage, st, ctx);
+    else if (mineNow && isChoice(st.pending.card)) choicePanel(stage, st, ctx);
     else if (!seq) { stage.hidden = true; stage.dataset.pool = ''; }
   }
 
@@ -702,6 +705,35 @@ function forcedNote(body, st, ctx) {
   return false;
 }
 
+/* ── แผงปุ่มตัวเลือก ───────────────────────────────────────
+   ใช้กับขั้นที่คำตอบไม่ใช่ของบนกระดาน เช่นเลือกทิศทางย้ายกล่อง
+   ตัวเลือกที่กติกาไม่อนุญาตจะขึ้นแบบทึบ ไม่ใช่หายไป
+   เพราะการเห็นว่า "มีทางนี้อยู่แต่ตอนนี้ใช้ไม่ได้" บอกสถานะกระดานให้ด้วย */
+function choicePanel(stage, st, ctx) {
+  const step = st.pending.needs;
+  const okList = targetsOf(st, ctx.me.uid, st.pending.card, step, st.pending.picks || {});
+  const all = ['B', 'F'];
+
+  const sig = st.pending.at + '|' + okList.join(',');
+  if (stage.dataset.pool === sig) return;
+  stage.dataset.pool = sig;
+  stage.hidden = false;
+
+  stage.innerHTML = `<div class="wr-choice">
+      <p class="wr-choice-head">${esc(t(askKey(st.pending.card, step)))}</p>
+      <div class="wr-choice-row">${
+        all.map(k => `<button class="wr-choice-btn n-${k}" data-pick="${k}"
+          ${okList.includes(k) ? '' : 'disabled title="' + esc(t('wreck.pick.none')) + '"'}>
+            ${esc(t('wreck.pick.' + k))}
+          </button>`).join('')
+      }</div>
+    </div>`;
+
+  stage.querySelectorAll('[data-pick]').forEach(b => {
+    b.onclick = () => { if (!b.disabled) sendFn?.('useCard', { target: b.dataset.pick }); };
+  });
+}
+
 function titleOf(st, ph, me) {
   if (st.forced && key.startsWith('forced:')) {
     return { who: t('wreck.act.force'), big: st.names?.[st.forced.who] || '?' };
@@ -734,6 +766,7 @@ function titleOf(st, ph, me) {
       storm:   'wreck.card.stormyseas',
       hookMiss: 'wreck.card.grapple',
       rat:     'wreck.card.bilgerat',
+      fizzle:  'wreck.event',
       skip:    'wreck.card.scurvy',
       wreck:   'wreck.card.shipwreck',
       calm:    'wreck.card.doldrums',
@@ -900,12 +933,12 @@ function pot(body, v) {
     for (const uid of Object.keys(sent)) {
       const have = seen[uid] || 0;
       for (let i = have; i < sent[uid]; i++) {
-        if (row.children.length >= cards.length - 1) break;
+        if (row.children.length >= cards.length - 1 - (v.heard || 0)) break;
         row.appendChild(voteBack(nameOf(uid)));
       }
       seen[uid] = Math.max(have, sent[uid]);
     }
-    while (row.children.length < cards.length - 1) row.appendChild(voteBack(''));
+    while (row.children.length < cards.length - 1 - (v.heard || 0)) row.appendChild(voteBack(''));
     row.classList.remove('wiggle');
     measure(row);
 
@@ -921,9 +954,19 @@ function pot(body, v) {
      ถ้ามาพร้อมกันจะดูเหมือนไพ่โผล่พรวดเดียวทั้งกอง แยกไม่ออกว่าใบไหนมาจากไหน
      ติดป้ายไว้ด้วย เพราะจำนวนสัญลักษณ์ที่ออกมาไม่เท่ากับจำนวนไพ่ (ใบเปล่าไม่มีสัญลักษณ์) */
   if (ms > T.deckWait && !row.querySelector('.from-deck')) {
+    /* ไพ่จากกองกลาง — ใบแรกคือใบมาตรฐาน ที่เกินมาคือของกระซิบ
+       ต้องแยกชื่อให้เห็น ไม่งั้นคนดูจะไม่รู้ว่าไพ่เกินมาจากไหน */
+    const heard = v.heard || 0;
     const extra = voteBack(t('wreck.scene.fromDeck'));
     extra.classList.add('from-deck');
     row.appendChild(extra);
+
+    /* ใบที่เกินมาจากกระซิบ — ชื่อของตัวเอง จะได้รู้ว่าไพ่เกินมาจากไหน */
+    for (let i = 0; i < heard; i++) {
+      const w = voteBack(t('wreck.scene.whisper'));
+      w.classList.add('from-deck', 'from-whisper');
+      row.appendChild(w);
+    }
     measure(row);
   }
 

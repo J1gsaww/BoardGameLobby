@@ -87,21 +87,24 @@ export const EFFECTS = {
   /* หนูท้องเรือ — ย้ายกล่องหนึ่งใบในที่ที่ยืน จากฝั่งประเทศหนึ่งไปอีกฝั่ง
      ถามฝั่งต้นทางก่อน แล้วค่อยถามฝั่งปลายทาง ใช้กลไกถามหลายขั้นเหมือนใบอื่น */
   bilgerat: {
-    steps: ['from', 'to'],
-    ask: { from: 'rat.from', to: 'rat.to' },
-    targets: (st, uid, step, picks) => {
-      const place = placeOf(st.pos[uid]);
-      const box = st.cargo?.[place] || {};
-      if (step === 'from') return ['B', 'F'].filter(k => (box[k] || 0) > 0);
-      return ['B', 'F'].filter(k => k !== picks.from);
+    /* ถามครั้งเดียวว่าจะย้ายทางไหน — มีสองฝั่ง เลือกต้นทางก็รู้ปลายทางแล้ว
+       ตอบด้วยปุ่มกลางจอ ไม่ใช่คลิกของบนกระดาน เพราะฝั่งประเทศไม่ใช่ชิ้นบนกระดาน */
+    steps: ['dir'],
+    ask: { dir: 'rat.dir' },
+    choice: true,
+    targets: (st, uid) => {
+      const box = st.cargo?.[placeOf(st.pos[uid])] || {};
+      return ['B', 'F'].filter(k => (box[k] || 0) > 0);
     },
     run: (st, uid, picks, hands) => {
       const place = placeOf(st.pos[uid]);
       const box = st.cargo[place];
+      const from = picks.dir;
+      const to = from === 'B' ? 'F' : 'B';
       const cargo = { ...st.cargo,
-        [place]: { ...box, [picks.from]: box[picks.from] - 1, [picks.to]: box[picks.to] + 1 } };
+        [place]: { ...box, [from]: box[from] - 1, [to]: box[to] + 1 } };
       return { state: { ...st, cargo }, hands,
-               shout: { kind: 'rat', by: uid, place, from: picks.from, to: picks.to, card: 'bilgerat' } };
+               shout: { kind: 'rat', by: uid, place, from, to, card: 'bilgerat' } };
     }
   },
 
@@ -508,6 +511,9 @@ export function targetsOf(st, uid, id, step, picks = {}) {
    เรือเต็มทั้งสองลำก็ใช้จดหมายไม่ได้ เพราะไม่มีที่ให้ส่งใครไป */
 /* คีย์ข้อความของขั้นถาม — ใบไหนไม่ประกาศก็ตกไปใช้ของกลาง
    ใช้เป็นสองที่: บรรทัดสั่งกลางกระดาน กับหัวข้อในกล่องยืนยัน */
+/* ขั้นนี้ตอบด้วยปุ่มกลางจอไหม (แทนการคลิกของบนกระดาน) */
+export const isChoice = (id) => !!effectOf(id)?.choice;
+
 export const askKey = (id, step) => {
   const k = effectOf(id)?.ask?.[step];
   return k ? `wreck.ask.${k}` : `wreck.ask.any.${step}`;
