@@ -908,14 +908,26 @@ function paintEvents(el, st, ctx) {
     const usedByPeek = mid?.slots.includes(i);
     const acts = slot.querySelector('.wr-event-acts');
     acts.classList.toggle('ready', on && mine && !usedByPeek);
-    /* ระหว่างเลือกการ์ดให้คนอื่นเปิด ทั้งช่องคือปุ่มเลือก
-       ปุ่มเปิด/แอบดูจึงต้องหายไปเลย ไม่ใช่แค่ทึบ เพราะตอนนี้ไม่ใช่ทางเลือกที่มีอยู่ */
-    const actBox = slot.querySelector('.wr-event-acts');
-    if (actBox) actBox.hidden = !!(st.pending?.by === me && st.pending?.needs === 'slots');
+    /* ── ปุ่มในช่องการ์ด มีสามสถานการณ์ที่ต้องแยกให้ขาด ──────
+       ปกติ          — เปิดหรือแอบดูได้ตามสิทธิ์ของตา
+       กำลังเลือกให้คนอื่นเปิด — ทั้งช่องคือปุ่มเลือก ปุ่มในช่องหายไปหมด
+       ถูกบังคับให้เปิด      — เหลือแค่ปุ่มเปิด และเฉพาะสองใบที่เขาชี้ไว้
+                              แอบดูไม่ได้ เพราะตอนนี้ไม่ใช่ตาของเราด้วยซ้ำ */
+    const pickingSlots = st.pending?.by === me && st.pending?.needs === 'slots';
+    const forcedMe = st.forced?.who === me;
+    const forcedOk = forcedMe && (st.forced.slots || []).includes(i);
 
-    slot.querySelector('[data-ev="activate"]').disabled = !(on && mine && filled && !mid);
+    const actBox = slot.querySelector('.wr-event-acts');
+    if (actBox) actBox.hidden = !!pickingSlots || (forcedMe && !forcedOk);
+
+    const bAct = slot.querySelector('[data-ev="activate"]');
+    const bPeek = slot.querySelector('[data-ev="peek"]');
+
+    bAct.disabled = forcedMe ? !forcedOk : !(on && mine && filled && !mid);
+
     /* ดูใบที่เคยเปิดไปแล้วซ้ำได้ ห้ามเฉพาะใบที่เพิ่งดูไปในการแอบดูรอบนี้ */
-    slot.querySelector('[data-ev="peek"]').disabled = !(on && mine && filled && !usedByPeek);
+    bPeek.hidden = forcedMe;
+    bPeek.disabled = forcedMe || !(on && mine && filled && !usedByPeek);
 
     /* กำลังเลือกการ์ดสองใบให้คนอื่นเปิด — ช่องที่เลือกได้เรืองส้ม ที่เลือกแล้วเรืองแรง */
     const picking = st.pending?.by === me && st.pending?.needs === 'slots';
@@ -925,17 +937,18 @@ function paintEvents(el, st, ctx) {
     slot.classList.toggle('fx-on', !!(picking && forcePick.includes(i)));
 
     /* ถูกบังคับให้เปิด — เรืองเฉพาะสองใบที่เขาชี้ไว้ ที่เหลือกดไม่ได้ */
-    const forcedMe = st.forced?.who === me;
-    slot.classList.toggle('fx-must', !!(forcedMe && (st.forced.slots || []).includes(i)));
+    slot.classList.toggle('fx-must', !!forcedOk);
     /* ปุ่มเลือกการ์ดเองสำหรับเทส โผล่เฉพาะตอนเปิด ?dev=cards และเป็นเจ้าของห้อง */
     const pick = slot.querySelector('[data-ev="pick"]');
     if (pick) { pick.hidden = !(DEV_CARDS && ctx.isHost); pick.disabled = !on; }
     slot.classList.toggle('used', !!usedByPeek);
   });
 
-  /* ระหว่างเลือกการ์ดให้คนอื่นเปิด ข้อความของโหมดแอบดูต้องเงียบไป
-     เพราะมันพูดถึงการกระทำคนละอย่างกับที่กำลังทำอยู่ */
-  const forcing2 = st.pending?.by === me && st.pending?.needs === 'slots';
+  /* ข้อความของโหมดแอบดูต้องเงียบทั้งสองฝั่งของการบังคับ
+     คนสั่งกำลังเลือกให้คนอื่น · คนโดนบังคับกำลังถูกบังคับ
+     ทั้งคู่ไม่ได้อยู่ในโหมดแอบดูเลย ข้อความนั้นจึงพูดถึงคนละเรื่อง */
+  const forcing2 = (st.pending?.by === me && st.pending?.needs === 'slots')
+                || st.forced?.who === me;
   const note = el.querySelector('.wr-event-note');
   if (note) {
     note.textContent = forcing2 ? ''
