@@ -209,6 +209,22 @@ function shell(el, ctx) {
   });
 
   el.querySelector('.wr-event-row').addEventListener('click', e => {
+    /* กำลังเลือกการ์ดสองใบให้คนอื่นเปิด — ทั้งช่องคือปุ่มเลือก
+       ต้องดักก่อนทุกอย่าง ไม่งั้นคลิกจะไปเข้าตัวแปรของโหมดแอบดู
+       ซึ่งเป็นคนละเรื่องกันและเก็บได้ทีละใบครึ่ง ๆ กลาง ๆ */
+    const now = live?.state;
+    const meUid = live?.me?.uid;
+    if (now?.pending?.by === meUid && now.pending.needs === 'slots') {
+      const box = e.target.closest('.wr-event-slot');
+      if (!box) return;
+      const i = Number(box.dataset.event) - 1;
+      forcePick = forcePick.includes(i)
+        ? forcePick.filter(x => x !== i)
+        : (forcePick.length < 2 ? [...forcePick, i] : forcePick);
+      paint(el);
+      return;
+    }
+
     const mini = e.target.closest('[data-ev]');
     if (mini && !mini.disabled) {
       /* ปุ่มอยู่ในช่องของมันเอง จึงอ่านเลขช่องจากตรงนั้นตรง ๆ
@@ -917,10 +933,13 @@ function paintEvents(el, st, ctx) {
     slot.classList.toggle('used', !!usedByPeek);
   });
 
+  /* ระหว่างเลือกการ์ดให้คนอื่นเปิด ข้อความของโหมดแอบดูต้องเงียบไป
+     เพราะมันพูดถึงการกระทำคนละอย่างกับที่กำลังทำอยู่ */
+  const forcing2 = st.pending?.by === me && st.pending?.needs === 'slots';
   const note = el.querySelector('.wr-event-note');
   if (note) {
-    note.textContent =
-        mid ? t('wreck.peekLeft', { n: mid.left })
+    note.textContent = forcing2 ? ''
+        : mid ? t('wreck.peekLeft', { n: mid.left })
         : picks.length === 1 ? t('wreck.pickMore') : '';
     note.hidden = !note.textContent;
   }

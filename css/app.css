@@ -2055,13 +2055,18 @@ button{ cursor:pointer; border:0; background:none; }
 /* ── บังคับให้คนอื่นเปิดการ์ด ────────────────────────────────
    คนสั่งเห็นช่องที่เลือกได้เรืองส้ม ที่เลือกไว้แล้วเรืองแรงขึ้น
    คนที่ถูกบังคับเห็นเฉพาะสองใบที่เขาชี้ไว้ เรืองแดงเพราะไม่มีทางเลือกอื่น */
+/* ช่องที่เลือกได้ — แค่บอกว่ากดได้ ไม่ต้องเรือง
+   ถ้าเรืองทุกใบจะแยกไม่ออกว่าใบไหนถูกเลือกอยู่ ซึ่งเป็นข้อมูลเดียวที่ต้องดู */
 .wr-event-slot.fx-pick{ cursor:pointer; }
-.wr-event-slot.fx-pick .wr-card{
-  box-shadow:0 0 0 2px var(--lamp), 0 0 16px rgba(244,169,73,.5);
+.wr-event-slot.fx-pick .wr-card{ box-shadow:none; }
+.wr-event-slot.fx-pick:hover .wr-card{
+  box-shadow:0 0 0 2px rgba(244,169,73,.5);
+  transform:translateY(-2px);
 }
-.wr-event-slot.fx-pick:hover .wr-card{ transform:translateY(-3px); }
+
+/* ใบที่เลือกอยู่ — กรอบหนาชัด ๆ ใบเดียวที่ต่างจากเพื่อน */
 .wr-event-slot.fx-on .wr-card{
-  box-shadow:0 0 0 3px var(--lamp), 0 0 26px rgba(244,169,73,.95);
+  box-shadow:0 0 0 4px var(--lamp);
   transform:translateY(-4px);
 }
 .wr-event-slot.fx-must .wr-card{
