@@ -15,9 +15,10 @@ import {
 } from './board.js';
 import { deal } from './vote.js';
 import { BASE_CARDS, ENDER, ENDER_ZONE } from './events.js';
+import { startDuel, duelSubmit, duelReady, resolveDuel, canDuelNow, marchOrder } from './duel.js';
 import { effectOf, targetsOf, nextStep, keepsInHand, canUseCard,
          isDeferred, isGift, giftTargets, canPlayNow, pickCountOf, crowPool,
-         pickUpToOf, isHandStep } from './effects.js';
+         pickUpToOf, isHandStep, duelOf } from './effects.js';
 import { EXTRA_CARDS } from './cards.js';
 import {
   SHIP_IDS, BOAT_IDS, BOAT_LINK, VOTE_ROW,
@@ -26,7 +27,7 @@ import {
   buildEventDeck, refillSlots, emptyDeck,
   startVote, voteReady, tallyRow, attackPasses, mutinyPasses, brawlSplit,
   moveBox, score, winningSide, winners, dealNations, pushLog, refill, birdStrike, SAVE_CARDS, nextSeat,
-  voteWeight, setVoteWeight, addVoteBan, markCount, addMark, swapSpots,
+  voteWeight, setVoteWeight, addVoteBan, markCount, addMark, swapSpots, clearMark,
   attackTargets, takeSides, keepSides, canAttack
 } from './rules.js';
 
@@ -206,6 +207,8 @@ export async function onAction(ctx, action) {
 
   /* ส่งไพ่โหวตทำได้นอกตาตัวเอง เป็นทางเดียวที่ไม่ต้องรอถึงตา */
   if (type === 'voteCard') return submitVote(ctx, uid, payload.card);
+  /* ส่งไพ่เข้าวงยิงแข่ง — ทุกคนบนเรือส่งพร้อมกัน จึงทำได้นอกตาตัวเอง */
+  if (type === 'duelCard') return submitDuel(ctx, uid, payload.card);
   if (type === 'useDorado') return useDorado(ctx, uid, payload);
   if (type === 'endGame') return finish(ctx);
 
@@ -463,6 +466,16 @@ function activate(ctx, uid, { slot }) {
     };
   }
 
+  /* การ์ดที่เปิดวงยิงแข่งสองลำ — ไม่ผ่านตา รอทั้งสองฝั่งส่งไพ่ครบก่อน
+     ผลจริงเกิดตอนวงยิงจบ ไม่ใช่ตอนเปิดการ์ด */
+  if (duelOf(id)) {
+    return {
+      state: pushLog(startDuel(said, { card: id, by: uid }),
+                     'wreck.log.duel', { name: st.names?.[uid] }),
+      secrets: { _deck: next, ...cleared }
+    };
+  }
+
   /* การ์ดที่ไม่ต้องถามอะไร ผลเกิดทันทีตอนเปิด แล้วผ่านตาไปเลย
      ฉากจะเล่าสองช่วงต่อกันเอง — โชว์การ์ดก่อน แล้วค่อยประกาศผล */
   if (!needs && eff?.run) {
@@ -495,6 +508,69 @@ function activate(ctx, uid, { slot }) {
           deadline: Date.now() + PICK_MS }
       : passTurn(said),
     secrets: { _deck: next, ...cleared }
+  };
+}
+
+/* ── ส่งไพ่เข้าวงยิงแข่งสองลำ ──────────────────────────────
+   ทั้งสองลำส่งพร้อมกัน ผลเปิดพร้อมกันเมื่อครบทุกคน
+   ระบบนี้แยกจากการโหวตปกติทั้งชุด ไม่ได้ใช้ st.vote เลย */
+function submitDuel(ctx, uid, cardId) {
+  const st = ctx.state;
+  if (!canDuelNow(st, uid)) return null;
+
+  const hands = handsOf(ctx);
+  if (!(hands[uid] || []).includes(cardId)) return null;
+
+  const ship = placeOf(st.pos[uid]);
+  const duel = duelSubmit(st.duel, uid, ship, cardId);
+  const left = { ...hands, [uid]: hands[uid].filter(c => c !== cardId) };
+
+  /* ยังไม่ครบ — บันทึกไว้เฉย ๆ ไพ่ที่ส่งไปเก็บในข้อมูลลับของเจ้าตัว */
+  if (!duelReady(duel)) {
+    return {
+      state: { ...st, duel, votes: countHands(left) },
+      secrets: secretsFrom(ctx, left)
+    };
+  }
+
+  /* ครบทั้งสองฝั่งแล้ว — เปิดผลพร้อมกัน */
+  const res = resolveDuel({ ...st, duel }, left, ctx.rng || Math.random);
+  return finishDuel(ctx, { ...st, duel }, res, left);
+}
+
+/* ── ปิดวงยิงแข่ง แล้วทำผลของการ์ดที่เปิดวงนี้ ────────────── */
+function finishDuel(ctx, st, res, hands) {
+  const d = st.duel;
+  let next = { ...st, duel: null,
+    lastDuel: { card: d.card, by: d.by, sides: res.sides, won: res.won,
+                at: (st.logSeq || 0) + 1 } };
+  let out = hands;
+
+  if (d.card === 'vegan') {
+    /* ลำที่ยิงติดฝ่ายเดียวรอด นอกนั้นลงเกาะหมด ลำดับสุ่มทั้งหมด */
+    const safe = res.won === 'tie' ? [] : occupants(next.pos, res.won);
+    const doomed = SHIP_IDS.flatMap(s => (s === res.won ? [] : occupants(next.pos, s)));
+    const order = marchOrder(doomed, ctx.rng || Math.random);
+
+    /* คนที่อยู่บนเกาะอยู่แล้วเสียไพ่โหวตถาวรคนละใบ */
+    const ashore = occupants(next.pos, 'island');
+    for (const u of ashore) {
+      next = { ...next, maxVote: { ...next.maxVote,
+        [u]: Math.max(0, (next.maxVote?.[u] ?? 0) - 1) } };
+    }
+
+    /* ส่งลงเกาะตามลำดับที่สุ่มได้ */
+    for (const u of order) next = { ...next, pos: joinPlace(next.pos, u, 'island') };
+
+    /* แล้วค่อยเก็บนกคืนทั้งกระดาน */
+    next = clearMark(next, 'bird');
+
+    next = { ...next, lastDuel: { ...next.lastDuel, safe, order, ashore } };
+  }
+
+  return {
+    state: passTurn(pushLog(next, 'wreck.log.duelDone', {})),
+    secrets: secretsFrom(ctx, out)
   };
 }
 
@@ -734,6 +810,24 @@ function useCard(ctx, uid, { target, cards }) {
   const e = effectOf(p.card);
   const hands = handsOf(ctx);
   let out = e.run(st, uid, got, hands);
+
+  /* การ์ดที่สั่งเปิดโหวตทันที — เปิดวงตรงนี้เลย ไม่ผ่านตา
+     ต้องทำที่นี่เพราะการเปิดวงต้องรู้ว่าใครอยู่ในวงและถือไพ่อะไรบ้าง
+     ซึ่งเป็นข้อมูลที่ผลการ์ดเห็นไม่ได้ */
+  if (out.openVote) {
+    const ov = out.openVote;
+    const opened = startVote({ ...out.state,
+      /* กบฏใต้ท้องเรือ — ถ้าผ่าน คนที่สั่งขึ้นเป็นกัปตันเอง ไม่ใช่ต้นหน */
+      flag: ov.claim ? { by: uid, kind: ov.kind, place: ov.place, claim: true,
+                         at: (out.state.logSeq || 0) + 1 } : null
+    }, { kind: ov.kind, place: ov.place, caller: ov.caller });
+
+    return {
+      state: pushLog({ ...opened, pending: null, cardUp: null },
+                     'wreck.log.card.' + p.card, { name: st.names?.[uid] }),
+      secrets: undefined
+    };
+  }
 
   /* การ์ดที่สั่งให้จั่วทดแทน — เติมมือทุกคนกลับจนเต็มเพดานของตัวเอง
      ใช้ตัวเดียวกับที่ใช้หลังโหวต ไพ่ที่ทิ้งไปจึงกลับเข้ากองเองโดยไม่ต้องเก็บกอง */

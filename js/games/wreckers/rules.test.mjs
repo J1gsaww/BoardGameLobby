@@ -2302,3 +2302,70 @@ group('การ์ด · กบฏใต้ท้องเรือ');
        actionsFor({ ...done.state, turn: 'd' }, 'd').includes('islandVote'), true);
   }
 }
+
+group('การ์ดที่สั่งเปิดโหวตทันที');
+{
+  /* กบฏใต้ท้องเรือกับธงดำ — เปิดโหวตชนิดที่เลือก **ตรงนั้นเลย**
+     ไม่ใช่ให้สิทธิ์ไว้สั่งทีหลัง ซึ่งเป็นการตีความที่ผิดในรอบแรก */
+  const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+  const mk = (id) => ({ ...out.secrets._deck, slots: [id, ...out.secrets._deck.slots.slice(1)] });
+  const at = (pos, turn) => ({ ...out.state, phase: 'play', turn, pos,
+                               cargo: { shipL: { B: 2, F: 1 }, shipR: { B: 0, F: 1 },
+                                        island: { B: 1, F: 1 }, merchant: 4 },
+                               seats: [...P], names: filled().names, out: [] });
+
+  /* ลูกเรือธรรมดาสั่งยิงได้เดี๋ยวนั้น */
+  {
+    const st = at({ a: 'shipL:C', b: 'shipL:F', c: 'shipL:3', d: 'shipR:C',
+                    e: 'island:G', f: 'island:2' }, 'c');
+    const ctx = { ...ctxOf(st), secrets: { ...out.secrets, _deck: mk('holdmutiny') }, hostUid: 'a' };
+    const up = await onAction(ctx, { uid: 'c', type: 'activate', payload: { slot: 0 } });
+    const r = await onAction({ ...ctx, state: up.state },
+                             { uid: 'c', type: 'useCard', payload: { target: 'attack' } });
+    ok('เปิดโหวตยิงทันที', r.state.vote.kind, 'attack');
+    ok('เปิดที่เรือของคนเปิด', r.state.vote.place, 'shipL');
+    ok('คนสั่งคือลูกเรือคนนั้น', r.state.vote.caller, 'c');
+    ok('ไม่มีสิทธิ์ค้างไว้ให้สั่งทีหลัง', r.state.flag ?? null, null);
+  }
+
+  /* ลูกเรือสั่งกบฏได้เดี๋ยวนั้น และจองเก้าอี้กัปตันไว้ */
+  {
+    const st = at({ a: 'shipL:C', b: 'shipL:F', c: 'shipL:3', d: 'shipR:C',
+                    e: 'island:G', f: 'island:2' }, 'c');
+    const ctx = { ...ctxOf(st), secrets: { ...out.secrets, _deck: mk('holdmutiny') }, hostUid: 'a' };
+    const up = await onAction(ctx, { uid: 'c', type: 'activate', payload: { slot: 0 } });
+    const r = await onAction({ ...ctx, state: up.state },
+                             { uid: 'c', type: 'useCard', payload: { target: 'mutiny' } });
+    ok('เปิดโหวตกบฏทันที', r.state.vote.kind, 'mutiny');
+    ok('จองเก้าอี้กัปตันไว้ถ้าผ่าน', r.state.flag.claim, true);
+  }
+
+  /* คนบนเกาะสั่งโหวตย้ายกล่องได้เดี๋ยวนั้น */
+  {
+    const st = at({ a: 'shipL:C', b: 'shipL:F', c: 'island:G', d: 'island:2',
+                    e: 'island:3', f: 'shipR:C' }, 'd');
+    const ctx = { ...ctxOf(st), secrets: { ...out.secrets, _deck: mk('holdmutiny') }, hostUid: 'a' };
+    const up = await onAction(ctx, { uid: 'd', type: 'activate', payload: { slot: 0 } });
+    const r = await onAction({ ...ctx, state: up.state },
+                             { uid: 'd', type: 'useCard', payload: { target: 'islandVote' } });
+    ok('เปิดโหวตย้ายกล่องทันที', r.state.vote.kind, 'islandVote');
+    ok('ไม่ได้จองเก้าอี้เพราะไม่ใช่กบฏ', r.state.flag ?? null, null);
+  }
+
+  /* ธงดำก็เปิดทันทีเหมือนกัน แค่ไม่ให้เลือกชนิด */
+  {
+    const st = at({ a: 'shipL:C', b: 'shipL:F', c: 'shipL:3', d: 'shipR:C',
+                    e: 'island:G', f: 'island:2' }, 'c');
+    const ctx = { ...ctxOf(st), secrets: { ...out.secrets, _deck: mk('blackflag') }, hostUid: 'a' };
+    const r = await onAction(ctx, { uid: 'c', type: 'activate', payload: { slot: 0 } });
+    ok('ธงดำบนเรือ = เปิดโหวตยิงทันที', r.state.vote.kind, 'attack');
+    ok('ไม่มีขั้นถามอะไรเลย', r.state.pending ?? null, null);
+  }
+  {
+    const st = at({ a: 'shipL:C', b: 'shipL:F', c: 'island:G', d: 'island:2',
+                    e: 'island:3', f: 'shipR:C' }, 'c');
+    const ctx = { ...ctxOf(st), secrets: { ...out.secrets, _deck: mk('blackflag') }, hostUid: 'a' };
+    const r = await onAction(ctx, { uid: 'c', type: 'activate', payload: { slot: 0 } });
+    ok('ธงดำบนเกาะ = เปิดโหวตย้ายกล่องทันที', r.state.vote.kind, 'islandVote');
+  }
+}

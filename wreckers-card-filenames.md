@@ -26,23 +26,23 @@
 
 | ชื่อไฟล์ | ชื่อการ์ด | ระดับ | จำนวนใบ |
 |---|---|---|---|
-| `fountain.png` | น้ำพุอมตะ · Fountain of Youth | map | ×1 |
-| `atlantis.png` | แอตแลนติส · Atlantis | map | ×1 |
-| `eldorado.png` | เอลโดราโด · El Dorado | map | ×1 |
+| `fountain.png` | น้ำพุอมตะ · Fountain of Youth | map | ×1 | ✅
+| `atlantis.png` | แอตแลนติส · Atlantis | map | ×1 | ✅
+| `eldorado.png` | เอลโดราโด · El Dorado | map | ×1 | ✅
 
 ### Rare
 
 | ชื่อไฟล์ | ชื่อการ์ด | ระดับ | จำนวนใบ |
 |---|---|---|---|
-| `facade.png` | หน้ากาก · Facade | rare | ×1 |
-| `eightbell.png` | ระฆังแปดครั้ง · Eight Bells | rare | ×1 |
-| `crowsnest.png` | รังกา · Crow’s Nest | rare | ×1 |
-| `blackpowder.png` | ดินปืน · Black Powder | rare | ×1 |
-| `piratecode.png` | ประมวลโจรสลัด · Pirate Code | rare | ×1 |
-| `scurvy.png` | ลักปิดลักเปิด · Scurvy | rare | ×1 |
-| `cabinfever.png` | บ้าเรือ · Cabin Fever | rare | ×1 |
-| `stormyseas.png` | ทะเลบ้า · Stormy Seas | rare | ×1 |
-| `armada.png` | กองเรือสเปน · Spanish Armada | rare | ×1 |
+| `facade.png` | หน้ากาก · Facade | rare | ×1 | ✅
+| `eightbell.png` | ระฆังแปดครั้ง · Eight Bells | rare | ×1 | ✅
+| `crowsnest.png` | รังกา · Crow’s Nest | rare | ×1 | ✅
+| `blackpowder.png` | ดินปืน · Black Powder | rare | ×1 | ✅
+| `piratecode.png` | ประมวลโจรสลัด · Pirate Code | rare | ×1 | ✅
+| `scurvy.png` | ลักปิดลักเปิด · Scurvy | rare | ×1 | ✅
+| `cabinfever.png` | บ้าเรือ · Cabin Fever | rare | ×1 | ✅
+| `stormyseas.png` | ทะเลบ้า · Stormy Seas | rare | ×1 | ✅
+| `armada.png` | กองเรือสเปน · Spanish Armada | rare | ×1 | ✅
 
 ---
 
@@ -52,18 +52,18 @@
 
 | ชื่อไฟล์ | ชื่อการ์ด | ระดับ | จำนวนใบ |
 |---|---|---|---|
-| `grapple.png` | ตะขอเกี่ยว · Grapple Hook | common | ×3 |
-| `bilgerat.png` | หนูท้องเรือ · Bilge Rat | common | ×2 |
-| `whisper.png` | The Whisper · The Whisper | common | ×2 |
-| `jettison.png` | ปล่อยของ · Jettison | common | ×2 |
-| `contract.png` | สัญญาฉบับใหม่ · A New Contract | common | ×3 |
-| `relief.png` | ผลัดเวร · Relief Watch | common | ×3 |
+| `grapple.png` | ตะขอเกี่ยว · Grapple Hook | common | ×3 | ✅
+| `bilgerat.png` | หนูท้องเรือ · Bilge Rat | common | ×2 | ✅
+| `whisper.png` | The Whisper · The Whisper | common | ×2 | ✅
+| `jettison.png` | ปล่อยของ · Jettison | common | ×2 | ✅
+| `contract.png` | สัญญาฉบับใหม่ · A New Contract | common | ×3 | ✅
+| `relief.png` | ผลัดเวร · Relief Watch | common | ×3 | ✅
 
 ### Rare
 
 | ชื่อไฟล์ | ชื่อการ์ด | ระดับ | จำนวนใบ |
 |---|---|---|---|
-| `holdmutiny.png` | กบฏใต้ท้องเรือ · Mutiny in the Hold | rare | ×1 |
+| `holdmutiny.png` | กบฏใต้ท้องเรือ · Mutiny in the Hold | rare | ×1 | ✅
 | `wreckers.png` | พวกล่อเรือ · The Wreckers | rare | ×1 |
 | `vegan.png` | มังสวิรัส · Vegetarian | rare | ×1 |
 | `shipwreck.png` | เรือล่ม · Shipwreck | rare | ×1 |

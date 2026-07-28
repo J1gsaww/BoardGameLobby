@@ -184,9 +184,6 @@ export function actionsFor(st, uid) {
   out.push('activate', 'peek', 'force');
   if (boatsOpen(st, spot).length) out.push('toBoat');
 
-  /* ถือธงดำอยู่ = สั่งโหวตได้โดยไม่ต้องมีตำแหน่ง ตามชนิดที่ธงให้มา */
-  if (st.flag?.by === uid && canCallVote(st, place) && !isCalm(st)) out.push(st.flag.kind);
-
   /* ลมสงบ — ห้ามสั่งโหวตทุกชนิด ไม่ว่าอยู่ที่ไหนหรือมีตำแหน่งอะไร */
   if (isCalm(st)) {
     if ((st.held?.[uid] || 0) > 0) out.push('playHeld');

@@ -15,7 +15,7 @@
 
 import { t } from '../../i18n.js';
 import { VOTE_ART, ICON_EXT } from './vote.js';
-import { takeSides, keepSides, SHIP_CARGO_CAP, occupants, placeOf } from './rules.js';
+import { takeSides, keepSides, SHIP_CARGO_CAP, occupants, placeOf, SHIP_IDS } from './rules.js';
 import { askKey, pickCountOf, isChoice, targetsOf } from './effects.js';
 import { voteCard, cardById as voteById } from './vote.js';
 import { BASE_CARDS, cardArt, eventArt, eventAlt, CARD_ART, CARD_EXT, CARD_ALT } from './events.js';
@@ -98,6 +98,11 @@ const now = () => performance.now();
 /* หนึ่งฉาก = หนึ่งการโหวตทั้งกระบวน ตั้งแต่สั่งจนกัปตันเลือกเสร็จ
    ผูกกับคนสั่งกับสถานที่ ไม่ผูกกับช่วง จึงไม่ถูกตัดใหม่กลางทาง */
 function sceneKey(st) {
+  /* วงยิงแข่งสองลำ — ฉากของตัวเอง ไม่ปนกับการโหวตปกติ
+     มาก่อนทุกอย่างเพราะระหว่างนั้นไม่มีอะไรอื่นเกิดขึ้นได้เลย */
+  if (st.duel) return `duel:${st.duel.at}`;
+  if (st.lastDuel && !told.has('duel:' + st.lastDuel.at)) return `duelend:${st.lastDuel.at}`;
+
   if (st.vote) return `ep:${st.vote.caller}:${st.vote.place}`;
   /* ประกาศการแอบดูเป็นฉากสั้น ๆ ของตัวเอง ไม่ปนกับฉากโหวต */
   if (st.lastPeek && !dismissed.has('peek:' + st.lastPeek.at)) return `peek:${st.lastPeek.at}`;
@@ -215,6 +220,8 @@ export function paintScene(el, st, ctx) {
 /* ตัวเดินเรื่อง — ตัดสินว่าตอนนี้ควรอยู่ช่วงไหน แล้วเดินไปข้างหน้าเท่านั้น
    คืนค่า true เมื่อยังมีอะไรขยับ เพื่อขอเฟรมถัดไป */
 function step(body, st, ctx) {
+  if (key.startsWith('duelend:')) return duelResult(body, st, ctx);
+  if (key.startsWith('duel:')) return duelCollect(body, st, ctx);
   if (key.startsWith('peek:')) return peekNote(body, st);
   if (key.startsWith('shout:')) return shoutNote(body, st);
   if (key.startsWith('card:')) return cardNote(body, st, ctx);
@@ -772,7 +779,112 @@ function askNote(body, st, ctx) {
   return false;
 }
 
+/* ── วงยิงแข่งสองลำ ────────────────────────────────────────
+   สองคอลัมน์ซ้ายขวา มีเส้นคั่นกลาง ฝั่งละแถวไพ่
+   รอครบทั้งสองฝั่งแล้วค่อยเปิดพร้อมกัน แล้วสรุปว่าใครชนะ
+
+   ระบบนี้แยกจากฉากโหวตปกติทั้งชุด ยืมมาแค่ภาพไพ่ */
+const DUEL_READ = 3400;
+
+function duelSideBack(ship, side, names) {
+  const cards = side.crew.map(u => `<div class="wr-vb${side.done.includes(u) ? ' in' : ''}">
+      <span class="wr-vb-card">${VOTE_BACK}</span>
+      <span class="wr-vb-name">${esc(names?.[u] || '?')}</span>
+    </div>`).join('');
+  return `<div class="wr-duel-side">
+      <p class="wr-duel-head">${esc(t('wreck.place.' + ship))}</p>
+      <div class="wr-duel-cards">${side.empty
+        ? `<p class="wr-duel-empty">${esc(t('wreck.duel.empty'))}</p>` : cards}</div>
+    </div>`;
+}
+
+function duelCollect(body, st, ctx) {
+  const d = st.duel;
+  const sig = 'duel:' + SHIP_IDS.map(x => d.sides[x].done.length).join('.');
+  if (body.dataset.duel === sig) return true;
+  body.dataset.duel = sig;
+
+  body.innerHTML = `<div class="wr-duel">
+      ${duelSideBack('shipL', d.sides.shipL, st.names)}
+      <div class="wr-duel-line"></div>
+      ${duelSideBack('shipR', d.sides.shipR, st.names)}
+    </div>
+    <p class="wr-scene-note">${esc(t('wreck.duel.wait'))}</p>`;
+  return true;
+}
+
+function duelResult(body, st, ctx) {
+  const r = st.lastDuel;
+  const ms = now() - stageAt;
+
+  if (body.dataset.duel !== 'end:' + r.at) {
+    body.dataset.duel = 'end:' + r.at;
+    const side = (ship) => {
+      const one = r.sides[ship];
+      const cards = one.pot.map(id => `<div class="wr-vb">
+          <span class="wr-vb-card">${voteCard(voteById(id), lang)}</span>
+        </div>`).join('');
+      return `<div class="wr-duel-side">
+          <p class="wr-duel-head ${one.hit ? 'hit' : 'miss'}">${esc(t('wreck.place.' + ship))}</p>
+          <div class="wr-duel-cards">${cards}</div>
+          <p class="wr-duel-verdict ${one.hit ? 'hit' : 'miss'}">${
+            esc(t(one.empty ? 'wreck.duel.none' : one.hit ? 'wreck.duel.hit' : 'wreck.duel.miss'))}</p>
+        </div>`;
+    };
+    body.innerHTML = `<div class="wr-duel">
+        ${side('shipL')}<div class="wr-duel-line"></div>${side('shipR')}
+      </div>
+      <p class="wr-duel-sum">${esc(r.won === 'tie'
+        ? t('wreck.duel.tie')
+        : t('wreck.duel.won', { place: t('wreck.place.' + r.won) }))}</p>`;
+  }
+
+  if (ms < DUEL_READ) return true;
+
+  /* เล่าลำดับที่ถูกส่งลงเกาะทีละคน — ใช้แผงเดียวกับระฆังแปดครั้ง
+     เพราะเป็นเรื่องเดียวกันคือ "ลำดับใหม่ที่สุ่มมา" ไม่ต้องเขียนของใหม่ */
+  const order = r.order || [];
+  if (order.length) {
+    const stage = body.parentElement.querySelector('.wr-scene-stage');
+    const done = marchStage(stage, st, order, ms - DUEL_READ);
+    if (!done) return true;
+  }
+
+  told.add('duel:' + r.at);
+  closing = true;
+  return false;
+}
+
+/* แผงไล่โปรไฟล์ทีละคน — ใช้ซ้ำได้ทั้งระฆังแปดครั้งและวงยิงแข่ง
+   ต่างกันแค่หัวข้อ ตัวกลไกเหมือนกันทุกอย่าง */
+function marchStage(stage, st, order, ms, headKey = 'wreck.duel.march') {
+  if (!stage) return true;
+
+  const sig = 'march:' + order.join(',');
+  if (stage.dataset.sig !== sig) {
+    stage.dataset.sig = sig;
+    stage.hidden = false;
+    stage.innerHTML = `<p class="wr-bells-head">${esc(t(headKey))}</p>
+      <div class="wr-bells-row">${
+        order.map((uid, i) => `<span class="wr-bell" data-i="${i}">
+            <span class="wr-bell-no">${i + 1}</span>
+            <span class="wr-bell-face">${esc((st.names?.[uid] || '?').slice(0, 2))}</span>
+            <span class="wr-bell-name">${esc(st.names?.[uid] || '?')}</span>
+          </span>`).join('')
+      }</div>`;
+  }
+
+  const shown = Math.floor((ms - BELL_LEAD) / BELL_STEP) + 1;
+  stage.querySelectorAll('.wr-bell').forEach((el, i) => el.classList.toggle('in', i < shown));
+
+  return ms > BELL_LEAD + order.length * BELL_STEP + BELL_HOLD;
+}
+
 function titleOf(st, ph, me) {
+  if (key.startsWith('duel')) {
+    return { who: t('wreck.card.' + (st.duel?.card || st.lastDuel?.card || 'vegan')),
+             big: t('wreck.duel.title') };
+  }
   if (st.pending && key.startsWith('ask:')) {
     return { who: t('wreck.act.force'), big: st.names?.[st.pending.by] || '?' };
   }

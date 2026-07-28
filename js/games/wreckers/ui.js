@@ -20,6 +20,7 @@ import { actionsFor, occupants, placeOf, BOAT_IDS, canVoteNow, isWrecked,
          boatsFromAll, boatsOpen } from './rules.js';
 import { targetsOf, canUseCard, askKey, canPlayNow, playWindow,
          isHandStep, pickUpToOf } from './effects.js';
+import { canDuelNow } from './duel.js';
 import * as Sound from './sound.js';
 import { BASE_CARDS, cardArt, cardArtAlt, CARD_BACK, CARD_BACK_ALT,
          tokenArt, tokenAlt } from './events.js';
@@ -762,6 +763,8 @@ function paintHand(el, st, ctx) {
   const held = st.held?.[me] ?? 0;
   /* ใช้ฟังก์ชันเดียวกับฝั่งกติกา จะได้ไม่มีทางที่หน้าจอชวนให้กดสิ่งที่กติกาไม่รับ */
   const asking = canVoteNow(st, me);
+  /* วงยิงแข่งสองลำ — ส่งไพ่แบบเดียวกับโหวต แต่คนละคำสั่งและคนละระบบ */
+  const duelling = canDuelNow(st, me);
 
   /* การ์ดที่ให้เลือกไพ่ในมือตัวเอง (สัญญาฉบับใหม่) — คนละโหมดกับการโหวต
      เลือกได้หลายใบ คลิกซ้ำเอาออก แล้วกดยืนยันทีเดียว */
@@ -779,6 +782,9 @@ function paintHand(el, st, ctx) {
       if (tossing) {
         return `<button class="wr-pick wr-toss${tossPick.includes(id) ? ' on' : ''}"
           data-toss="${esc(id)}">${voteCard(voteById(id), lang)}</button>`;
+      }
+      if (duelling) {
+        return `<button class="wr-pick" data-duel="${esc(id)}">${voteCard(voteById(id), lang)}</button>`;
       }
       return asking
         ? `<button class="wr-pick" data-card="${esc(id)}">${voteCard(voteById(id), lang)}</button>`
@@ -814,7 +820,7 @@ function paintHand(el, st, ctx) {
     (sittingOut ? `<p class="wr-empty">${esc(t('wreck.sittingOut'))}</p>` : '');
 
   const box = el.querySelector('.wr-hand-cards');
-  box.classList.toggle('asking', asking);
+  box.classList.toggle('asking', asking || duelling);
   /* โหมดทิ้งไพ่ก็เรืองกรอบเหมือนตอนโหวต เพราะเป็นจังหวะ "ถึงตาเราต้องเลือก" เหมือนกัน */
   box.classList.toggle('tossing', !!tossing);
   /* เรืองแสงทั้งกล่อง ไม่ใช่แค่ไพ่ — ตอนโหวตสายตาทุกคนอยู่กลางจอ
@@ -824,6 +830,10 @@ function paintHand(el, st, ctx) {
     box.dataset.sig = html;
     box.innerHTML = html;
     /* โหมดทิ้งไพ่ — คลิกเลือก คลิกซ้ำเอาออก แล้วกดยืนยันทีเดียว */
+  box.querySelectorAll('[data-duel]').forEach(b => {
+    b.onclick = () => ctx.send('duelCard', { card: b.dataset.duel });
+  });
+
   box.querySelectorAll('[data-toss]').forEach(b => {
     b.onclick = () => {
       const id = b.dataset.toss;

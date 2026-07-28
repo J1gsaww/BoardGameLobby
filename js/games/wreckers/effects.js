@@ -91,12 +91,14 @@ export const EFFECTS = {
     targets: (st, uid) => placeOf(st.pos[uid]) === 'island'
       ? ['islandVote']
       : ['attack', 'mutiny'],
+    /* เปิดโหวตชนิดที่เลือก **ทันทีตรงนั้นเลย** ไม่ใช่ให้สิทธิ์ไว้สั่งทีหลัง
+       ลูกเรือธรรมดาสั่งยิงได้เดี๋ยวนั้น · คนบนเกาะสั่งโหวตกล่องได้เดี๋ยวนั้น
+       ตัวจัดการคำสั่งเป็นคนเปิดวงให้ เพราะการเปิดวงต้องรู้จักมือไพ่ทุกคน */
     run: (st, uid, picks, hands) => ({
-      state: { ...st,
-        flag: { by: uid, kind: picks.kind, place: placeOf(st.pos[uid]),
-                claim: picks.kind === 'mutiny', at: (st.logSeq || 0) + 1 } },
+      state: st,
       hands,
-      shout: { kind: 'hold', by: uid, pick: picks.kind, card: 'holdmutiny' }
+      openVote: { kind: picks.kind, place: placeOf(st.pos[uid]), caller: uid,
+                  claim: picks.kind === 'mutiny' }
     })
   },
 
@@ -275,37 +277,22 @@ export const EFFECTS = {
      ตัวการ์ดบอกให้เอาใบอัลบาทรอสกลับเข้ากองแล้วสับใหม่ด้วย ซึ่งทำที่ชั้นสำรับ
      ตรงนี้จึงรับผิดชอบแค่ส่วนที่อยู่บนกระดาน คือนกที่เกาะตัวคนอยู่ */
   vegan: {
-    run: (st, uid, _picks, hands) => {
-      const marks = { ...(st.marks || {}) };
-      const freed = [];
-      for (const [u, m] of Object.entries(marks)) {
-        if (!m?.bird) continue;
-        freed.push(u);
-        const rest = { ...m };
-        delete rest.bird;
-        marks[u] = rest;
-      }
-      if (!freed.length) return { state: st, hands };
-      return {
-        state: { ...st, marks },
-        hands,
-        shout: { kind: 'vegan', by: uid, who: freed, card: 'vegan' }
-      };
-    }
+    /* เปิดวงยิงแข่งสองลำ ผลตอนจบอยู่ที่ตัวจัดการวงยิง ไม่ได้จบตรงนี้
+       ลำที่ยิงติดฝ่ายเดียวรอด นอกนั้นโดน Maroon แล้วค่อยเก็บนก */
+    duel: 'vegan',
+    run: (st, uid, _picks, hands) => ({ state: st, hands })
   },
 
   /* ธงดำ — สั่งโหวตได้ทันทีโดยไม่ต้องมีตำแหน่ง
      บนเรือได้โหวตโจมตี บนเกาะได้โหวตแบ่งกล่อง
      ให้สิทธิ์ไว้แล้วเปิดโหวตเลยในจังหวะเดียว ไม่ต้องให้กดซ้ำอีกรอบ */
   blackflag: {
+    /* เปิดโหวตทันทีเหมือนกบฏใต้ท้องเรือ ต่างกันแค่ไม่ให้เลือกชนิด
+       บนเรือเป็นโหวตยิง บนเกาะเป็นโหวตย้ายกล่อง */
     run: (st, uid, _picks, hands) => {
       const place = placeOf(st.pos[uid]);
       const kind = place === 'island' ? 'islandVote' : 'attack';
-      return {
-        state: { ...st, flag: { by: uid, kind, place, at: (st.logSeq || 0) + 1 } },
-        hands,
-        shout: { kind: 'flag', by: uid, place, card: 'blackflag' }
-      };
+      return { state: st, hands, openVote: { kind, place, caller: uid, claim: false } };
     }
   },
 
@@ -589,6 +576,9 @@ export function targetsOf(st, uid, id, step, picks = {}) {
    ใช้เป็นสองที่: บรรทัดสั่งกลางกระดาน กับหัวข้อในกล่องยืนยัน */
 /* ขั้นนี้ตอบด้วยปุ่มกลางจอไหม (แทนการคลิกของบนกระดาน) */
 export const isChoice = (id) => !!effectOf(id)?.choice;
+
+/* การ์ดใบนี้เปิดวงยิงแข่งสองลำไหม — ถ้าใช่ ผลจริงเกิดตอนวงยิงจบ */
+export const duelOf = (id) => effectOf(id)?.duel || null;
 
 export const askKey = (id, step) => {
   const k = effectOf(id)?.ask?.[step];
