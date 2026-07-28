@@ -1990,3 +1990,83 @@ button{ cursor:pointer; border:0; background:none; }
 }
 .wr-over-row.win{ border-color:var(--lamp); box-shadow:0 0 0 1px var(--lamp) inset; }
 .wr-over-who{ flex:1; min-width:0; font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* ปุ่มบนหน้าสรุปผล — เจ้าของห้องได้สองปุ่ม คนอื่นได้ปุ่มเดียวหลังนับถอยหลัง */
+.wr-over-go{ display:flex; gap:9px; flex-wrap:wrap; justify-content:center; margin-top:10px; width:100%; }
+.wr-over-btn{ flex:1 1 auto; min-width:150px; }
+.wr-over-btn:disabled{ opacity:.45; cursor:not-allowed; }
+
+/* ── สมุดการ์ด ─────────────────────────────────────────────
+   สามการ์ดต่อแถว = หกคอลัมน์ (ภาพ + คำอธิบาย สลับกันไป)
+   คำอธิบายอยู่ข้างภาพเลย ไม่ต้องเอาเมาส์ไปชี้ เพราะต้องอ่านเทียบกันหลายใบ */
+.journal-card{
+  width:min(1080px, 96vw); max-height:90vh;
+  display:grid; grid-template-rows:auto auto 1fr; gap:12px;
+}
+.journal-head{ display:flex; align-items:center; gap:12px; }
+.journal-head h3{ margin:0; flex:1; font-family:var(--display); font-size:20px; }
+
+.journal-tabs{ display:flex; flex-wrap:wrap; gap:6px; }
+.jr-tab{
+  display:inline-flex; align-items:center; gap:6px;
+  padding:6px 11px; border-radius:999px; font-size:12px;
+  background:var(--sunk); border:1px solid var(--line); color:var(--muted);
+}
+.jr-tab:hover{ border-color:var(--lamp); }
+.jr-tab.on{ color:var(--ink); border-color:var(--lamp); background:rgba(244,169,73,.14); }
+.jr-tab-n{ font-family:var(--mono); font-size:10px; opacity:.75; }
+.jr-tab-all{ font-weight:600; }
+
+.journal-body{ overflow-y:auto; padding-right:4px; display:grid; gap:20px; align-content:start; }
+.jr-sec-head{
+  display:flex; align-items:baseline; gap:10px; margin:0 0 8px;
+  font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--lamp); border-bottom:1px solid var(--line); padding-bottom:6px;
+}
+.jr-sec-n{ margin-left:auto; color:var(--muted); letter-spacing:.06em; }
+
+/* หกคอลัมน์ = สามการ์ดต่อแถว · แคบลงเหลือสองแล้วหนึ่งตามจอ */
+.jr-grid{
+  display:grid; gap:10px 14px; align-items:start;
+  grid-template-columns:repeat(3, 74px minmax(0, 1fr));
+}
+@media (max-width: 900px){ .jr-grid{ grid-template-columns:repeat(2, 74px minmax(0, 1fr)); } }
+@media (max-width: 560px){ .jr-grid{ grid-template-columns:74px minmax(0, 1fr); } }
+
+.jr-card{ position:relative; }
+.jr-img{
+  width:74px; aspect-ratio:3/4; object-fit:cover; display:block;
+  border-radius:7px; border:1px solid var(--line);
+  background:linear-gradient(150deg,#2a2148,#171029);
+}
+.jr-img-none{ display:block; }
+.jr-n{
+  position:absolute; right:-4px; bottom:-4px;
+  font-family:var(--mono); font-size:10px; padding:1px 5px; border-radius:999px;
+  color:#241704; background:var(--lamp);
+}
+.jr-text{ min-width:0; }
+.jr-name{ margin:0 0 3px; font-family:var(--display); font-size:13.5px; font-weight:700; }
+.jr-desc{ margin:0; font-size:11.5px; line-height:1.55; color:var(--muted); }
+.jr-empty{ color:var(--muted); text-align:center; padding:30px 0; }
+
+/* ── บังคับให้คนอื่นเปิดการ์ด ────────────────────────────────
+   คนสั่งเห็นช่องที่เลือกได้เรืองส้ม ที่เลือกไว้แล้วเรืองแรงขึ้น
+   คนที่ถูกบังคับเห็นเฉพาะสองใบที่เขาชี้ไว้ เรืองแดงเพราะไม่มีทางเลือกอื่น */
+.wr-event-slot.fx-pick{ cursor:pointer; }
+.wr-event-slot.fx-pick .wr-card{
+  box-shadow:0 0 0 2px var(--lamp), 0 0 16px rgba(244,169,73,.5);
+}
+.wr-event-slot.fx-pick:hover .wr-card{ transform:translateY(-3px); }
+.wr-event-slot.fx-on .wr-card{
+  box-shadow:0 0 0 3px var(--lamp), 0 0 26px rgba(244,169,73,.95);
+  transform:translateY(-4px);
+}
+.wr-event-slot.fx-must .wr-card{
+  box-shadow:0 0 0 3px var(--rose), 0 0 24px rgba(242,100,126,.85);
+  animation:wr-must 1.5s ease-in-out infinite;
+}
+@keyframes wr-must{
+  0%,100%{ box-shadow:0 0 0 2px var(--rose), 0 0 16px rgba(242,100,126,.6); }
+  50%    { box-shadow:0 0 0 4px var(--rose), 0 0 32px rgba(242,100,126,1); }
+}

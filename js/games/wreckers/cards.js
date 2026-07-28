@@ -15,6 +15,40 @@ export const RARITY_LABEL = {
   map:    { th: 'Map',    en: 'Map' }
 };
 
+/* ── สุ่มชุดการ์ดพิเศษ ──────────────────────────────────────
+   นับเป็น "ชุด" ไม่ใช่ "ใบ" เพราะบางชนิดมีหลายใบ
+   สุ่ม 6 ชุดอาจได้ 10 ใบก็ได้ ขึ้นกับว่าจับได้ชนิดไหน
+
+   ข้อจำกัดเพื่อความสมดุล: ถ้าจับได้ **เกยตื้น** ต้องมี **ผลัดเวร** กับ
+   **Anthemoessa** ติดมาด้วยเสมอ เพราะเกยตื้นทำให้เกาะมีสี่กล่องได้
+   ซึ่งเปลี่ยนสมดุลตอนโหวตบนเกาะไปเลย สองใบนั้นเป็นทางแก้ที่ทำให้ยังเล่นได้
+   แต่สองใบนั้นอยู่เดี่ยว ๆ ได้ ไม่ต้องมีเกยตื้น */
+export const NEEDS_WITH = { aground: ['relief', 'anthemoessa'] };
+
+export function randomSets(n, rng = Math.random) {
+  const ids = [...new Set(EXTRA_CARDS.map(c => c.id))];
+  const bag = [...ids];
+  for (let i = bag.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [bag[i], bag[j]] = [bag[j], bag[i]];
+  }
+
+  const out = bag.slice(0, Math.min(n, bag.length));
+
+  /* ใบที่ต้องมีคู่หู — สลับใบที่ไม่เกี่ยวออกไปให้ ไม่ใช่เติมจนเกินจำนวนที่ขอ */
+  for (const [lead, mates] of Object.entries(NEEDS_WITH)) {
+    if (!out.includes(lead)) continue;
+    const locked = new Set([lead, ...mates]);
+    for (const mate of mates) {
+      if (out.includes(mate)) continue;
+      const spot = out.findIndex(id => !locked.has(id));
+      if (spot < 0) break;
+      out[spot] = mate;
+    }
+  }
+  return out;
+}
+
 export const EXTRA_CARDS = [
   /* ── Common ชนิดละ 3 ใบ ─────────────────────────────────── */
   {

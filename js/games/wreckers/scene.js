@@ -111,6 +111,8 @@ function sceneKey(st) {
   /* ช่วงรอให้คนเปิดเลือกเป้า — ค้างไว้จนกว่าจะเลือกเสร็จ ไม่มีนับถอยหลัง
      ทุกคนต้องรู้ว่ากำลังอยู่ในช่วงนี้ ไม่ใช่แค่คนที่ต้องเลือก */
   if (st.pending) return `card:${st.pending.at}`;
+  /* มีคนถูกบังคับให้เปิดแล้วยังไม่เปิด — ค้างบอกทั้งวงไว้ว่ารออะไรอยู่ */
+  if (st.forced) return `forced:${st.forced.at}`;
   if (st.aim) return `ep:${st.aim.by}:${st.aim.place}`;
   if (st.lastVote && !dismissed.has(st.lastVote.at))
     return `ep:${st.lastVote.caller}:${st.lastVote.place}`;
@@ -183,6 +185,8 @@ export function paintScene(el, st, ctx) {
     phase === 'aim' && !!st.aim && st.aim.by === ctx.me.uid && !st.aim.target);
   /* ช่วงเลือกเป้าไม่ต้องมีพื้นมืด เพราะต้องมองกระดานแล้วคลิก
      ความมืดจะถูกถอดออกตอนการ์ดย่อไปมุม ดูที่คลาส parked ของตัวเนื้อหา */
+  /* ช่วงรอคนถูกบังคับ ไม่ต้องมืด เพราะเขาต้องมองเห็นการ์ดเพื่อกด */
+  if (key.startsWith('forced:')) box.classList.add('bare');
   box.classList.toggle('bare', !!st.pending && key.startsWith('card:')
     && !!box.querySelector('.wr-scene-body.parked'));
   title.classList.toggle('up', ms > T.intro);
@@ -210,6 +214,7 @@ function step(body, st, ctx) {
   if (key.startsWith('peek:')) return peekNote(body, st);
   if (key.startsWith('shout:')) return shoutNote(body, st);
   if (key.startsWith('card:')) return cardNote(body, st, ctx);
+  if (key.startsWith('forced:')) return forcedNote(body, st, ctx);
   if (key.startsWith('save:')) return saveNote(body, st, ctx);
   if (st.vote) { goto('collect'); return collect(body, st); }
 
@@ -480,8 +485,11 @@ function cardNote(body, st, ctx) {
   if (line) {
     const want = !st.pending ? ''
       : mineNow
-        ? (many ? '' : t(askKey(st.pending.card, st.pending.needs)))
-        : (many ? t('wreck.scene.crowWait')
+        ? (many && st.pending.needs !== 'slots' ? '' : t(askKey(st.pending.card, st.pending.needs)))
+        : (st.pending.needs === 'slots'
+            ? t('wreck.scene.forcing', { name: st.names?.[st.pending.by] || '?',
+                                         who: st.names?.[st.pending.picks?.player] || '?' })
+          : many ? t('wreck.scene.crowWait')
                 : t('wreck.scene.pickTargetThem', { name: st.names?.[st.pending.by] || '?' }));
     if (line.textContent !== want) line.textContent = want;
     line.hidden = !want || !parked;
@@ -672,7 +680,25 @@ function feverNote(body, st, ctx) {
   return false;
 }
 
+/* ── รอคนที่ถูกบังคับกดเปิด ────────────────────────────────
+   ไม่มีนับถอยหลัง ค้างจนกว่าเขาจะเปิดจริง
+   จอไม่มืด เพราะคนที่ถูกบังคับต้องมองเห็นการ์ดของตัวเองเพื่อกด */
+function forcedNote(body, st, ctx) {
+  const mine = st.forced.who === ctx.me.uid;
+  const want = 'forced:' + (mine ? 'me' : 'them');
+  if (aimView === want) return false;
+  aimView = want;
+
+  body.innerHTML = `<p class="wr-scene-note">${esc(mine
+    ? t('wreck.scene.forcedMe')
+    : t('wreck.scene.forcedThem', { who: st.names?.[st.forced.who] || '?' }))}</p>`;
+  return false;
+}
+
 function titleOf(st, ph, me) {
+  if (st.forced && key.startsWith('forced:')) {
+    return { who: t('wreck.act.force'), big: st.names?.[st.forced.who] || '?' };
+  }
   if (st.saveAsk && key.startsWith('save:')) {
     return { who: t('wreck.card.' + st.saveAsk.card), big: st.names?.[st.saveAsk.who] || '?' };
   }

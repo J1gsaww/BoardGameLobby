@@ -418,6 +418,18 @@ export const isGift = (id) => !!effectOf(id)?.gift;
 export const giftTargets = (st, uid) =>
   (st.seats || []).filter(u => u !== uid && st.pos?.[u]);
 
+/* บังคับให้คนอื่นเปิด — ไม่ใช่การ์ด แต่เป็น Action ที่ถามสองขั้นเหมือนกัน
+   จึงยืมกลไกเดียวกันมาใช้ ไม่ต้องเขียนทางแยกใหม่ทั้งชุด
+   ไม่มี run เพราะผลไม่ได้เกิดตรงนี้ — เกิดตอนคนที่ถูกบังคับกดเปิดเอง */
+EFFECTS.force = {
+  steps: ['player', 'slots'],
+  ask: { player: 'force.player', slots: 'force.slots' },
+  pickCount: { slots: 2 },
+  targets: (st, uid, step) => step === 'player'
+    ? (st.seats || []).filter(u => u !== uid && st.pos?.[u])
+    : []
+};
+
 export const effectOf = (id) => EFFECTS[id] || null;
 
 /* การ์ดใบนี้เปิดแล้วเข้ามือไหม */

@@ -163,6 +163,10 @@ export function passTurn(st, now = Date.now()) {
      เช็กที่นี่จุดเดียวแทนที่จะไล่ใส่ทุกที่ที่เรียกผ่านตา ซึ่งมีสิบกว่าที่ */
   if (st.saveAsk) return st;
 
+  /* มีคนถูกบังคับให้เปิดแล้วยังไม่เปิด = Action ของคนสั่งยังไม่จบ
+     การเปิดเป็นส่วนหนึ่งของ Action นั้น ไม่ใช่ตาใหม่ของใคร */
+  if (st.forced) return st;
+
   const { state, uid, skipped = [] } = advance(st);        /* คนที่ติดหนี้ข้ามเทิร์นถูกหักหนี้แล้วข้ามไปในนี้ */
   /* มีคนโดนข้ามตา = ประกาศให้ทั้งวงรู้ว่าใครหยุดอยู่
      ไม่งั้นจะเห็นแค่ตากระโดดข้ามหัวไปเฉย ๆ แล้วงงว่าเกิดอะไรขึ้น */
@@ -207,6 +211,18 @@ export async function onAction(ctx, action) {
   /* ตอบว่าจะใช้การ์ดกัน Maroon ไหม ทำได้นอกตาตัวเอง
      เพราะคนที่ถูกถามมักไม่ใช่คนที่ถึงตา เช่นโดนคนอื่นยิงหรือโดนนกถล่มทั้งลำ */
   if (type === 'useSave') return settle(ctx, useSave(ctx, uid, payload));
+
+  /* ถูกบังคับให้เปิด — ทำได้นอกตาตัวเอง เพราะไม่ใช่ตาของเราตั้งแต่ต้น
+     การเปิดนี้เป็นส่วนหนึ่งของ Action ของคนที่สั่ง ไม่ใช่ตาใหม่ */
+  if (type === 'activate' && st.forced?.who === uid) {
+    return settle(ctx, activate(ctx, uid, payload));
+  }
+
+  /* ตอบเป้าของการ์ดที่ค้างอยู่ — คนตอบอาจเป็นคนที่ถูกบังคับ ซึ่งไม่ใช่เจ้าของตา
+     เช่นโดนบังคับให้เปิดปืนพก แล้วต้องเป็นคนเลือกเองว่าจะยิงใคร */
+  if (type === 'useCard' && st.pending?.by === uid && st.turn !== uid) {
+    return settle(ctx, useCard(ctx, uid, payload));
+  }
 
   /* การ์ดในมือมีด่านของตัวเอง เพราะบางใบใช้ได้ในตาของใครก็ได้
      ตัดสินด้วยฟังก์ชันเดียวกับที่หน้าจอใช้ จึงไม่มีทางคิดไม่ตรงกัน */
@@ -306,9 +322,14 @@ async function route(ctx, uid, type, payload) {
     case 'activate': return activate(ctx, uid, payload);
     case 'peek':     return peek(ctx, uid, payload);
 
-    /* บังคับให้คนอื่นเปิด ยังไม่ได้ทำ กินสิทธิ์ Action ไปก่อน */
+    /* บังคับให้คนอื่นเปิด — ถามสองขั้น เลือกคน แล้วเลือกการ์ดสองใบให้เขาเลือกเอง */
     case 'force':
-      return { state: passTurn(pushLog(st, 'wreck.log.force', { name: st.names?.[uid] })) };
+      return {
+        state: { ...st,
+          pending: { card: 'force', by: uid, mode: 'force', picks: {}, needs: 'player',
+                     at: (st.logSeq || 0) + 1 },
+          deadline: Date.now() + PICK_MS }
+      };
 
     default: return null;
   }
@@ -350,6 +371,9 @@ function activate(ctx, uid, { slot }) {
   const id = deck.slots?.[i];
   if (!Number.isInteger(i) || !id) return null;
 
+  /* ถูกบังคับอยู่ = เปิดได้เฉพาะสองใบที่เขาชี้ไว้เท่านั้น */
+  if (st.forced && !(st.forced.slots || []).includes(i)) return null;
+
   const slots = [...deck.slots];
   slots[i] = null;
   const next = refillSlots({ ...deck, slots, discard: [...(deck.discard || []), id] }, EVENT_SLOTS);
@@ -370,8 +394,12 @@ function activate(ctx, uid, { slot }) {
     cleared[u] = { ...sec, peek: { ...sec.peek, seen: sec.peek.seen.filter(x => x.slot !== i) } };
   }
 
+  /* เปิดแล้วสถานะบังคับจบหน้าที่ ไม่ว่าจะเปิดใบไหนในสองใบนั้น
+     ล้างที่นี่จุดเดียว ทุกทางที่การเปิดจบลงจึงได้ผลเหมือนกัน */
+  const shown2 = st.forced ? { ...shown, forced: null } : shown;
+
   /* ประกาศชื่อการ์ดให้ทุกคนเห็นทันทีที่เปิด */
-  const said = pushLog({ ...shown, cardUp: { id, by: uid, at: (st.logSeq || 0) + 1 } },
+  const said = pushLog({ ...shown2, cardUp: { id, by: uid, at: (st.logSeq || 0) + 1 } },
                        'wreck.log.activate', { name: st.names?.[uid] });
 
   /* การ์ดที่ต้องถามก่อน จะยังไม่ผ่านตา เกมค้างรอคนเปิดเลือกเป้าก่อน
@@ -618,7 +646,16 @@ function useCard(ctx, uid, { target, cards }) {
   const want = pickCountOf(p.card, step);
   let answer;
 
-  if (want > 1) {
+  if (want > 1 && step === 'slots') {
+    /* เลือกช่องการ์ดบนกระดาน — ตรวจว่าเป็นเลขช่องจริงและช่องนั้นมีไพ่คว่ำอยู่
+       ไม่ใช้กองลับเหมือนรังกา เพราะช่องการ์ดเป็นของสาธารณะอยู่แล้ว */
+    const deck = deckOf(ctx);
+    const list = Array.isArray(cards) ? cards.map(Number) : [];
+    if (list.length !== want) return null;
+    if (new Set(list).size !== list.length) return null;
+    if (!list.every(i => Number.isInteger(i) && deck.slots?.[i])) return null;
+    answer = list;
+  } else if (want > 1) {
     /* ขั้นที่เลือกหลายใบพร้อมกัน — ส่งมาเป็นชุดเดียว ต้องครบพอดีและห้ามซ้ำ
        ตรวจกับกองที่เก็บไว้ในข้อมูลลับของคนเปิด ไม่ใช่กองที่หน้าจอส่งมาเอง */
     const pool = ctx.secrets?.[uid]?.pool || [];
@@ -648,6 +685,18 @@ function useCard(ctx, uid, { target, cards }) {
       };
     }
     return { state: { ...st, pending: { ...p, picks: got, needs: more } } };
+  }
+
+  /* บังคับให้คนอื่นเปิด — ไม่มีผลเกิดตรงนี้ แค่ตั้งสถานะรอให้เขากดเปิดเอง
+     ตายังไม่ผ่าน เพราะการเปิดเป็นส่วนหนึ่งของ Action นี้ */
+  if (p.mode === 'force') {
+    const done = pushLog({ ...st, pending: null,
+                           forced: { by: uid, who: got.player, slots: got.slots,
+                                     at: (st.logSeq || 0) + 1 },
+                           deadline: Date.now() + PICK_MS },
+                         'wreck.log.force',
+                         { name: st.names?.[uid], who: st.names?.[got.player] });
+    return { state: done };
   }
 
   const e = effectOf(p.card);
@@ -1081,6 +1130,15 @@ export async function tick(ctx) {
     /* กลับมาแล้วก่อนหมดเพดาน ยกเลิกให้ เล่นต่อได้ตามสบาย */
     if (!st.turnSeconds && !offline(st.turn)) return { state: { ...st, deadline: null, graced: false } };
     return null;
+  }
+
+  /* คนถูกบังคับไม่ยอมเปิด — เปิดให้เองใบแรกที่เขาชี้ไว้ แล้วไปต่อ
+     ทิ้งไปเฉย ๆ ไม่ได้ เพราะ Action ของคนสั่งจะสูญไปโดยไม่มีอะไรเกิดขึ้น */
+  if (st.forced) {
+    if (!due) return null;
+    const pick = (st.forced.slots || [])[0];
+    const out = await activate({ ...ctx, state: { ...st } }, st.forced.who, { slot: pick });
+    return out || { state: passTurn({ ...st, forced: null }) };
   }
 
   /* คนเปิดการ์ดค้างไม่เลือกเป้า — ทิ้งผลการ์ดแล้วผ่านตาไป */

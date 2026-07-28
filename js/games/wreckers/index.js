@@ -5,7 +5,8 @@
 import { register } from '../../games.js';
 import { init, onAction, tick } from './game.js';
 import { render } from './ui.js';
-import { EXTRA_CARDS } from './cards.js';
+import { EXTRA_CARDS, randomSets } from './cards.js';
+import { SECTIONS, journalBody, journalTabs } from './journal.js';
 import { TURN_OPTIONS } from './board.js';
 import { DUTCH_OPTIONS, dutchAllowed, DUTCH_NEEDS } from './rules.js';
 
@@ -33,9 +34,18 @@ register({
        ปุ่มดัตช์กดได้เฉพาะจำนวนคนที่แบ่งฝั่งแล้วยังลงตัว */
     { key: 'dutch', default: 'auto', options: DUTCH_OPTIONS, hint: true,
       enabled: (value, count) => dutchAllowed(count, value) },
-    { key: 'extraCards', type: 'cards', default: [], catalogue: EXTRA_CARDS }
+    /* random = ปุ่มสุ่มชุด · pick = ตัวสุ่มของเกมเอง
+       ให้เกมเป็นคนสุ่ม ไม่ใช่หน้าล็อบบี้ เพราะข้อจำกัดเรื่องสมดุลเป็นกติกาของเกม
+       หน้าล็อบบี้ใช้ร่วมกันหลายเกม ไม่ควรรู้ว่าใบไหนต้องมากับใบไหน */
+    { key: 'extraCards', type: 'cards', default: [], catalogue: EXTRA_CARDS,
+      random: [6, 8], pick: randomSets }
   ],
   init, onAction, tick, render,
+
+  /* สมุดการ์ด — เกมเป็นคนบอกว่ามีหมวดอะไรและวาดเนื้อหายังไง
+     หน้าจอกลางแค่เปิดหน้าต่างให้ เพราะเกมอื่นก็มีสำรับของตัวเองได้ */
+  journal: { sections: SECTIONS.map(s => s.id), body: journalBody, tabs: journalTabs },
+
 
   i18n: {
     th: {
@@ -183,6 +193,20 @@ register({
       'wreck.over.sides': 'ตอนจบเกม ใครอยู่ฝ่ายไหน',
       'wreck.over.youWin': 'คุณชนะ',
       'wreck.over.youLose': 'คุณไม่ได้ชนะ',
+      'journal.title': 'สมุดการ์ด',
+      'journal.all': 'ทุกหมวด',
+      'journal.cards': '{n} ใบ',
+      'journal.none': 'ยังไม่ได้เลือกหมวดไหนเลย',
+      'journal.sec.common': 'เหตุการณ์ทั่วไป',
+      'journal.sec.map': 'แผนที่',
+      'journal.sec.rare': 'เหตุการณ์หายาก',
+      'journal.sec.xcommon': 'พิเศษ · ทั่วไป',
+      'journal.sec.xmap': 'พิเศษ · แผนที่',
+      'journal.sec.xrare': 'พิเศษ · หายาก',
+      'wreck.over.again': 'เล่นอีกครั้งกับคนกลุ่มเดิม',
+      'wreck.over.lobby': 'กลับไปหน้าห้อง',
+      'wreck.over.leave': 'ออกจากห้อง',
+      'wreck.over.leaveIn': 'ออกจากห้อง ({n})',
       'wreck.log.card.stormyseas': 'พายุซัดกล่องบนเรือหายไปหมด',
       'wreck.scene.storm': 'พายุซัดกล่อง {n} กล่องจาก{place}ไปเรือสินค้า',
       'wreck.scene.stormIsle': 'พายุซัดกล่องบนเกาะจนแบ่งเท่ากันสองฝั่ง',
@@ -254,6 +278,12 @@ register({
       'wreck.ask.any.player': 'เลือกผู้เล่น',
       'wreck.ask.any.ship': 'เลือกเรือ',
       'wreck.ask.any.cards': 'เลือกไพ่',
+      'wreck.ask.any.slots': 'เลือกการ์ด',
+      'wreck.ask.force.player': 'เลือกคนที่จะบังคับให้เปิดการ์ด',
+      'wreck.ask.force.slots': 'เลือกการ์ดสองใบให้เขาเลือกเปิดหนึ่งใบ',
+      'wreck.scene.forcing': '{name} กำลังเลือกการ์ดให้ {who} เปิด',
+      'wreck.scene.forcedMe': 'คุณถูกบังคับให้เปิด — เลือกหนึ่งในสองใบที่เรืองอยู่',
+      'wreck.scene.forcedThem': 'รอ {who} เลือกเปิดหนึ่งในสองใบ',
       'wreck.ask.pistol.player': 'เลือกคนที่จะยิง — บนกระดานหรือในรายชื่อก็ได้',
       'wreck.ask.marque.player': 'เลือกคนที่จะเชิญขึ้นเรือ — ตัวเองก็ได้',
       'wreck.ask.marque.ship': 'เลือกเรือที่จะให้เขาไปต่อท้ายแถว',
@@ -482,6 +512,20 @@ register({
       'wreck.over.sides': 'Where everyone stood at the end',
       'wreck.over.youWin': 'You win',
       'wreck.over.youLose': 'You did not win',
+      'journal.title': 'Card journal',
+      'journal.all': 'All categories',
+      'journal.cards': '{n} cards',
+      'journal.none': 'No categories selected',
+      'journal.sec.common': 'Common events',
+      'journal.sec.map': 'Maps',
+      'journal.sec.rare': 'Rare events',
+      'journal.sec.xcommon': 'Special \u00b7 common',
+      'journal.sec.xmap': 'Special \u00b7 maps',
+      'journal.sec.xrare': 'Special \u00b7 rare',
+      'wreck.over.again': 'Play again, same crew',
+      'wreck.over.lobby': 'Back to the room',
+      'wreck.over.leave': 'Leave the room',
+      'wreck.over.leaveIn': 'Leave the room ({n})',
       'wreck.log.card.stormyseas': 'The storm sweeps the deck clean',
       'wreck.scene.storm': 'The storm sweeps {n} boxes from {place} to the merchant',
       'wreck.scene.stormIsle': 'The storm splits the island cargo evenly',
@@ -553,6 +597,12 @@ register({
       'wreck.ask.any.player': 'Choose a player',
       'wreck.ask.any.ship': 'Choose a ship',
       'wreck.ask.any.cards': 'Choose cards',
+      'wreck.ask.any.slots': 'Choose cards',
+      'wreck.ask.force.player': 'Choose who must flip a card',
+      'wreck.ask.force.slots': 'Choose two cards for them to pick from',
+      'wreck.scene.forcing': '{name} is choosing cards for {who} to flip',
+      'wreck.scene.forcedMe': 'You must flip \u2014 pick one of the two glowing cards',
+      'wreck.scene.forcedThem': 'waiting for {who} to flip one of the two',
       'wreck.ask.pistol.player': 'Click the player to shoot \u2014 on the board or in the list',
       'wreck.ask.marque.player': 'Choose who to invite aboard \u2014 yourself is allowed',
       'wreck.ask.marque.ship': 'Choose the ship they join, at the back of the queue',

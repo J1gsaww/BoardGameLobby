@@ -19,6 +19,7 @@ import { dieSvg, rollPose, HERO, ROLL_MS } from './die.js';
 import { actionsFor, occupants, placeOf, BOAT_IDS, canVoteNow, isWrecked,
          boatsFromAll, boatsOpen } from './rules.js';
 import { targetsOf, canUseCard, askKey, canPlayNow, playWindow } from './effects.js';
+import * as Sound from './sound.js';
 import { BASE_CARDS, cardArt, cardArtAlt, CARD_BACK, CARD_BACK_ALT,
          tokenArt, tokenAlt } from './events.js';
 import { paintScene, stopScene, setPlanView, setPlanWire, VOTE_BACK,
@@ -44,6 +45,8 @@ const BOB = { ship: [1, 4], merchant: [1.3, 3.5], boat: [2.6, 2.6], island: [0, 
 let menu = null;        // { kind, uid, spot, place, x, y }
 let picks = [];         // การ์ดเหตุการณ์ที่เลือกไว้ สูงสุด 2 ใบ
 let forcing = null;     // uid ของคนที่กำลังจะบังคับให้เปิดการ์ด
+/* ช่องการ์ดที่เลือกไว้ตอนสั่งให้คนอื่นเปิด — เก็บในเครื่อง ยังไม่ส่งจนกว่าจะครบสอง */
+let forcePick = [];
 let plan = null;        // ตัวเลือกที่ยังไม่ยืนยัน เช่นจะยิงลำไหน เก็บฝั่งไหน
 
 /* เครื่องมือทดสอบเปิดด้วย ?dev=cards ท้าย URL เท่านั้น
@@ -130,6 +133,7 @@ function shell(el, ctx) {
     </div>`;
 
   mountSea(el.querySelector('.wr-stage'), ART);
+  Sound.preload();          /* โหลดไว้ก่อน เสียงจะได้มาทันจังหวะ */
 
   // ผูกปุ่มครั้งเดียวด้วยการดักที่ตัวแม่ ปุ่มข้างในจึงไม่ต้องผูกใหม่ทุกรอบ
   el.querySelector('.wr-pieces').addEventListener('click', e => {
@@ -356,9 +360,54 @@ function paintOver(el, st, ctx) {
 
       <p class="wr-over-small">${esc(t('wreck.over.sides'))}</p>
       <ul class="wr-over-list">${rows}</ul>
+
+      <div class="wr-over-go">${ctx.isHost
+        ? `<button class="btn wr-over-btn" data-over="again">${esc(t('wreck.over.again'))}</button>
+           <button class="btn btn-muted wr-over-btn" data-over="lobby">${esc(t('wreck.over.lobby'))}</button>`
+        : `<button class="btn btn-muted wr-over-btn" data-over="leave" disabled>${esc(t('wreck.over.leave'))}</button>`}
+      </div>
     </div>`;
 
-  if (box.dataset.sig !== html) { box.dataset.sig = html; box.innerHTML = html; }
+  if (box.dataset.sig !== html) {
+    box.dataset.sig = html;
+    box.innerHTML = html;
+    wireOver(box, ctx);
+  }
+  tickLeave(box);
+}
+
+/* ปุ่มบนหน้าสรุป — เจ้าของห้องได้เล่นอีกครั้งกับกลับห้อง คนอื่นได้ออกจากห้อง */
+function wireOver(box, ctx) {
+  box.querySelectorAll('[data-over]').forEach(b => {
+    b.onclick = () => {
+      if (b.disabled) return;
+      if (b.dataset.over === 'again') ctx.playAgain?.();
+      else if (b.dataset.over === 'lobby') ctx.backToLobby?.();
+      else ctx.leaveRoom?.();
+    };
+  });
+  leaveAt = 0;
+}
+
+/* ปุ่มออกจากห้องขึ้นหลังนับถอยหลัง — กันคนกดหนีทันทีจนไม่ทันเห็นผล
+   นับจากตอนที่หน้าสรุปถูกวาดจริง ไม่ใช่ตอนที่เกมจบ เพราะสองอย่างนี้ห่างกันได้ */
+const LEAVE_WAIT = 5000;
+let leaveAt = 0;
+
+function tickLeave(box) {
+  const b = box.querySelector('[data-over="leave"]');
+  if (!b) return;
+  if (!leaveAt) leaveAt = Date.now();
+
+  const left = Math.ceil((LEAVE_WAIT - (Date.now() - leaveAt)) / 1000);
+  if (left > 0) {
+    b.disabled = true;
+    b.textContent = t('wreck.over.leaveIn', { n: left });
+    setTimeout(() => tickLeave(box), 250);
+    return;
+  }
+  b.disabled = false;
+  b.textContent = t('wreck.over.leave');
 }
 
 function paintLoading(el) {
@@ -377,10 +426,24 @@ function paintLoading(el) {
 
 export function render(el, ctx) {
   const st = ctx.state;
-  if (!st || !st.phase) { el.innerHTML = ''; stopSea(); stopScene(); closeMenu(); return; }
+  if (!st || !st.phase) {
+    el.innerHTML = ''; stopSea(); stopScene(); closeMenu();
+    Sound.reset();          /* ออกจากเกมแล้วเริ่มนับเหตุการณ์ใหม่ */
+    return;
+  }
 
   live = ctx;
   shell(el, ctx);
+
+  /* เสียงประกอบของการ์ด — ผูกกับสถานะ ทุกคนจึงได้ยินพร้อมกัน
+     ไม่ใช่ผูกกับการกด ซึ่งจะได้ยินแค่คนกดคนเดียว */
+  Sound.cardSounds(st);
+
+  /* เกมมีหน้าต่างของตัวเองขึ้นมาแทรกเมื่อไหร่ ปิดสมุดการ์ดทิ้ง
+     ไม่งั้นสมุดจะบังฉากที่กำลังเล่าอยู่ หรือบังแผงที่ต้องกดตอบ */
+  if (st.phase === 'over' || st.pending || st.saveAsk || st.vote || st.shout || st.cardUp) {
+    ctx.closeOverlays?.();
+  }
   preload(el);
   paintLoading(el);
 
@@ -742,6 +805,15 @@ function paintEvents(el, st, ctx) {
     slot.querySelector('[data-ev="activate"]').disabled = !(on && mine && filled && !mid);
     /* ดูใบที่เคยเปิดไปแล้วซ้ำได้ ห้ามเฉพาะใบที่เพิ่งดูไปในการแอบดูรอบนี้ */
     slot.querySelector('[data-ev="peek"]').disabled = !(on && mine && filled && !usedByPeek);
+
+    /* กำลังเลือกการ์ดสองใบให้คนอื่นเปิด — ช่องที่เลือกได้เรืองส้ม ที่เลือกแล้วเรืองแรง */
+    const picking = st.pending?.by === me && st.pending?.needs === 'slots';
+    slot.classList.toggle('fx-pick', !!(picking && filled));
+    slot.classList.toggle('fx-on', !!(picking && forcePick.includes(i)));
+
+    /* ถูกบังคับให้เปิด — เรืองเฉพาะสองใบที่เขาชี้ไว้ ที่เหลือกดไม่ได้ */
+    const forcedMe = st.forced?.who === me;
+    slot.classList.toggle('fx-must', !!(forcedMe && (st.forced.slots || []).includes(i)));
     /* ปุ่มเลือกการ์ดเองสำหรับเทส โผล่เฉพาะตอนเปิด ?dev=cards และเป็นเจ้าของห้อง */
     const pick = slot.querySelector('[data-ev="pick"]');
     if (pick) { pick.hidden = !(DEV_CARDS && ctx.isHost); pick.disabled = !on; }
@@ -1263,6 +1335,16 @@ export function planBody(st, ctx) {
     /* เป้าเป็นคนก็ได้ เป็นของบนกระดานก็ได้ ดูจากว่ามีชื่อผู้เล่นไหม
        เช็กแบบนี้แทนการไล่ชื่อขั้นทีละอัน จะได้ไม่ต้องแก้ทุกครั้งที่มีขั้นใหม่ */
     const step = st.pending?.needs || 'player';
+    /* เลือกหลายใบพร้อมกัน — แสดงเป็นเลขช่อง ไม่ใช่ชื่อคนหรือชื่อสถานที่ */
+    if (Array.isArray(plan.cards)) {
+      return `<div class="wr-plan-head">${esc(t('wreck.act.force'))}</div>
+        <div class="wr-plan-row"><span>${esc(t(askKey(st.pending?.card, step)))}</span>
+          <span class="wr-chip on">${plan.cards.map(n => n + 1).join(' · ')}</span></div>
+        <div class="wr-plan-go">
+          <button class="wr-act" data-plan="go">${esc(t('wreck.plan.confirm'))}</button>
+          <button class="wr-act ghost" data-plan="off">${esc(t('wreck.cancel'))}</button>
+        </div>`;
+    }
     const label = st.names?.[plan.target] || (plan.target ? t('wreck.place.' + plan.target) : '');
     rows = `<div class="wr-plan-row"><span>${esc(t(askKey(st.pending?.card, step)))}</span>
       <span class="wr-chip on">${esc(label || '—')}</span></div>`;
@@ -1292,7 +1374,7 @@ export function wirePlan(box, el, ctx) {
     b.onclick = () => { plan = { ...plan, [b.dataset.set]: b.dataset.val }; paint(el); };
   });
   const off = box.querySelector('[data-plan="off"]');
-  if (off) off.onclick = () => { plan = null; closeMenu(); paint(el); };
+  if (off) off.onclick = () => { plan = null; forcePick = []; closeMenu(); paint(el); };
   const go = box.querySelector('[data-plan="go"]');
   if (go) go.onclick = () => {
     if (!plan) return;      /* กดซ้ำหรือแผนถูกล้างไปแล้ว อย่าให้ล้มทั้งหน้า */

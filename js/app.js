@@ -336,6 +336,17 @@ function cardPicker(room, game, setting) {
     none.textContent = t('cards.clear');
     none.onclick = () => Room.setGameSetting(setting.key, []);
     head.append(all, none);
+
+    /* ปุ่มสุ่มชุด — เกมเป็นคนสุ่มเอง หน้านี้แค่กดเรียก
+       เพราะข้อจำกัดว่าใบไหนต้องมากับใบไหนเป็นกติกาของเกมนั้น ๆ
+       หน้าล็อบบี้ใช้ร่วมกันหลายเกม จึงไม่ควรรู้เรื่องพวกนี้ */
+    for (const n of (setting.random || [])) {
+      const b = document.createElement('button');
+      b.className = 'btn btn-slim';
+      b.textContent = t('cards.random', { n });
+      b.onclick = () => Room.setGameSetting(setting.key, setting.pick(n));
+      head.appendChild(b);
+    }
   }
   head.hidden = !cardsOpen;
   wrap.appendChild(head);
@@ -386,6 +397,11 @@ function paintRoom() {
     $('playCode').textContent = room.code;
     Music.setTrack(game?.music || Music.defaultTrack());
     startAmbience(game?.ambience);
+    /* ปุ่มสมุดการ์ดมีเฉพาะเกมที่ประกาศไว้ว่ามีสำรับให้ดู */
+    const jrGame = Games.get(room.doc?.gameId);
+    $('btnJournal').hidden = !jrGame?.journal;
+    $('btnJournal').textContent = t('journal.title');
+
     $('btnBack').hidden = !room.isHost;
     $('btnBack').textContent = t('play.leaveGame');
 
@@ -825,6 +841,55 @@ $('btnJoin').onclick = async () => {
 $('btnSetting').onclick = () => { cameFrom = current; paintLangPick(); paintAudio(); paintAvatar(); show('view-setting'); };
 
 const openRules = () => { cameFrom = current; rulesGame = null; paintRules(); show('view-rules'); };
+/* ── สมุดการ์ด ─────────────────────────────────────
+   เกมเป็นคนบอกว่ามีหมวดอะไรและวาดเนื้อหายังไง หน้านี้แค่เปิดหน้าต่างให้
+   ปิดได้ทั้งปุ่มกากบาท คลิกนอกกล่อง และปุ่ม Esc
+   และถูกบังคับปิดเมื่อเกมมีหน้าต่างของตัวเองขึ้นมาแทรก */
+let jrPick = new Set();
+
+export function closeJournal() {
+  $('journal').hidden = true;
+}
+
+function paintJournal() {
+  const game = Games.get(Room.room.doc?.gameId);
+  const jr = game?.journal;
+  if (!jr) return;
+  $('journalTabs').innerHTML = jr.tabs(jrPick);
+  $('journalBody').innerHTML = jr.body(jrPick);
+  $('journalBody').scrollTop = 0;
+
+  $('journalTabs').querySelectorAll('[data-tab]').forEach(b => {
+    b.onclick = () => {
+      const id = b.dataset.tab;
+      if (id === '*') {
+        const all = jr.sections.every(x => jrPick.has(x));
+        jrPick = new Set(all ? [] : jr.sections);
+      } else if (jrPick.has(id)) jrPick.delete(id);
+      else jrPick.add(id);
+      paintJournal();
+    };
+  });
+}
+
+function openJournal() {
+  const game = Games.get(Room.room.doc?.gameId);
+  if (!game?.journal) return;
+  if (!jrPick.size) jrPick = new Set(game.journal.sections);
+  $('journalTitle').textContent = t('journal.title');
+  $('journalClose').textContent = t('rules.back');
+  $('journal').hidden = false;
+  paintJournal();
+}
+
+$('btnJournal').onclick = openJournal;
+$('journalClose').onclick = closeJournal;
+$('journal').onclick = (e) => { if (e.target === $('journal')) closeJournal(); };
+Room.onCloseOverlays(closeJournal);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('journal').hidden) closeJournal();
+});
+
 $('btnRules').onclick = openRules;
 $('btnRulesPlay').onclick = openRules;
 $('btnRulesHome').onclick = openRules;

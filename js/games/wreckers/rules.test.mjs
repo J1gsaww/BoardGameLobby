@@ -26,7 +26,7 @@ import { onAction, init, tick, finish, passTurn, openTurn } from './game.js';
 import { DECK } from './vote.js';
 import { shipsWithRoom, canUseCard, MAP_CARDS, playWindow, pickCountOf, targetsOf } from './effects.js';
 import { BASE_CARDS, BASE_TOTAL, baseById, ENDER } from './events.js';
-import { EXTRA_CARDS } from './cards.js';
+import { EXTRA_CARDS, randomSets } from './cards.js';
 
 let pass = 0, fail = 0;
 const ok = (label, got, want = true) => {
@@ -480,15 +480,16 @@ group('ต่อสาย · โหมดไม่จับเวลา');
   ok('หมดเพดานแล้วยังไม่กลับ ข้ามตาไป', gone.state.turn, 'b');
 }
 {
+  /* ใช้ toBoat แทน force เพราะ force ไม่ผ่านตาทันทีอีกแล้ว — มันเปิดขั้นถามก่อน */
   const st = { ...filled(), turnSeconds: 0, deadline: null };
-  const done = (await onAction(ctxOf(st), { uid: 'a', type: 'force' })).state;
+  const done = (await onAction(ctxOf(st), { uid: 'a', type: 'toBoat', payload: { boat: 'boatL' } })).state;
   ok('ไม่จับเวลา ส่งตาต่อแล้วก็ยังไม่มีเส้นตาย', done.deadline, null);
 }
 
 group('ต่อสาย · หนึ่งตาหนึ่ง Action');
 {
   const st = filled();
-  const r = await onAction(ctxOf(st), { uid: 'a', type: 'force' });
+  const r = await onAction(ctxOf(st), { uid: 'a', type: 'toBoat', payload: { boat: 'boatL' } });
   ok('ทำแล้วส่งตาต่อทันที', r.state.turn, 'b');
   const bad = await onAction(ctxOf(r.state), { uid: 'a', type: 'force' });
   ok('คนเดิมทำซ้ำในตาของคนอื่นไม่ได้', bad, null);
@@ -513,9 +514,11 @@ group('ต่อสาย · ลงเรือเล็กแล้วขึ้
   ok('ต้นหนขึ้นเป็นกัปตันทันทีที่กัปตันลงเรือ', roleAt(r.state.pos, 'b'), 'captain');
 
   /* วนจนกลับมาถึงตาเขาอีกครั้ง */
+  /* ใช้ลงเรือเล็กเป็น Action ที่จบในตัวเอง แทน force ซึ่งตอนนี้เปิดขั้นถามก่อน
+     คนบนเกาะมีเรือเล็กสองลำให้เลือก คนบนเรือมีลำเดียว */
   let s = r.state;
   for (const uid of ['b', 'c', 'd', 'e', 'f']) {
-    s = (await onAction(ctxOf(s), { uid, type: 'force' })).state;
+    s = passTurn(s);   /* คนอื่นทำอะไรก็ได้ ตรงนี้สนใจแค่ว่าตาวนกลับมาถึง a */
   }
   ok('ครบรอบแล้วกลับมาถึงตาเขา และขึ้นฝั่งให้อัตโนมัติ', s.pos.a, 'island:3');
   ok('ขึ้นฝั่งแล้วยังเป็นตาของเขาอยู่ ไม่เสีย Action', s.turn, 'a');
@@ -1934,4 +1937,102 @@ group('การ์ด · กองเรือสเปน');
   ok('บอกฝ่ายที่ชนะ', r.state.result.side, 'B');
   ok('ส่งไพ่ประเทศทุกคนไปให้หน้าจอ', Object.keys(r.state.result.nations).sort(), [...P].sort());
   ok('ไม่นับกล่องบนเรือสินค้า', r.state.result.score.B + r.state.result.score.F, 5);
+}
+
+group('สุ่มชุดการ์ดพิเศษ');
+{
+  /* นับเป็นชุด ไม่ใช่ใบ — บางชนิดมีหลายใบ สุ่ม 6 ชุดจึงได้มากกว่า 6 ใบได้ */
+  const types = [...new Set(EXTRA_CARDS.map(c => c.id))];
+
+  for (const n of [6, 8]) {
+    const runs = Array.from({ length: 300 }, () => randomSets(n));
+    ok('สุ่ม ' + n + ' ชุด · ได้ครบตามจำนวนเสมอ',
+       [...new Set(runs.map(r => r.length))], [n]);
+    ok('สุ่ม ' + n + ' ชุด · ไม่มีชนิดซ้ำในชุดเดียวกัน',
+       runs.every(r => new Set(r).size === r.length), true);
+    ok('สุ่ม ' + n + ' ชุด · ทุกใบมีอยู่จริงในสำรับพิเศษ',
+       runs.every(r => r.every(id => types.includes(id))), true);
+
+    /* ข้อจำกัดเพื่อความสมดุล */
+    const withLead = runs.filter(r => r.includes('aground'));
+    ok('สุ่ม ' + n + ' ชุด · จับได้เกยตื้นบ้าง', withLead.length > 0, true);
+    ok('สุ่ม ' + n + ' ชุด · มีเกยตื้นแล้วต้องมีคู่หูครบทุกครั้ง',
+       withLead.every(r => r.includes('relief') && r.includes('anthemoessa')), true);
+  }
+
+  /* คู่หูอยู่เดี่ยว ๆ ได้ ไม่ต้องลากเกยตื้นมาด้วย */
+  const runs = Array.from({ length: 400 }, () => randomSets(6));
+  const soloMate = runs.some(r =>
+    (r.includes('relief') || r.includes('anthemoessa')) && !r.includes('aground'));
+  ok('ผลัดเวรกับ Anthemoessa อยู่เดี่ยว ๆ ได้', soloMate, true);
+}
+
+group('Action · บังคับให้คนอื่นเปิดการ์ด');
+{
+  /* หัวใจของใบนี้คือ **ผลของการ์ดต้องเป็นของคนที่กดเปิด ไม่ใช่คนที่สั่ง**
+     ถ้าพลาดตรงนี้ กลไกทั้งเกมเสียเลย เพราะการบังคับจะกลายเป็นการทำร้ายตัวเอง */
+  const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+  const deck = { ...out.secrets._deck,
+                 slots: ['blackspot', 'pistol', 'albatross', 'facade', 'relief'] };
+  const base = { ...out.state, phase: 'play', turn: 'a', pos: filled().pos,
+                 seats: [...P], names: filled().names, out: [] };
+  const ctx = { ...ctxOf(base), secrets: { ...out.secrets, _deck: deck }, hostUid: 'a' };
+
+  const step1 = await onAction(ctx, { uid: 'a', type: 'force' });
+  ok('สั่งแล้วเข้าขั้นถาม ไม่ผ่านตาทันที', step1.state.pending.needs, 'player');
+  ok('ยังเป็นตาของคนสั่ง', step1.state.turn, 'a');
+  ok('เลือกตัวเองไม่ได้',
+     await onAction({ ...ctx, state: step1.state }, { uid: 'a', type: 'useCard', payload: { target: 'a' } }), null);
+
+  const step2 = await onAction({ ...ctx, state: step1.state },
+                               { uid: 'a', type: 'useCard', payload: { target: 'b' } });
+  ok('ขั้นสองเลือกการ์ด', step2.state.pending.needs, 'slots');
+  ok('ต้องเลือกสองใบ', pickCountOf('force', 'slots'), 2);
+
+  const c2 = { ...ctx, state: step2.state };
+  ok('เลือกใบเดียวไม่ได้',
+     await onAction(c2, { uid: 'a', type: 'useCard', payload: { cards: [0] } }), null);
+  ok('เลือกช่องซ้ำไม่ได้',
+     await onAction(c2, { uid: 'a', type: 'useCard', payload: { cards: [0, 0] } }), null);
+
+  const set = await onAction(c2, { uid: 'a', type: 'useCard', payload: { cards: [0, 3] } });
+  ok('ตั้งสถานะบังคับไว้', [set.state.forced.who, set.state.forced.slots], ['b', [0, 3]]);
+  ok('ตายังไม่ผ่าน เพราะ Action ยังไม่จบ', set.state.turn, 'a');
+  ok('คนถูกบังคับทำได้อย่างเดียวคือเปิด', actionsFor(set.state, 'b'), ['activate']);
+  ok('คนสั่งทำอะไรต่อไม่ได้', actionsFor(set.state, 'a'), []);
+  ok('คนอื่นก็ทำอะไรไม่ได้', actionsFor(set.state, 'c'), []);
+
+  const c3 = { ...ctx, state: set.state };
+  ok('เปิดใบที่ไม่ได้ถูกชี้ไม่ได้',
+     await onAction(c3, { uid: 'b', type: 'activate', payload: { slot: 1 } }), null);
+
+  const flip = await onAction(c3, { uid: 'b', type: 'activate', payload: { slot: 0 } });
+  ok('ผลของจุดดำตกที่คนเปิด ไม่ใช่คนสั่ง', flip.state.pos.b.startsWith('island'), true);
+  ok('คนสั่งไม่โดนอะไร', flip.state.pos.a, base.pos.a);
+  ok('ปลดสถานะบังคับแล้ว', flip.state.forced ?? null, null);
+  ok('เปิดเสร็จแล้วผ่านตาไปจากคนสั่ง', flip.state.turn, 'b');
+}
+{
+  /* การ์ดที่ต้องเลือกเป้า — คนที่ถูกบังคับต้องเป็นคนเลือกเอง */
+  const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+  const deck = { ...out.secrets._deck,
+                 slots: ['pistol', 'albatross', 'facade', 'relief', 'contract'] };
+  const base = { ...out.state, phase: 'play', turn: 'a', pos: filled().pos,
+                 seats: [...P], names: filled().names, out: [] };
+  const ctx = { ...ctxOf(base), secrets: { ...out.secrets, _deck: deck }, hostUid: 'a' };
+
+  let s = (await onAction(ctx, { uid: 'a', type: 'force' })).state;
+  s = (await onAction({ ...ctx, state: s }, { uid: 'a', type: 'useCard', payload: { target: 'b' } })).state;
+  s = (await onAction({ ...ctx, state: s }, { uid: 'a', type: 'useCard', payload: { cards: [0, 1] } })).state;
+  s = (await onAction({ ...ctx, state: s }, { uid: 'b', type: 'activate', payload: { slot: 0 } })).state;
+
+  ok('คนที่ถูกบังคับกลายเป็นเจ้าของผลการ์ด', s.pending.by, 'b');
+  ok('เขาเลือกเป้าได้ ทั้งที่ไม่ใช่ตาของเขา', actionsFor(s, 'b'), ['useCard']);
+  ok('คนสั่งเลือกแทนไม่ได้', actionsFor(s, 'a'), []);
+  ok('เขายิงตัวเองไม่ได้',
+     await onAction({ ...ctx, state: s }, { uid: 'b', type: 'useCard', payload: { target: 'b' } }), null);
+
+  const shot = await onAction({ ...ctx, state: s }, { uid: 'b', type: 'useCard', payload: { target: 'a' } });
+  ok('เขายิงคนสั่งกลับได้', shot.state.pos.a.startsWith('island'), true);
+  ok('ประกาศบอกว่าคนยิงคือคนที่ถูกบังคับ', shot.state.shout.by, 'b');
 }

@@ -658,6 +658,10 @@ async function runTick() {
 }
 
 /* ── ข้อมูลที่ส่งให้เกม ───────────────────────────── */
+/* หน้าต่างกลางที่เกมสั่งปิดได้ — หน้าจอหลักมาลงทะเบียนไว้ */
+const onOverlays = [];
+export const onCloseOverlays = (fn) => onOverlays.push(fn);
+
 export function context() {
   return {
     me: { uid: me.uid, ...(room.mine || {}) },
@@ -670,7 +674,19 @@ export function context() {
     secret: room.secret,          // ของเราคนเดียว
     secrets: room.secrets,        // ครบทุกคน เฉพาะเจ้าของห้อง
     send,
-    leave: backToLobby
+    leave: backToLobby,
+
+    /* ปุ่มบนหน้าสรุปผลของเกม — ให้เกมเรียกได้โดยไม่ต้องรู้จักห้อง
+       เล่นอีกครั้ง = กลับหน้าห้องแล้วเริ่มใหม่ทันที คนเดิมครบทุกคน */
+    backToLobby,
+    leaveRoom,
+    /* ให้เกมสั่งปิดหน้าต่างกลางได้ เช่นสมุดการ์ด เวลามีฉากของตัวเองขึ้นมาแทรก */
+    closeOverlays: () => onOverlays.forEach(fn => fn()),
+    playAgain: async () => {
+      if (!room.isHost) return;
+      await backToLobby();
+      await start();
+    }
   };
 }
 
