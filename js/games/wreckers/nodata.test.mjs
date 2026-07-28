@@ -65,6 +65,15 @@ for (const card of ['blackspot', 'albatross', 'facade', 'eightbell', 'piratecode
         await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } }));
 }
 
+/* บ้าเรือ — สับไพ่ประเทศ แตะข้อมูลลับของสองคน */
+{
+  const ctx = table('cabinfever');
+  const up = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+  check('cabinfever · ตอนถามเป้า', up);
+  check('cabinfever · ตอนสับจริง',
+        await onAction({ ...ctx, state: up.state }, { uid: 'a', type: 'useCard', payload: { target: 'b' } }));
+}
+
 /* การ์ดที่ต้องเลือกเป้าเป็นคน */
 {
   const ctx = table('pistol');

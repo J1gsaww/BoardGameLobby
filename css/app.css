@@ -1867,3 +1867,60 @@ button{ cursor:pointer; border:0; background:none; }
 }
 .wr-row-sick .wr-row-ban-n{ color:#c98cff; }
 .wr-row-sick .wr-row-ban-mark{ color:#c98cff; font-size:11px; line-height:1; padding:0 2px; }
+
+/* ป่วยจนติดหนี้ข้ามตา — เรืองม่วงค้างไว้จนกว่าจะถูกข้ามจริง
+   ต่างจาก .swapped ที่เป็นไฟวาบสั้น ๆ อันนี้คือสถานะที่ยังมีผลอยู่
+   จึงเต้นช้ากว่าและอ่อนกว่า ไม่ให้กวนสายตาตลอดเวลา */
+.wr-slot.sick .wr-pawn{
+  box-shadow:0 0 0 3px #b06cff, 0 0 16px rgba(176,108,255,.7);
+  border-radius:50%;
+  animation:wr-sick-glow 2.6s ease-in-out infinite;
+}
+@keyframes wr-sick-glow{
+  0%,100%{ box-shadow:0 0 0 2px #9a5be0, 0 0 10px rgba(176,108,255,.45); }
+  50%    { box-shadow:0 0 0 4px #c98cff, 0 0 22px rgba(176,108,255,.85); }
+}
+/* โดนสลับที่พร้อมกับป่วยอยู่ ให้ไฟวาบของการสลับเด่นกว่า */
+.wr-slot.swapped .wr-pawn{ animation:wr-swap-glow .9s ease-in-out infinite; }
+
+/* ── ฉากสับไพ่ประเทศ (บ้าเรือ) ──────────────────────────────
+   ไพ่สองใบเลื่อนเข้ามาจากคนละทาง สลับที่กันเร็ว ๆ แล้วเลื่อนออกคนละทาง
+   ทั้งหมดเป็นการหลอกตา ผลจริงถูกตัดสินไปแล้วตั้งแต่ตอนกดยืนยัน */
+.wr-fever{ display:grid; justify-items:center; gap:18px; }
+.wr-fever-cards{
+  position:relative; display:flex; gap:18px; justify-content:center;
+  --lift:340px;
+}
+.wr-fever-card{
+  width:min(120px, 22vw); aspect-ratio:3/4; border-radius:10px;
+  box-shadow:0 10px 26px rgba(0,0,0,.75);
+  transition:transform .7s cubic-bezier(.25,.9,.3,1);
+}
+/* เริ่มจากนอกจอ ใบซ้ายมาจากบน ใบขวามาจากล่าง */
+.wr-fever-card.fv-l{ transform:translateY(calc(var(--lift) * -1)); }
+.wr-fever-card.fv-r{ transform:translateY(var(--lift)); }
+.wr-fever-cards.in .wr-fever-card{ transform:none; }
+
+/* สลับที่กันเร็ว ๆ — เลื่อนตามแกนนอนสวนทางกัน */
+.wr-fever-cards.mixing .fv-l{ animation:wr-fv-l .22s linear infinite; }
+.wr-fever-cards.mixing .fv-r{ animation:wr-fv-r .22s linear infinite; }
+@keyframes wr-fv-l{
+  0%,100%{ transform:translateX(0) scale(1); }
+  50%    { transform:translateX(138px) scale(.94); }
+}
+@keyframes wr-fv-r{
+  0%,100%{ transform:translateX(0) scale(1); }
+  50%    { transform:translateX(-138px) scale(.94); }
+}
+
+/* ออกสวนทางกับตอนเข้า — ซ้ายลงล่าง ขวาขึ้นบน */
+.wr-fever-cards.out .fv-l{ animation:none; transform:translateY(var(--lift)); }
+.wr-fever-cards.out .fv-r{ animation:none; transform:translateY(calc(var(--lift) * -1)); }
+
+.wr-fever-line{
+  margin:0; min-height:1.6em; text-align:center; opacity:0;
+  font-family:var(--display); font-size:20px; font-weight:700; color:#fdf6e6;
+  text-shadow:0 2px 6px rgba(0,0,0,.9);
+  transition:opacity .4s;
+}
+.wr-fever-line.show{ opacity:1; }

@@ -18,7 +18,11 @@ import { VOTE_ART, ICON_EXT } from './vote.js';
 import { takeSides, keepSides, SHIP_CARGO_CAP, occupants, placeOf } from './rules.js';
 import { askKey, pickCountOf } from './effects.js';
 import { voteCard, cardById as voteById } from './vote.js';
-import { BASE_CARDS, cardArt, eventArt, eventAlt } from './events.js';
+import { BASE_CARDS, cardArt, eventArt, eventAlt, CARD_ART, CARD_EXT, CARD_ALT } from './events.js';
+
+/* หลังไพ่ประเทศ ใช้ในฉากสับไพ่ของบ้าเรือ */
+const BRAWL_BACK = 'assets/game/wreckers/cards/brawl_back' + CARD_EXT;
+const BRAWL_BACK_ALT = 'assets/game/wreckers/cards/brawl_back' + CARD_ALT;
 import { EXTRA_CARDS } from './cards.js';
 import { lang } from '../../i18n.js';
 
@@ -293,6 +297,9 @@ function shoutNote(body, st) {
     closing = true;
     return false;
   }
+
+  /* บ้าเรือ — มีแอนิเมชันของตัวเองแล้วค่อยเฉลย ไม่ใช่ข้อความบรรทัดเดียว */
+  if (sh.kind === 'fever') return feverNote(body, st, sceneCtx || {});
 
   if (goto('collect')) {
     const nameOf2 = (u) => st.names?.[u] || '?';
@@ -593,6 +600,58 @@ function poolPanel(stage, st, ctx) {
   if (go) go.onclick = () => { if (!go.disabled) sendFn?.('useCard', { cards: [...poolPick] }); };
 }
 
+/* ── ฉากสับไพ่ประเทศ ────────────────────────────────────────
+   ไพ่สองใบเลื่อนเข้ามาจากคนละทาง สลับที่กันเร็ว ๆ แล้วเลื่อนออกคนละทาง
+   เป็นการหลอกตาล้วน ผลจริงถูกตัดสินไปแล้วตั้งแต่ตอนกดยืนยัน
+
+   คนที่เกี่ยวข้องเห็นประเทศของตัวเองตอนจบ · คนอื่นเห็นแค่ว่าสองคนนี้อาจเปลี่ยนข้างแล้ว */
+const FV = { in: 700, mix: 1500, rest: 400, out: 600, tell: 2600 };
+const FV_TOTAL = FV.in + FV.mix + FV.rest + FV.out;
+
+function feverNote(body, st, ctx) {
+  const sh = st.shout;
+  const me = ctx.me?.uid;
+  const mine = me === sh.by || me === sh.who;
+
+  if (goto('collect')) {
+    body.innerHTML = `<div class="wr-fever">
+        <div class="wr-fever-cards">
+          ${['l', 'r'].map(side => `<img class="wr-fever-card fv-${side}"
+            src="${esc(BRAWL_BACK)}" alt="" draggable="false"
+            data-alt="${esc(BRAWL_BACK_ALT)}"
+            onerror="if(this.dataset.alt){this.src=this.dataset.alt;this.dataset.alt='';}else{this.remove();}">`).join('')}
+        </div>
+        <p class="wr-fever-line"></p>
+      </div>`;
+  }
+
+  const ms = now() - stageAt;
+  const box = body.querySelector('.wr-fever-cards');
+  if (box) {
+    box.classList.toggle('in', ms > 40);
+    box.classList.toggle('mixing', ms > FV.in && ms < FV.in + FV.mix);
+    box.classList.toggle('out', ms > FV.in + FV.mix + FV.rest);
+  }
+
+  /* เฉลยหลังไพ่เลื่อนออกไปแล้ว */
+  const line = body.querySelector('.wr-fever-line');
+  if (line && ms > FV_TOTAL) {
+    const want = mine
+      ? `${t('wreck.scene.feverMine')} ${t('wreck.nation.' + (ctx.secret?.nation || 'D') + '.tag')}`
+      : t('wreck.scene.feverThem', {
+          a: st.names?.[sh.by] || '?', b: st.names?.[sh.who] || '?' });
+    if (line.textContent !== want) {
+      line.textContent = want;
+      line.className = 'wr-fever-line show' + (mine ? ' n-' + (ctx.secret?.nation || 'D') : '');
+    }
+  }
+
+  if (ms < FV_TOTAL + FV.tell) return true;
+  dismissed.add('shout:' + sh.at);
+  closing = true;
+  return false;
+}
+
 function titleOf(st, ph, me) {
   if (st.saveAsk && key.startsWith('save:')) {
     return { who: t('wreck.card.' + st.saveAsk.card), big: st.names?.[st.saveAsk.who] || '?' };
@@ -618,6 +677,7 @@ function titleOf(st, ph, me) {
       gaveMap: 'wreck.card.' + (st.shout.card || 'fountain'),
       /* ใบที่เพิ่มทีหลัง — ถ้าลืมใส่ตรงนี้ หัวข้อจะตกไปเป็นคำว่า EVENT ลอย ๆ */
       scurvy:  'wreck.card.scurvy',
+      fever:   'wreck.card.cabinfever',
       skip:    'wreck.card.scurvy',
       wreck:   'wreck.card.shipwreck',
       calm:    'wreck.card.doldrums',

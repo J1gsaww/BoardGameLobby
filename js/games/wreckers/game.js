@@ -168,9 +168,6 @@ export function passTurn(st, now = Date.now()) {
      ไม่งั้นจะเห็นแค่ตากระโดดข้ามหัวไปเฉย ๆ แล้วงงว่าเกิดอะไรขึ้น */
   const said = skipped.length
     ? pushLog({ ...state,
-                /* เรืองม่วงรอบตัวคนที่โดนข้าม ใช้ช่องทางเดียวกับตอนสลับที่
-                   ให้เห็นด้วยตาว่าใครหยุดอยู่ ไม่ใช่อ่านเอาจากข้อความอย่างเดียว */
-                glow: { uids: skipped, at: (state.logSeq || 0) + 1 },
                 shout: { kind: 'skip', who: skipped, at: (state.logSeq || 0) + 1 } },
               'wreck.log.skipped', { who: skipped.map(u => st.names?.[u] || '?').join(', ') })
     : state;
@@ -652,6 +649,20 @@ function useCard(ctx, uid, { target, cards }) {
     ? (mine.held || []).filter((c, i, a) => i !== a.indexOf(p.card))
     : (mine.held || []);
 
+  /* สับไพ่ประเทศของสองคนแล้วแจกคืน — แตะข้อมูลลับของทั้งคู่
+     ทำที่นี่เพราะผลการ์ดเห็นแต่สถานะสาธารณะ ไม่มีสิทธิ์อ่านไพ่ประเทศใคร */
+  const mix = out.mixNations || null;
+  let mixed = {};
+  if (mix) {
+    const [x, y] = mix;
+    const two = [ctx.secrets?.[x]?.nation, ctx.secrets?.[y]?.nation];
+    const drawn = Math.random() < 0.5 ? two : [two[1], two[0]];
+    mixed = {
+      [x]: { ...(ctx.secrets?.[x] || {}), nation: drawn[0] },
+      [y]: { ...(ctx.secrets?.[y] || {}), nation: drawn[1] }
+    };
+  }
+
   /* การ์ดที่ยกให้คนอื่น — เข้ามือของเขา ไม่ใช่ของคนเปิด */
   const gift = out.give || null;
   const theirs = gift ? (ctx.secrets?.[gift.to]?.held || []) : [];
@@ -679,7 +690,8 @@ function useCard(ctx, uid, { target, cards }) {
     ...(out.hands === hands ? {} : secretsFrom(ctx, out.hands)),
     [uid]: { ...mine, ...(out.hands === hands ? {} : { vote: out.hands[uid] }),
              held: bag, pool: null },
-    ...(gift ? { [gift.to]: { ...(ctx.secrets?.[gift.to] || {}), held: theirBag } } : {})
+    ...(gift ? { [gift.to]: { ...(ctx.secrets?.[gift.to] || {}), held: theirBag } } : {}),
+    ...mixed
   };
 
   return { state: passTurn(next), secrets };

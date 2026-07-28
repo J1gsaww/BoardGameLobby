@@ -35,7 +35,7 @@ console.log('  ชนิดที่โค้ดสร้างได้:', made
 /* สาขาในสายเงื่อนไขของข้อความ */
 const branches = new Set([...scene.matchAll(/sh\.kind === '([a-zA-Z]+)'/g)].map(m => m[1]));
 /* birds กับ bells มีฉากของตัวเองแยกต่างหาก ไม่ได้ใช้สายข้อความนี้ */
-const OWN_STAGE = ['birds', 'bells'];
+const OWN_STAGE = ['birds', 'bells', 'fever'];
 const noBranch = made.filter(k => !OWN_STAGE.includes(k) && !branches.has(k));
 ok('ทุกชนิดมีสาขาข้อความของตัวเอง', noBranch, []);
 

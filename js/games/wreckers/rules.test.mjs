@@ -1833,3 +1833,38 @@ group('การ์ด · ลักปิดลักเปิด');
   ok('รายงานว่า a ถูกข้าม', three.skipped, ['a']);
   ok('หนี้ของ a หมดแล้ว', three.state.skip?.a ?? 0, 0);
 }
+
+group('การ์ด · บ้าเรือ');
+{
+  const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+  const deck = { ...out.secrets._deck, slots: ['cabinfever', ...out.secrets._deck.slots.slice(1)] };
+  const base = { ...out.state, phase: 'play', turn: 'a', pos: filled().pos,
+                 seats: [...P], names: filled().names, out: [] };
+  const c0 = ctxOf(base);
+  const secrets = { ...c0.secrets, a: { ...c0.secrets.a, nation: 'B' },
+                    b: { ...c0.secrets.b, nation: 'F' }, _deck: deck };
+  const ctx = { ...c0, secrets, hostUid: 'a' };
+
+  const up = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+  ok('ขั้นแรกเลือกคน', up.state.pending.needs, 'player');
+  ok('เลือกตัวเองไม่ได้',
+     await onAction({ ...ctx, state: up.state }, { uid: 'a', type: 'useCard', payload: { target: 'a' } }), null);
+
+  /* สับหลายรอบ ต้องออกได้ทั้งสองแบบ — ถ้าสลับแน่นอนทุกครั้ง ข้อมูลจะรั่ว */
+  const seen = new Set();
+  for (let i = 0; i < 200; i++) {
+    const r = await onAction({ ...ctx, state: up.state },
+                             { uid: 'a', type: 'useCard', payload: { target: 'b' } });
+    seen.add(r.secrets.a.nation + r.secrets.b.nation);
+  }
+  ok('ออกได้ทั้งใบเดิมและใบสลับ', [...seen].sort(), ['BF', 'FB']);
+
+  const one = await onAction({ ...ctx, state: up.state },
+                             { uid: 'a', type: 'useCard', payload: { target: 'b' } });
+  ok('ไพ่ประเทศยังอยู่ครบสองใบ',
+     [one.secrets.a.nation, one.secrets.b.nation].sort(), ['B', 'F']);
+  ok('คนอื่นไม่ถูกแตะ', one.secrets.c ?? null, null);
+  ok('ประกาศบอกว่าใครกับใคร',
+     [one.state.shout.kind, one.state.shout.by, one.state.shout.who], ['fever', 'a', 'b']);
+  ok('ใช้เสร็จแล้วผ่านตา', one.state.turn, 'b');
+}
