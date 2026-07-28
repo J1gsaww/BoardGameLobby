@@ -2036,3 +2036,37 @@ group('Action · บังคับให้คนอื่นเปิดกา
   ok('เขายิงคนสั่งกลับได้', shot.state.pos.a.startsWith('island'), true);
   ok('ประกาศบอกว่าคนยิงคือคนที่ถูกบังคับ', shot.state.shout.by, 'b');
 }
+
+group('นกอัลบาทรอส · คนเดียวถือได้หลายตัว');
+{
+  /* คนเดียวถือสองตัวก็ล่มทั้งลำได้ ไม่ต้องรอสองคน
+     เป็นเคสที่ลืมง่าย เพราะชื่อกฎฟังเหมือน "สองคน" ทั้งที่จริงคือ "สองตัว" */
+  const base = board({ a: 'shipL:C', b: 'shipL:F', c: 'shipR:C', d: 'island:G' });
+
+  const one = addMark(base, 'a', 'bird');
+  ok('ถือตัวเดียวยังไม่ล่ม', birdStrike(one, {}, zero), null);
+  ok('นับได้หนึ่ง', marksIn(one, 'shipL', 'bird'), 1);
+
+  const two = addMark(one, 'a', 'bird');
+  ok('คนเดียวถือสองตัว นับได้สอง', markCount(two, 'a', 'bird'), 2);
+  ok('รวมทั้งลำก็ได้สอง', marksIn(two, 'shipL', 'bird'), 2);
+
+  const hit = birdStrike(two, {}, zero);
+  ok('ล่มทั้งลำแม้มีคนถือคนเดียว', hit?.place, 'shipL');
+  ok('คนที่ไม่ได้ถือนกก็โดนด้วย', hit.who, ['a', 'b']);
+
+  /* อยู่คนเดียวบนเรือแล้วถือสามตัว */
+  const alone = addMark(addMark(addMark(
+    board({ a: 'shipL:C', b: 'shipR:C', c: 'island:G' }), 'a', 'bird'), 'a', 'bird'), 'a', 'bird');
+  const solo = birdStrike(alone, {}, zero);
+  ok('อยู่คนเดียวถือสามตัวก็ล่ม', solo?.who, ['a']);
+
+  /* สองคนถือคนละตัวก็ยังล่มเหมือนเดิม */
+  const split = addMark(addMark(base, 'a', 'bird'), 'b', 'bird');
+  ok('คนละตัวสองคนก็ล่ม', birdStrike(split, {}, zero)?.place, 'shipL');
+
+  /* มังสวิรัสเก็บคืนต้องเก็บครบทุกตัว ไม่ใช่ลดทีละตัว */
+  const swept = clearMark(two, 'bird');
+  ok('เก็บคืนแล้วไม่เหลือสักตัว', markCount(swept, 'a', 'bird'), 0);
+  ok('เก็บคืนแล้วไม่ล่มอีก', birdStrike(swept, {}, zero), null);
+}

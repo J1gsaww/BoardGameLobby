@@ -2070,3 +2070,19 @@ button{ cursor:pointer; border:0; background:none; }
   0%,100%{ box-shadow:0 0 0 2px var(--rose), 0 0 16px rgba(242,100,126,.6); }
   50%    { box-shadow:0 0 0 4px var(--rose), 0 0 32px rgba(242,100,126,1); }
 }
+
+/* จำนวนนกที่ติดตัว — คนเดียวถือหลายตัวได้ และสองตัวบนลำเดียวก็ล่มแล้ว
+   จำนวนจึงเป็นข้อมูลที่ต้องเห็น ไม่ใช่แค่รู้ว่ามีนก */
+.wr-row-bird{ display:inline-flex; align-items:center; gap:2px; flex:0 0 auto; }
+.wr-row-bird-n{
+  font-family:var(--mono); font-size:10px; font-weight:700; line-height:1;
+  color:#b6ff6a; text-shadow:0 0 6px rgba(150,230,90,.9);
+}
+.wr-token-n{
+  position:absolute; left:calc(56% - 6px); bottom:-6px; z-index:13;
+  font-family:var(--mono); font-size:10px; font-weight:700; line-height:1;
+  padding:1px 3px; border-radius:999px;
+  color:#0d2200; background:#b6ff6a;
+  box-shadow:0 0 8px rgba(150,230,90,.9);
+  pointer-events:none;
+}

@@ -521,6 +521,20 @@ export function render(el, ctx) {
     /* ป้ายของติดตัว วางมุมล่างซ้ายของหมาก แยกจากการวาดรูปประจำตัว
        เพราะรูปวาดใหม่เฉพาะตอนคนในช่องเปลี่ยน ส่วนป้ายเปลี่ยนได้ตลอดเวลา */
     const birds = uid ? (view.marks?.[uid]?.bird || 0) : 0;
+
+    /* ป้ายบอกจำนวนบนหมาก — แยกจากตัวรูป เพราะรูปวาดครั้งเดียวแล้วอยู่ยาว
+       ส่วนจำนวนเปลี่ยนได้ทุกเมื่อที่เก็บนกเพิ่ม */
+    let tokN = b.querySelector('.wr-token-n');
+    if (birds > 1) {
+      if (!tokN) {
+        tokN = document.createElement('span');
+        tokN.className = 'wr-token-n';
+        b.appendChild(tokN);
+      }
+      const txt = '\u00d7' + birds;
+      if (tokN.textContent !== txt) tokN.textContent = txt;
+    } else if (tokN) tokN.remove();
+
     let tok = b.querySelector('.wr-token');
     if (birds && !tok) {
       tok = document.createElement('img');
@@ -528,7 +542,7 @@ export function render(el, ctx) {
       tok.draggable = false;
       tok.src = tokenArt('albatross_icon');
       tok.dataset.alt = tokenAlt('albatross_icon');
-      tok.title = t('wreck.token.bird');
+      tok.title = t('wreck.token.bird', { n: birds });
       tok.onerror = () => {
         if (tok.dataset.alt) { tok.src = tok.dataset.alt; tok.dataset.alt = ''; }
         else tok.remove();
@@ -1465,11 +1479,16 @@ function paintRoster(el, st, ctx) {
        จึงรวมไว้ในกล่องเดียวแล้วต่อกันไป ไม่ใช่ช่องเดียวที่ทับกันเอง */
     const tags = [];
 
-    if (st.marks?.[uid]?.bird) {
-      tags.push(`<img class="wr-row-token" src="${esc(tokenArt('albatross_icon'))}" alt=""
-        draggable="false" title="${esc(t('wreck.token.bird'))}"
-        data-alt="${esc(tokenAlt('albatross_icon'))}"
-        onerror="if(this.dataset.alt){this.src=this.dataset.alt;this.dataset.alt='';}else{this.remove();}">`);
+    /* นกสะสมได้หลายตัวต่อคน — คนเดียวถือสองตัวก็ล่มทั้งลำได้
+       จึงต้องบอกจำนวนให้เห็น ไม่ใช่แค่บอกว่ามีนก */
+    const birdN = st.marks?.[uid]?.bird || 0;
+    if (birdN) {
+      tags.push(`<span class="wr-row-bird" title="${esc(t('wreck.token.bird', { n: birdN }))}">
+        <img class="wr-row-token" src="${esc(tokenArt('albatross_icon'))}" alt=""
+          draggable="false" data-alt="${esc(tokenAlt('albatross_icon'))}"
+          onerror="if(this.dataset.alt){this.src=this.dataset.alt;this.dataset.alt='';}else{this.remove();}">
+        ${birdN > 1 ? `<span class="wr-row-bird-n">\u00d7${birdN}</span>` : ''}
+      </span>`);
     }
 
     /* ป่วยจนข้ามตา — ป้ายสีม่วง อ่านจากจำนวนรอบที่เหลือโดยตรง
