@@ -110,6 +110,9 @@ function sceneKey(st) {
   if (st.shout && !dismissed.has('shout:' + st.shout.at)) return `shout:${st.shout.at}`;
   /* ช่วงรอให้คนเปิดเลือกเป้า — ค้างไว้จนกว่าจะเลือกเสร็จ ไม่มีนับถอยหลัง
      ทุกคนต้องรู้ว่ากำลังอยู่ในช่วงนี้ ไม่ใช่แค่คนที่ต้องเลือก */
+  /* มีขั้นถามค้างอยู่แต่ไม่มีการ์ดเปิดอยู่ = เป็น Action ไม่ใช่การ์ด (เช่นการบังคับให้เปิด)
+     ต้องแยกฉาก ไม่งั้นฉากเปิดการ์ดจะไปอ่านข้อมูลการ์ดที่ไม่มีอยู่แล้วพัง */
+  if (st.pending && !st.cardUp) return `ask:${st.pending.at}`;
   if (st.pending) return `card:${st.pending.at}`;
   /* มีคนถูกบังคับให้เปิดแล้วยังไม่เปิด — ค้างบอกทั้งวงไว้ว่ารออะไรอยู่ */
   if (st.forced) return `forced:${st.forced.at}`;
@@ -186,7 +189,8 @@ export function paintScene(el, st, ctx) {
   /* ช่วงเลือกเป้าไม่ต้องมีพื้นมืด เพราะต้องมองกระดานแล้วคลิก
      ความมืดจะถูกถอดออกตอนการ์ดย่อไปมุม ดูที่คลาส parked ของตัวเนื้อหา */
   /* ช่วงรอคนถูกบังคับ ไม่ต้องมืด เพราะเขาต้องมองเห็นการ์ดเพื่อกด */
-  if (key.startsWith('forced:')) box.classList.add('bare');
+  /* ช่วงเลือกของ Action พวกนี้ จอต้องไม่มืด เพราะต้องมองเห็นกระดานกับการ์ดเพื่อกด */
+  if (key.startsWith('forced:') || key.startsWith('ask:')) box.classList.add('bare');
   box.classList.toggle('bare', !!st.pending && key.startsWith('card:')
     && !!box.querySelector('.wr-scene-body.parked'));
   title.classList.toggle('up', ms > T.intro);
@@ -214,6 +218,7 @@ function step(body, st, ctx) {
   if (key.startsWith('peek:')) return peekNote(body, st);
   if (key.startsWith('shout:')) return shoutNote(body, st);
   if (key.startsWith('card:')) return cardNote(body, st, ctx);
+  if (key.startsWith('ask:')) return askNote(body, st, ctx);
   if (key.startsWith('forced:')) return forcedNote(body, st, ctx);
   if (key.startsWith('save:')) return saveNote(body, st, ctx);
   if (st.vote) { goto('collect'); return collect(body, st); }
@@ -744,7 +749,32 @@ function choicePanel(stage, st, ctx) {
   });
 }
 
+/* ── ขั้นถามที่ไม่มีการ์ดประกอบ ────────────────────────────
+   ใช้กับ Action ที่ต้องเลือกหลายขั้นอย่างการบังคับให้คนอื่นเปิด
+   ไม่มีรูปการ์ดให้โชว์ จึงเหลือแค่บรรทัดสั่งกับแผงเลือก (ถ้ามี)
+   จอไม่มืด เพราะคนเลือกต้องมองเห็นกระดานกับการ์ดเพื่อกด */
+function askNote(body, st, ctx) {
+  const mine = st.pending.by === ctx.me.uid;
+  const step = st.pending.needs;
+  const stage = body.parentElement.querySelector('.wr-scene-stage');
+
+  if (stage) { stage.hidden = true; stage.dataset.pool = ''; }
+
+  const want = 'ask:' + (mine ? 'me' : 'them') + ':' + step;
+  if (aimView === want) return false;
+  aimView = want;
+
+  body.innerHTML = `<p class="wr-scene-note">${esc(mine
+    ? t(askKey(st.pending.card, step))
+    : t('wreck.scene.forcing', { name: st.names?.[st.pending.by] || '?',
+                                 who: st.names?.[st.pending.picks?.player] || '?' }))}</p>`;
+  return false;
+}
+
 function titleOf(st, ph, me) {
+  if (st.pending && key.startsWith('ask:')) {
+    return { who: t('wreck.act.force'), big: st.names?.[st.pending.by] || '?' };
+  }
   if (st.forced && key.startsWith('forced:')) {
     return { who: t('wreck.act.force'), big: st.names?.[st.forced.who] || '?' };
   }

@@ -766,6 +766,8 @@ function paintHand(el, st, ctx) {
 
   const box = el.querySelector('.wr-hand-cards');
   box.classList.toggle('asking', asking);
+  /* โหมดทิ้งไพ่ก็เรืองกรอบเหมือนตอนโหวต เพราะเป็นจังหวะ "ถึงตาเราต้องเลือก" เหมือนกัน */
+  box.classList.toggle('tossing', !!tossing);
   /* เรืองแสงทั้งกล่อง ไม่ใช่แค่ไพ่ — ตอนโหวตสายตาทุกคนอยู่กลางจอ
      ถ้าไม่ดึงสายตากลับมาที่มือ จะไม่มีใครรู้ว่าต้องส่งไพ่ */
   el.querySelector('.wr-hand')?.classList.toggle('asking', asking);
@@ -872,6 +874,8 @@ function paintEvents(el, st, ctx) {
     /* กำลังเลือกการ์ดสองใบให้คนอื่นเปิด — ช่องที่เลือกได้เรืองส้ม ที่เลือกแล้วเรืองแรง */
     const picking = st.pending?.by === me && st.pending?.needs === 'slots';
     slot.classList.toggle('fx-pick', !!(picking && filled));
+    /* ทั้งแถวเรืองด้วย จะได้เห็นทันทีว่าตอนนี้ต้องมาเลือกตรงนี้ */
+    slot.parentElement?.classList.toggle('picking', !!picking);
     slot.classList.toggle('fx-on', !!(picking && forcePick.includes(i)));
 
     /* ถูกบังคับให้เปิด — เรืองเฉพาะสองใบที่เขาชี้ไว้ ที่เหลือกดไม่ได้ */
@@ -1072,12 +1076,21 @@ function openMenu(el, node, data) {
   const stage = el.querySelector('.wr-stage');
   const r = node.getBoundingClientRect();
   const s = stage.getBoundingClientRect();
-  menu = {
-    ...data,
-    right: r.right - s.left + 10,          // จุดวางเมื่อออกทางขวา
-    left: r.left - s.left - 10,            // จุดวางเมื่อต้องพลิกไปทางซ้าย
-    y: r.top - s.top + r.height / 2
-  };
+
+  /* สิ่งที่คลิกอยู่นอกกระดานหรือเปล่า เช่นชื่อในรายชื่อฝั่งขวา
+     กระดานตั้ง overflow:hidden ไว้ ถ้าวางเมนูอิงกับของนอกกระดาน
+     เมนูจะไปโผล่นอกกรอบแล้วถูกตัดจนมองไม่เห็น ทั้งที่โค้ดทำงานถูกทุกอย่าง */
+  const outside = r.right < s.left || r.left > s.right
+               || r.bottom < s.top || r.top > s.bottom;
+
+  menu = outside
+    ? { ...data, mid: true }               // วางกลางกระดานแทน เห็นแน่นอน
+    : {
+        ...data,
+        right: r.right - s.left + 10,      // จุดวางเมื่อออกทางขวา
+        left: r.left - s.left - 10,        // จุดวางเมื่อต้องพลิกไปทางซ้าย
+        y: r.top - s.top + r.height / 2
+      };
   paint(el);
 }
 
@@ -1103,9 +1116,12 @@ function paintMenu(el, st, ctx) {
   // ออกทางขวาของหมากก่อน ถ้าชนขอบเวทีค่อยพลิกไปทางซ้าย
   const stage = el.querySelector('.wr-stage');
   const w = box.offsetWidth, h = box.offsetHeight;
-  const fitsRight = menu.right + w <= stage.clientWidth - 6;
-  const x = fitsRight ? menu.right : Math.max(6, menu.left - w);
-  const y = Math.max(6, Math.min(menu.y - h / 2, stage.clientHeight - h - 6));
+  /* สิ่งที่คลิกอยู่นอกกระดาน = วางกลางกระดานแทน ไม่ต้องคำนวณทิศทาง */
+  const fitsRight = !menu.mid && menu.right + w <= stage.clientWidth - 6;
+  const x = menu.mid ? Math.max(6, (stage.clientWidth - w) / 2)
+          : fitsRight ? menu.right : Math.max(6, menu.left - w);
+  const y = menu.mid ? Math.max(6, (stage.clientHeight - h) / 2)
+          : Math.max(6, Math.min(menu.y - h / 2, stage.clientHeight - h - 6));
   box.style.left = x + 'px';
   box.style.top = y + 'px';
 

@@ -1055,6 +1055,8 @@ button{ cursor:pointer; border:0; background:none; }
 .wr-pick{ padding:0; background:none; border:0; display:block; width:100%; cursor:pointer; }
 .wr-pick:hover{ transform:translateY(-4px); }
 .wr-hand-cards.asking{ outline:1px dashed var(--lamp); outline-offset:6px; border-radius:10px; }
+/* โหมดทิ้งไพ่ก็ต้องเรืองเหมือนตอนโหวต เพราะเป็นการ "ถึงตาเราต้องเลือก" เหมือนกัน */
+.wr-hand-cards.tossing{ outline:1px dashed var(--lamp); outline-offset:6px; border-radius:10px; }
 
 .wr-log{
   list-style:none; margin:10px 0 0; padding:9px 12px;
@@ -2144,3 +2146,9 @@ button{ cursor:pointer; border:0; background:none; }
   grid-column:1 / -1; display:flex; align-items:center; gap:10px; margin-top:6px;
 }
 .wr-toss-left{ flex:1; font-family:var(--mono); font-size:10.5px; color:var(--muted); }
+
+/* แถวการ์ดเหตุการณ์ตอนกำลังเลือกให้คนอื่นเปิด — เรืองทั้งแถว
+   ใช้เส้นประสีไฟชุดเดียวกับตอนถึงตาเราต้องเลือกไพ่โหวต */
+.wr-event-row.picking{
+  outline:1px dashed var(--lamp); outline-offset:8px; border-radius:12px;
+}
