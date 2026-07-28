@@ -974,7 +974,7 @@ group('สำรับการ์ด · การเรียงกอง');
   /* ใส่การ์ดพิเศษเข้าไปด้วย ใบจบเกมก็ยังต้องอยู่ท้ายกอง */
   const cat = [...BASE_CARDS, ...EXTRA_CARDS];
   const order = buildEventDeck(cat, ENDER, 5, fakeRng([0.11, 0.83, 0.47, 0.2, 0.95]));
-  ok('สำรับเต็มได้ 49 ใบ', order.length, 49);
+  ok('สำรับเต็มได้ 48 ใบ', order.length, 48);
   ok('ใบจบเกมยังอยู่ห้าใบล่างสุด', order.slice(-5).includes(ENDER), true);
 }
 {
@@ -1022,8 +1022,8 @@ group('สำรับการ์ด');
   ok('ใบจบเกมมีอยู่จริงในสำรับ', !!baseById(ENDER), true);
   ok('id ของชุดมาตรฐานไม่ชนกับชุดพิเศษ',
      BASE_CARDS.filter(c => EXTRA_CARDS.some(x => x.id === c.id)), []);
-  ok('รวมทั้งสองชุดได้ 49 ใบ',
-     BASE_TOTAL + EXTRA_CARDS.reduce((n, c) => n + c.count, 0), 49);
+  ok('รวมทั้งสองชุดได้ 48 ใบ',
+     BASE_TOTAL + EXTRA_CARDS.reduce((n, c) => n + c.count, 0), 48);
 }
 
 group('บันทึกเหตุการณ์');

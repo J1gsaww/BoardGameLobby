@@ -295,7 +295,18 @@ function shoutNote(body, st) {
   }
 
   if (goto('collect')) {
-    const msg = sh.kind === 'powder'
+    const nameOf2 = (u) => st.names?.[u] || '?';
+    const msg = sh.kind === 'wreck'
+      ? t('wreck.scene.wreck', { place: t('wreck.place.' + sh.place) })
+      : sh.kind === 'calm' ? t('wreck.scene.calm')
+      : sh.kind === 'aground' ? t('wreck.scene.aground', { n: sh.n })
+      : sh.kind === 'agroundIsle' ? t('wreck.scene.agroundIsle')
+      : sh.kind === 'vegan' ? t('wreck.scene.vegan')
+      : sh.kind === 'flag'
+        ? t('wreck.scene.flag', { name: nameOf2(sh.by), place: t('wreck.place.' + sh.place) })
+      : sh.kind === 'siren'
+        ? t('wreck.scene.siren', { name: nameOf2(sh.by), who: nameOf2(sh.who) })
+      : sh.kind === 'powder'
       ? t(sh.who ? 'wreck.scene.powderRider' : 'wreck.scene.powder', {
           name: st.names?.[sh.by] || '?',
           place: t('wreck.place.' + sh.place),

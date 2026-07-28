@@ -172,8 +172,12 @@ export function passTurn(st, now = Date.now()) {
               'wreck.log.skipped', { who: skipped.map(u => st.names?.[u] || '?').join(', ') })
     : state;
 
+  /* ตาวนกลับมาถึงคนที่เปิดลมสงบแล้ว = ครบหนึ่งรอบ ลมกลับมาพัด */
+  const calmDone = said.calm && uid === said.calm.until;
+
   return openTurn({
     ...said,
+    ...(calmDone ? { calm: null } : {}),
     turn: uid,
     deadline: turnDeadline(said, now),
     graced: false,
@@ -783,7 +787,9 @@ function shiftCargo(ctx, uid, from) {
 function callVote(ctx, uid, kind) {
   const st = ctx.state;
   const place = placeOf(st.pos[uid]);
-  const opened = startVote(st, { kind, place, caller: uid });
+  /* ใช้สิทธิ์จากธงดำแล้วธงหมดผลทันที ใช้ได้ครั้งเดียว */
+  const st2 = st.flag?.by === uid ? { ...st, flag: null } : st;
+  const opened = startVote(st2, { kind, place, caller: uid });
 
   /* ไม่มีใครส่งไพ่ได้เลยสักคน (ทุกคนเพดานเหลือศูนย์หรือโดนห้ามโหวต)
      ต้องเปิดหม้อทันที ไม่งั้นเกมจะค้างรอคนที่ไม่มีวันส่ง

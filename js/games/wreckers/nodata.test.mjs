@@ -58,7 +58,8 @@ function check(label, res) {
 console.log('\nไม่มีค่า undefined หลุดไปถึง Firestore');
 
 /* การ์ดที่ผลเกิดทันทีตอนเปิด */
-for (const card of ['blackspot', 'albatross', 'facade', 'eightbell', 'piratecode', 'scurvy']) {
+for (const card of ['blackspot', 'albatross', 'facade', 'eightbell', 'piratecode', 'scurvy',
+                     'relief', 'shipwreck', 'doldrums', 'aground', 'vegan', 'blackflag']) {
   const ctx = table(card);
   check(card + ' · เปิดแล้วจบในตัว',
         await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } }));

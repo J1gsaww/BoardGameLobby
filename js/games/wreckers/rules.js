@@ -179,6 +179,15 @@ export function actionsFor(st, uid) {
   out.push('activate', 'peek', 'force');
   if (boatsOpen(st, spot).length) out.push('toBoat');
 
+  /* ถือธงดำอยู่ = สั่งโหวตได้โดยไม่ต้องมีตำแหน่ง ตามชนิดที่ธงให้มา */
+  if (st.flag?.by === uid && canCallVote(st, place) && !isCalm(st)) out.push(st.flag.kind);
+
+  /* ลมสงบ — ห้ามสั่งโหวตทุกชนิด ไม่ว่าอยู่ที่ไหนหรือมีตำแหน่งอะไร */
+  if (isCalm(st)) {
+    if ((st.held?.[uid] || 0) > 0) out.push('playHeld');
+    return out;
+  }
+
   if (role === 'captain') {
     if (canAttack(st, place)) out.push('attack');
     if (occupants(st.pos, place).length > 1) out.push('kick');
@@ -227,6 +236,10 @@ export function canShift(st, uid) {
 }
 
 /* ลมสงบสั่งห้ามโหวตทั้งกระดานตลอดรอบ · และห้ามซ้อนโหวตสองอันพร้อมกัน */
+/* ลมสงบยังมีผลอยู่ไหม — ห้ามสั่งโหวตทุกชนิดจนกว่าตาจะวนกลับถึงคนเปิด
+   เก็บเป็นชื่อคนแทนจำนวนรอบ เพราะจำนวนคนที่ยังเล่นอยู่เปลี่ยนได้ระหว่างรอบ */
+export const isCalm = (st) => !!st.calm;
+
 export const canCallVote = (st, place) =>
   !st.vote && !st.noVotes && occupants(st.pos, place).length >= 1;
 

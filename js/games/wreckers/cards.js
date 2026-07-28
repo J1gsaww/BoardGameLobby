@@ -29,8 +29,8 @@ export const EXTRA_CARDS = [
   },
   {
     id: 'whisper', rarity: 'common', count: 2,
-    th: { name: 'The Whisper', desc: 'เก็บไว้กับตัวได้ · เมื่อมีคนสั่งโหวตในสถานที่เดียวกับคุณ ลงใบนี้เพื่อเติมไพ่จากกองกลางเข้าหม้ออีก 1 ใบก่อนเปิดผล' },
-    en: { name: 'The Whisper', desc: 'May be kept in hand. When a vote is called where you are, play it to add one extra card from the central pile to the pot before revealing.' }
+    th: { name: 'The Whisper', desc: 'ติดอยู่กับตัวคุณ · การโหวตครั้งถัดไปที่คุณมีสิทธิ์ร่วม จะมีไพ่จากกองกลางเข้าหม้อเพิ่มอีก 1 ใบ ทำงานเอง เลือกใช้ไม่ได้ · ติดซ้อนกันหลายใบได้ นับเพิ่มใบละ 1' },
+    en: { name: 'The Whisper', desc: 'Stays with you. The next vote you may join draws one extra card from the central pile into the pot. It works on its own \u2014 you cannot choose when. Copies stack, one extra card each.' }
   },
   {
     id: 'jettison', rarity: 'common', count: 2,
@@ -43,7 +43,8 @@ export const EXTRA_CARDS = [
     en: { name: 'A New Contract', desc: 'Discard any number of vote cards from your hand, then draw that many back.' }
   },
   {
-    id: 'relief', rarity: 'common', count: 3,
+    /* [2026-07-27] ลดจาก 3 เหลือ 2 ใบตามที่ผู้ใช้เคาะ */
+    id: 'relief', rarity: 'common', count: 2,
     th: { name: 'ผลัดเวร', desc: 'สลับตำแหน่งกับผู้เล่นที่อยู่ข้างหลังคุณโดยตรง ใช้ถอยลงจากตำแหน่งที่กำลังตกเป็นเป้าได้' },
     en: { name: 'Relief Watch', desc: 'Swap places with the player directly behind you \u2014 a way to step down from a position under threat.' }
   },
@@ -56,13 +57,13 @@ export const EXTRA_CARDS = [
   },
   {
     id: 'wreckers', rarity: 'rare', count: 1,
-    th: { name: 'พวกล่อเรือ', desc: 'เลือกกล่อง 1 ใบจากเรือสินค้า ย้ายไปเรือใหญ่ลำไหนก็ได้ เลือกฝั่งประเทศเองได้' },
-    en: { name: 'The Wreckers', desc: 'Take one box from the merchant ship and place it on either big ship, choosing the nation side.' }
+    th: { name: 'พวกล่อเรือ', desc: 'สั่งเรือใหญ่ทั้งสองลำยิงแข่งกัน · ลำที่ยิงสำเร็จฝ่ายเดียวชิงกล่องจากอีกลำ 2 ใบ · เสมอกัน (สำเร็จทั้งคู่หรือพลาดทั้งคู่) กล่องของทั้งสองลำกลับไปเรือสินค้า โดยลูกเรือคนท้ายสุดของแต่ละลำเลือกเองว่าจะคืนฝั่งประเทศไหน · ลำที่ว่างเปล่าถือว่าอีกลำยิงฟรี · ว่างทั้งสองลำ ให้สองคนท้ายสุดของเกาะเลือกแทน คนท้ายสุดเลือกลำขวา คนรองสุดท้ายเลือกลำซ้าย' },
+    en: { name: 'The Wreckers', desc: 'Both big ships open fire at once. A ship that lands its shot alone takes two boxes from the other. If they tie \u2014 both hit or both miss \u2014 every box on both ships returns to the merchant, and the last crew member aboard each ship chooses which nation side to give up. An empty ship means the other fires unopposed. If both are empty, the last two ashore choose instead: last picks the right ship, second to last picks the left.' }
   },
   {
     id: 'vegan', rarity: 'rare', count: 1,
-    th: { name: 'มังสวิรัส', desc: 'เก็บ Albatross ที่ติดตัวผู้เล่นอยู่ทุกใบกลับเข้ากอง แล้วสับใหม่ โดยไม่รวมการ์ด 5 ใบล่างสุด' },
-    en: { name: 'Vegetarian', desc: 'Return every Albatross currently attached to a player back into the deck and shuffle \u2014 excluding the bottom five cards.' }
+    th: { name: 'มังสวิรัส', desc: 'ทุกคนโดน Maroon ก่อน แล้วจึงเก็บ Albatross ที่ติดตัวอยู่ทุกใบกลับเข้ากองแล้วสับใหม่ ไม่รวมการ์ด 5 ใบล่างสุด · ถ้าไม่มีใครอยู่บนเกาะเลย ให้เรือทั้งสองลำยิงแข่งกันก่อน ลำที่ชนะได้ลงเกาะก่อน เสมอกันให้สุ่มลำดับทั้งหมด' },
+    en: { name: 'Vegetarian', desc: 'Everyone is marooned first, then every Albatross attached to a player returns to the deck and it is shuffled \u2014 excluding the bottom five cards. If nobody is ashore, the two ships fire against each other first: the winning ship goes ashore first, and on a tie the whole order is random.' }
   },
   {
     id: 'shipwreck', rarity: 'rare', count: 1,

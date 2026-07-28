@@ -13,7 +13,7 @@
 
 import { maroon, occupants, placeOf, addMark, joinPlace, capacityOf, SHIP_IDS,
          insertBehind, nextSeat, swapSpots, shuffleQueue, pileOf,
-         BOAT_IDS, isWrecked, addVoteBan, addSkip } from './rules.js';
+         BOAT_IDS, isWrecked, addVoteBan, addSkip, moveBox, addVoter } from './rules.js';
 
 /* การ์ดหนึ่งใบประกาศได้สี่อย่าง ใส่เท่าที่ต้องใช้
 
@@ -58,6 +58,137 @@ export const EFFECTS = {
         shout: { kind: 'scurvy', by: uid, who: here, card: 'scurvy' }
       };
     }
+  },
+
+  /* ผลัดเวร — สลับที่กับคนที่ยืนอยู่ข้างหลังเราโดยตรงในที่เดียวกัน
+     ใช้ถอยลงจากตำแหน่งที่กำลังตกเป็นเป้า ถ้าไม่มีใครอยู่ข้างหลังก็ไม่เกิดอะไร */
+  relief: {
+    run: (st, uid, _picks, hands) => {
+      const line = occupants(st.pos, placeOf(st.pos[uid]));
+      const behind = line[line.indexOf(uid) + 1];
+      const pos = behind ? swapSpots(st.pos, uid, behind) : null;
+      if (!pos) return { state: st, hands };
+      return {
+        state: { ...st, pos, glow: { uids: [uid, behind], at: (st.logSeq || 0) + 1 } },
+        hands
+      };
+    }
+  },
+
+  /* เรือล่ม — บนเรือ ทุกคนบนลำนั้นตกลงเกาะ
+     บนเกาะ ทุกคนที่นั่นเสียไพ่โหวตถาวรคนละใบแทน เพราะตกลงเกาะซ้ำไม่ได้ */
+  shipwreck: {
+    run: (st, uid, _picks, hands) => {
+      const place = placeOf(st.pos[uid]);
+      const here = occupants(st.pos, place);
+      let cur = st, h = hands;
+
+      for (const u of here) {
+        const out = maroon(cur, u, h, Math.random, place === 'island');
+        cur = out.state; h = out.hands;
+        if (out.kind === 'ask') break;   /* มีการ์ดกัน — รอเขาตอบก่อน */
+      }
+      return {
+        state: cur, hands: h,
+        shout: { kind: 'wreck', by: uid, place, who: here, card: 'shipwreck' }
+      };
+    }
+  },
+
+  /* ลมสงบ — ตลอดรอบนี้ห้ามใครสั่งโหวตชนิดใดก็ตาม ไม่ว่าอยู่ที่ไหน
+     นับเป็นหนึ่งรอบเต็ม คือจนกว่าตาจะวนกลับมาถึงคนเปิดอีกครั้ง */
+  doldrums: {
+    run: (st, uid, _picks, hands) => ({
+      state: { ...st, calm: { until: uid, at: (st.logSeq || 0) + 1 } },
+      hands,
+      shout: { kind: 'calm', by: uid, card: 'doldrums' }
+    })
+  },
+
+  /* เกยตื้น — แบ่งกล่องบนเรือสินค้าลงเรือใหญ่สองลำเท่า ๆ กัน เศษคงไว้ที่เดิม
+     ถ้าเรือสินค้าว่างอยู่แล้ว ย้ายจากเรือใหญ่ไปเกาะประเทศละหนึ่งกล่องแทน */
+  aground: {
+    run: (st, uid, _picks, hands) => {
+      const c = st.cargo;
+      const boxes = c.merchant || 0;
+
+      if (boxes > 0) {
+        const each = Math.floor(boxes / 2);
+        if (!each) return { state: st, hands };
+        const cargo = {
+          ...c,
+          merchant: boxes - each * 2,
+          shipL: { ...c.shipL, B: c.shipL.B + each },
+          shipR: { ...c.shipR, B: c.shipR.B + each }
+        };
+        return { state: { ...st, cargo }, hands,
+                 shout: { kind: 'aground', by: uid, n: each, card: 'aground' } };
+      }
+
+      /* เรือสินค้าว่าง — ดึงจากเรือใหญ่ไปเกาะ ประเทศละหนึ่งกล่อง */
+      let cargo = c;
+      for (const side of ['B', 'F']) {
+        const from = SHIP_IDS.find(s => (cargo[s]?.[side] || 0) > 0);
+        if (!from) continue;
+        const next = moveBox(cargo, from, side, 'island', side);
+        if (next) cargo = next;
+      }
+      return { state: { ...st, cargo }, hands,
+               shout: { kind: 'agroundIsle', by: uid, card: 'aground' } };
+    }
+  },
+
+  /* มังสวิรัส — เก็บนกทุกตัวที่ติดตัวผู้เล่นอยู่ออกให้หมด
+     ตัวการ์ดบอกให้เอาใบอัลบาทรอสกลับเข้ากองแล้วสับใหม่ด้วย ซึ่งทำที่ชั้นสำรับ
+     ตรงนี้จึงรับผิดชอบแค่ส่วนที่อยู่บนกระดาน คือนกที่เกาะตัวคนอยู่ */
+  vegan: {
+    run: (st, uid, _picks, hands) => {
+      const marks = { ...(st.marks || {}) };
+      const freed = [];
+      for (const [u, m] of Object.entries(marks)) {
+        if (!m?.bird) continue;
+        freed.push(u);
+        const rest = { ...m };
+        delete rest.bird;
+        marks[u] = rest;
+      }
+      if (!freed.length) return { state: st, hands };
+      return {
+        state: { ...st, marks },
+        hands,
+        shout: { kind: 'vegan', by: uid, who: freed, card: 'vegan' }
+      };
+    }
+  },
+
+  /* ธงดำ — สั่งโหวตได้ทันทีโดยไม่ต้องมีตำแหน่ง
+     บนเรือได้โหวตโจมตี บนเกาะได้โหวตแบ่งกล่อง
+     ให้สิทธิ์ไว้แล้วเปิดโหวตเลยในจังหวะเดียว ไม่ต้องให้กดซ้ำอีกรอบ */
+  blackflag: {
+    run: (st, uid, _picks, hands) => {
+      const place = placeOf(st.pos[uid]);
+      const kind = place === 'island' ? 'islandVote' : 'attack';
+      return {
+        state: { ...st, flag: { by: uid, kind, place, at: (st.logSeq || 0) + 1 } },
+        hands,
+        shout: { kind: 'flag', by: uid, place, card: 'blackflag' }
+      };
+    }
+  },
+
+  /* Anthemoessa — ดึงใครก็ได้จากทั้งกระดานเข้ามาร่วมโหวตรอบนี้
+     ใช้ได้เฉพาะตอนมีโหวตเปิดอยู่ และคนนั้นต้องยังไม่ได้อยู่ในวง */
+  anthemoessa: {
+    steps: ['player'],
+    ask: { player: 'siren.player' },
+    targets: (st, uid, step) => step === 'player'
+      ? (st.seats || []).filter(u => st.pos?.[u] && !(st.vote?.voters || []).includes(u))
+      : [],
+    run: (st, uid, picks, hands) => ({
+      state: addVoter(st, picks.player),
+      hands,
+      shout: { kind: 'siren', by: uid, who: picks.player, card: 'anthemoessa' }
+    })
   },
 
   /* ประมวลโจรสลัด — คนเปิดโดนห้ามโหวตสองครั้ง
