@@ -321,7 +321,9 @@ function shoutNote(body, st) {
     const nameOf2 = (u) => st.names?.[u] || '?';
     /* สายนี้เคยหลุดหายไปตอนแก้ข้อความ ทำให้ไหลไปจบที่ข้อความไล่คนลงเรือ
        ซึ่งเป็นอันสุดท้ายของสาย เลยขึ้นผิดเรื่องทั้งหัวข้อและเนื้อความ */
-    const msg = sh.kind === 'toss'
+    const msg = sh.kind === 'hold'
+      ? t('wreck.scene.hold', { name: nameOf2(sh.by) })
+      : sh.kind === 'toss'
       ? t('wreck.scene.toss', { name: nameOf2(sh.by),
           side: t(sh.side === 'B' ? 'wreck.british' : 'wreck.france'),
           place: t('wreck.place.' + sh.place) })
@@ -722,7 +724,9 @@ function forcedNote(body, st, ctx) {
 function choicePanel(stage, st, ctx) {
   const step = st.pending.needs;
   const okList = targetsOf(st, ctx.me.uid, st.pending.card, step, st.pending.picks || {});
-  const all = ['B', 'F'];
+  /* ตัวเลือกทั้งหมดของขั้นนี้ — บางขั้นเป็นสองฝั่งประเทศ บางขั้นเป็นชนิดโหวต
+     ใบที่มีตัวเลือกตายตัวสองอันใช้ B/F ส่วนใบอื่นเอารายชื่อจากกติกามาเลย */
+  const all = step === 'side' || step === 'dir' ? ['B', 'F'] : okList;
   /* ข้อความบนปุ่มต่างกันตามขั้น — ย้ายกล่องบอกทิศทาง ส่วนโยนของบอกแค่ชื่อประเทศ */
   const label = (k) => t(step === 'side' ? 'wreck.pick.side.' + k : 'wreck.pick.' + k);
 
@@ -805,6 +809,7 @@ function titleOf(st, ph, me) {
       rat:     'wreck.card.bilgerat',
       fizzle:  'wreck.event',
       toss:    'wreck.card.jettison',
+      hold:    'wreck.card.holdmutiny',
       deal:    'wreck.card.contract',
       reliefMiss: 'wreck.card.relief',
       skip:    'wreck.card.scurvy',

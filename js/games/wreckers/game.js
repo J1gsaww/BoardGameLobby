@@ -26,7 +26,7 @@ import {
   buildEventDeck, refillSlots, emptyDeck,
   startVote, voteReady, tallyRow, attackPasses, mutinyPasses, brawlSplit,
   moveBox, score, winningSide, winners, dealNations, pushLog, refill, birdStrike, SAVE_CARDS, nextSeat,
-  voteWeight, setVoteWeight, addVoteBan, markCount, addMark,
+  voteWeight, setVoteWeight, addVoteBan, markCount, addMark, swapSpots,
   attackTargets, takeSides, keepSides, canAttack
 } from './rules.js';
 
@@ -980,6 +980,16 @@ export function reveal(ctx, st, hands, picks, rng = Math.random) {
   else if (v.kind === 'mutiny') {
     const done = resolveMutiny(next, counts, handsOut);
     next = done.state; handsOut = done.hands;
+
+    /* กบฏใต้ท้องเรือ — คนที่สั่งขึ้นเป็นกัปตันเอง ไม่ใช่ต้นหนตามปกติ
+       ทำหลังกบฏสำเร็จแล้ว จึงย้ายเขาไปหัวแถวทับตำแหน่งที่ต้นหนเพิ่งเลื่อนขึ้นไป */
+    if (st.flag?.claim && st.flag.by === v.caller && mutinyPasses(counts)) {
+      const line = occupants(next.pos, v.place);
+      const head = line[0];
+      if (head && head !== v.caller) {
+        next = { ...next, pos: swapSpots(next.pos, v.caller, head) || next.pos };
+      }
+    }
   } else if (v.kind === 'islandVote') next = resolveBrawl(next, counts);
 
   /* ตัวนับห้ามโหวตหักตรงนี้ ไม่ใช่ตอนสั่งโหวต — คนที่ถูกกันจึงเสียสิทธิ์ครบตามจำนวนครั้งจริง

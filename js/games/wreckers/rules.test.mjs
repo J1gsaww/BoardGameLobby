@@ -2258,3 +2258,47 @@ group('การ์ดพิเศษ · ปล่อยของ · สัญ�
     ok('ประกาศว่าไม่มีใครให้ผลัด', r.state.shout.kind, 'reliefMiss');
   }
 }
+
+group('การ์ด · กบฏใต้ท้องเรือ');
+{
+  const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+  const deck = { ...out.secrets._deck, slots: ['holdmutiny', ...out.secrets._deck.slots.slice(1)] };
+  const at = (pos, turn) => ({ ...out.state, phase: 'play', turn, pos,
+                               cargo: { shipL: { B: 2, F: 1 }, shipR: { B: 0, F: 1 },
+                                        island: { B: 1, F: 1 }, merchant: 4 },
+                               seats: [...P], names: filled().names, out: [] });
+
+  /* บนเรือ — เลือกได้ว่าจะยิงหรือก่อกบฏ */
+  {
+    const st = at({ a: 'shipL:C', b: 'shipL:F', c: 'shipL:3', d: 'shipR:C',
+                    e: 'island:G', f: 'island:2' }, 'c');
+    const ctx = { ...ctxOf(st), secrets: { ...out.secrets, _deck: deck }, hostUid: 'a' };
+    const up = await onAction(ctx, { uid: 'c', type: 'activate', payload: { slot: 0 } });
+    ok('ถามว่าจะสั่งโหวตอะไร', up.state.pending.needs, 'kind');
+    ok('บนเรือเลือกได้สองอย่าง',
+       targetsOf(up.state, 'c', 'holdmutiny', 'kind', {}), ['attack', 'mutiny']);
+
+    const done = await onAction({ ...ctx, state: up.state },
+                                { uid: 'c', type: 'useCard', payload: { target: 'mutiny' } });
+    ok('ได้สิทธิ์สั่งกบฏ', done.state.flag.kind, 'mutiny');
+    ok('จำไว้ว่าคนนี้จะขึ้นเป็นกัปตันถ้าผ่าน', done.state.flag.claim, true);
+    ok('ลูกเรือธรรมดาสั่งกบฏได้แล้ว',
+       actionsFor({ ...done.state, turn: 'c' }, 'c').includes('mutiny'), true);
+  }
+
+  /* บนเกาะ — มีทางเดียวคือโหวตย้ายกล่อง */
+  {
+    const st = at({ a: 'shipL:C', b: 'shipL:F', c: 'island:G', d: 'island:2',
+                    e: 'island:3', f: 'shipR:C' }, 'd');
+    const ctx = { ...ctxOf(st), secrets: { ...out.secrets, _deck: deck }, hostUid: 'a' };
+    const up = await onAction(ctx, { uid: 'd', type: 'activate', payload: { slot: 0 } });
+    ok('บนเกาะเหลือทางเดียว',
+       targetsOf(up.state, 'd', 'holdmutiny', 'kind', {}), ['islandVote']);
+
+    const done = await onAction({ ...ctx, state: up.state },
+                                { uid: 'd', type: 'useCard', payload: { target: 'islandVote' } });
+    ok('ไม่ได้อ้างเป็นกัปตันเพราะไม่ใช่กบฏ', done.state.flag.claim, false);
+    ok('คนที่ไม่ใช่ประธานเกาะสั่งโหวตย้ายกล่องได้',
+       actionsFor({ ...done.state, turn: 'd' }, 'd').includes('islandVote'), true);
+  }
+}

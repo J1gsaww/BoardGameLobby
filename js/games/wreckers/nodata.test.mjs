@@ -114,6 +114,15 @@ for (const card of ['blackspot', 'albatross', 'facade', 'eightbell', 'piratecode
                        { uid: 'a', type: 'useCard', payload: { cards: ctx.secrets.a.vote.slice(0, 2) } }));
 }
 
+/* กบฏใต้ท้องเรือ — เลือกชนิดโหวต */
+{
+  const ctx = table('holdmutiny');
+  const up = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+  check('holdmutiny · ตอนถาม', up);
+  check('holdmutiny · ตอนเลือกกบฏ',
+        await onAction({ ...ctx, state: up.state }, { uid: 'a', type: 'useCard', payload: { target: 'mutiny' } }));
+}
+
 /* แผนที่ — เปิดแล้วยกให้คนอื่น */
 for (const card of ['fountain', 'atlantis', 'eldorado']) {
   const ctx = table(card);

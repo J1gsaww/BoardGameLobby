@@ -49,6 +49,8 @@ let picks = [];         // การ์ดเหตุการณ์ที่�
 let forcePick = [];
 /* ไพ่ในมือที่เลือกไว้จะทิ้ง (สัญญาฉบับใหม่) — ยังไม่ส่งจนกว่าจะกดยืนยัน */
 let tossPick = [];
+/* เหตุการณ์ล่าสุดที่ทำให้ต้องปิดหน้าต่างของหน้าจอหลัก — กันปิดซ้ำทุกครั้งที่วาด */
+let lastBeat = '';
 let plan = null;        // ตัวเลือกที่ยังไม่ยืนยัน เช่นจะยิงลำไหน เก็บฝั่งไหน
 
 /* เครื่องมือทดสอบเปิดด้วย ?dev=cards ท้าย URL เท่านั้น
@@ -473,10 +475,16 @@ export function render(el, ctx) {
   Sound.cardSounds(st);
 
   /* เกมมีหน้าต่างของตัวเองขึ้นมาแทรกเมื่อไหร่ ปิดสมุดการ์ดทิ้ง
-     ไม่งั้นสมุดจะบังฉากที่กำลังเล่าอยู่ หรือบังแผงที่ต้องกดตอบ */
-  if (st.phase === 'over' || st.pending || st.saveAsk || st.vote || st.shout || st.cardUp) {
-    ctx.closeOverlays?.();
-  }
+
+     ต้องปิดเฉพาะตอนมี **เหตุการณ์ใหม่** ไม่ใช่ทุกครั้งที่วาดใหม่
+     ของเดิมดูแค่ว่ามีอะไรค้างอยู่ไหม ซึ่งเป็นจริงอยู่นานหลังเหตุการณ์จบ
+     สมุดจึงถูกปิดทุกครั้งที่หน้าจอขยับ รวมถึงตอนสัญญาณชีพเต้นทุก 20 วินาที
+     คนที่กำลังอ่านอยู่เลยโดนปิดหน้าใส่เป็นระยะ */
+  const beat = st.phase === 'over' ? 'over'
+    : [st.pending?.at, st.saveAsk?.at, st.forced?.at, st.vote?.at,
+       st.shout?.at, st.cardUp?.at].filter(Boolean).join('.');
+  if (beat && beat !== lastBeat) ctx.closeOverlays?.();
+  lastBeat = beat;
   preload(el);
   paintLoading(el);
 

@@ -81,6 +81,25 @@ export const EFFECTS = {
     }
   },
 
+  /* กบฏใต้ท้องเรือ — สั่งโหวตได้ทันทีโดยไม่ต้องมีตำแหน่ง
+     บนเรือเลือกได้ว่าจะยิงหรือก่อกบฏ · บนเกาะเป็นโหวตย้ายกล่องอย่างเดียว
+     และถ้ากบฏผ่าน คนเปิดขึ้นเป็นกัปตันเอง ไม่ใช่ต้นหนตามปกติ */
+  holdmutiny: {
+    steps: ['kind'],
+    ask: { kind: 'hold.kind' },
+    choice: true,
+    targets: (st, uid) => placeOf(st.pos[uid]) === 'island'
+      ? ['islandVote']
+      : ['attack', 'mutiny'],
+    run: (st, uid, picks, hands) => ({
+      state: { ...st,
+        flag: { by: uid, kind: picks.kind, place: placeOf(st.pos[uid]),
+                claim: picks.kind === 'mutiny', at: (st.logSeq || 0) + 1 } },
+      hands,
+      shout: { kind: 'hold', by: uid, pick: picks.kind, card: 'holdmutiny' }
+    })
+  },
+
   /* ปล่อยของ — ย้ายกล่องหนึ่งใบจากเรือใหญ่ลำไหนก็ได้ไปเรือสินค้า
      ขั้นแรกเลือกเรือบนกระดาน ขั้นสองเลือกฝั่งประเทศด้วยปุ่มกลางจอ */
   jettison: {
