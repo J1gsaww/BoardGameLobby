@@ -296,7 +296,13 @@ function shoutNote(body, st) {
 
   if (goto('collect')) {
     const nameOf2 = (u) => st.names?.[u] || '?';
-    const msg = sh.kind === 'wreck'
+    /* สายนี้เคยหลุดหายไปตอนแก้ข้อความ ทำให้ไหลไปจบที่ข้อความไล่คนลงเรือ
+       ซึ่งเป็นอันสุดท้ายของสาย เลยขึ้นผิดเรื่องทั้งหัวข้อและเนื้อความ */
+    const msg = sh.kind === 'skip'
+      ? t('wreck.scene.skipped', { who: (sh.who || []).map(nameOf2).join(', ') })
+      : sh.kind === 'scurvy'
+      ? t('wreck.scene.scurvy', { place: t('wreck.place.' + placeOf(st.pos?.[sh.by] || '')) })
+      : sh.kind === 'wreck'
       ? t('wreck.scene.wreck', { place: t('wreck.place.' + sh.place) })
       : sh.kind === 'calm' ? t('wreck.scene.calm')
       : sh.kind === 'aground' ? t('wreck.scene.aground', { n: sh.n })
@@ -345,10 +351,15 @@ function shoutNote(body, st) {
           from: t('wreck.' + (sh.from === 'B' ? 'british' : 'france')),
           to: t('wreck.' + (sh.to === 'B' ? 'british' : 'france'))
         })
-      : t('wreck.scene.kicked', {
+      : sh.kind === 'kick'
+      ? t('wreck.scene.kicked', {
           name: st.names?.[sh.by] || '?',
           who: st.names?.[sh.who] || '?'
-        });
+        })
+      /* ไม่มีสาขาไหนตรงเลย = มีชนิดใหม่ที่ลืมเขียนข้อความ
+         ปล่อยให้ไหลไปใช้ข้อความของสาขาสุดท้ายคือต้นตอของบั๊กที่เพิ่งเจอ
+         ขึ้นเป็นค่าว่างดีกว่า จะได้เห็นทันทีว่าลืม ไม่ใช่ขึ้นผิดเรื่องแบบเนียน ๆ */
+      : '';
     body.innerHTML = `<p class="wr-scene-note">${esc(msg)}</p>`;
   }
   if (now() - stageAt < T.linger) return true;
@@ -604,12 +615,25 @@ function titleOf(st, ph, me) {
       atlantis: 'wreck.card.atlantis',
       powder:   'wreck.card.blackpowder',
       crow:     'wreck.card.crowsnest',
-      gaveMap: 'wreck.card.' + (st.shout.card || 'fountain')
+      gaveMap: 'wreck.card.' + (st.shout.card || 'fountain'),
+      /* ใบที่เพิ่มทีหลัง — ถ้าลืมใส่ตรงนี้ หัวข้อจะตกไปเป็นคำว่า EVENT ลอย ๆ */
+      scurvy:  'wreck.card.scurvy',
+      skip:    'wreck.card.scurvy',
+      wreck:   'wreck.card.shipwreck',
+      calm:    'wreck.card.doldrums',
+      aground: 'wreck.card.aground',
+      agroundIsle: 'wreck.card.aground',
+      vegan:   'wreck.card.vegan',
+      flag:    'wreck.card.blackflag',
+      siren:   'wreck.card.anthemoessa'
     };
-    return {
-      who: t(HEAD[st.shout.kind] || 'wreck.event'),
-      big: st.names?.[st.shout.by] || '?'
-    };
+    /* ประกาศบางชนิดไม่มี "คนทำ" เช่นการถูกข้ามตา ซึ่งเป็นผลของการ์ดที่เปิดไปแล้ว
+       ถ้าใช้ชื่อคนทำจะได้เครื่องหมายคำถาม ต้องใช้ชื่อคนที่ได้รับผลแทน */
+    const sh = st.shout;
+    const big = sh.kind === 'skip'
+      ? (sh.who || []).map(u => st.names?.[u] || '?').join(', ')
+      : (st.names?.[sh.by] || '?');
+    return { who: t(HEAD[sh.kind] || 'wreck.event'), big };
   }
   if (st.lastPeek && key.startsWith('peek:'))
     return { who: t('wreck.act.peek'), big: st.names?.[st.lastPeek.by] || '?' };

@@ -168,6 +168,9 @@ export function passTurn(st, now = Date.now()) {
      ไม่งั้นจะเห็นแค่ตากระโดดข้ามหัวไปเฉย ๆ แล้วงงว่าเกิดอะไรขึ้น */
   const said = skipped.length
     ? pushLog({ ...state,
+                /* เรืองม่วงรอบตัวคนที่โดนข้าม ใช้ช่องทางเดียวกับตอนสลับที่
+                   ให้เห็นด้วยตาว่าใครหยุดอยู่ ไม่ใช่อ่านเอาจากข้อความอย่างเดียว */
+                glow: { uids: skipped, at: (state.logSeq || 0) + 1 },
                 shout: { kind: 'skip', who: skipped, at: (state.logSeq || 0) + 1 } },
               'wreck.log.skipped', { who: skipped.map(u => st.names?.[u] || '?').join(', ') })
     : state;

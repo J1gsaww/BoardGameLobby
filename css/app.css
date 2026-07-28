@@ -1742,14 +1742,15 @@ button{ cursor:pointer; border:0; background:none; }
 
 /* คนที่เพิ่งโดนสลับที่ — เรืองม่วงสองวินาที ให้เห็นว่าเกิดอะไรกับใคร
    ม่วงเพราะสีอื่นถูกใช้ไปแล้ว — ส้มคือถึงตา แดงคือกำลังเล็ง เขียวคือมีนกเกาะ */
+/* ใช้ทั้งตอนสลับที่และตอนโดนข้ามตา — เห็นชัดว่าเกิดอะไรกับใคร */
 .wr-slot.swapped .wr-pawn{
-  box-shadow:0 0 0 3px #b06cff, 0 0 20px rgba(176,108,255,.85);
+  box-shadow:0 0 0 4px #b06cff, 0 0 26px rgba(176,108,255,.95);
   border-radius:50%;
   animation:wr-swap-glow .9s ease-in-out infinite;
 }
 @keyframes wr-swap-glow{
-  0%,100%{ box-shadow:0 0 0 3px #b06cff, 0 0 14px rgba(176,108,255,.6); }
-  50%    { box-shadow:0 0 0 4px #c98cff, 0 0 28px rgba(176,108,255,1); }
+  0%,100%{ box-shadow:0 0 0 3px #b06cff, 0 0 16px rgba(176,108,255,.7); }
+  50%    { box-shadow:0 0 0 5px #c98cff, 0 0 34px rgba(176,108,255,1); }
 }
 
 /* ── ผลที่เล่าเป็นลำดับ (ระฆังแปดครั้ง) ────────────────── */
