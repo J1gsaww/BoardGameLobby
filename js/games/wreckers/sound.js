@@ -12,6 +12,7 @@
    เสียงลงหลอด Effects ตามที่ตกลงไว้ (sfx.js ใช้หลอดนั้นอยู่แล้ว) */
 
 import * as Sfx from '../../sfx.js';
+import { MAP_CARDS } from './effects.js';
 
 const DIR = 'assets/effect/pirate/';
 const at = (name) => DIR + name + '.mp3';
@@ -32,7 +33,11 @@ const ON_REVEAL = {
   piratecode: 'piratecode',
   scurvy: 'scurvy',
   cabinfever: 'cabinfever',
-  stormyseas: 'stormyseas'
+  stormyseas: 'stormyseas',
+
+  /* แผนที่ทุกใบใช้เสียงเดียวกัน — อ่านรายชื่อจากตัวกติกา ไม่ได้พิมพ์ซ้ำที่นี่
+     ใบแผนที่ใหม่ในอนาคตจะได้เสียงนี้เองโดยไม่ต้องมาเติม */
+  ...Object.fromEntries(MAP_CARDS.map(id => [id, 'map']))
 };
 
 /* เสียงตอนผลของการ์ดเกิดขึ้นจริง — คีย์คือชนิดของประกาศ */
@@ -42,10 +47,11 @@ const ON_SHOUT = {
   powder: 'cannon'
 };
 
-export const FILES = [
+/* กรองซ้ำก่อน — แผนที่ห้าใบชี้ไฟล์เดียวกัน ถ้าไม่กรองจะโหลดไฟล์เดิมห้ารอบ */
+export const FILES = [...new Set([
   ...Object.values(ON_REVEAL),
   ...Object.values(ON_SHOUT)
-].map(at);
+])].map(at);
 
 export const preload = () => Sfx.preload(FILES);
 

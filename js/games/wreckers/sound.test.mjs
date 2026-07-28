@@ -19,7 +19,9 @@ console.log('\nเสียงประกอบของการ์ด');
 
 /* เรียกตัวเล่นจริงไม่ได้เพราะผูกกับเบราว์เซอร์
    จึงตรวจสิ่งที่ตรวจได้จริงในนี้ — รายชื่อไฟล์ที่ประกาศไว้ */
-ok('รายชื่อไฟล์ครบทุกเสียง', Sound.FILES.length, 16);
+ok('รายชื่อไฟล์ครบทุกเสียง', Sound.FILES.length, 17);
+ok('แผนที่ห้าใบใช้ไฟล์เดียวกัน จึงไม่ทำให้รายการยาวขึ้นห้าเท่า',
+   Sound.FILES.filter(f => f.endsWith('map.mp3')).length, 1);
 ok('ทุกไฟล์อยู่ในโฟลเดอร์เดียวกัน',
    Sound.FILES.every(f => f.startsWith('assets/effect/pirate/')), true);
 ok('ทุกไฟล์เป็น mp3', Sound.FILES.every(f => f.endsWith('.mp3')), true);
@@ -29,7 +31,7 @@ for (const want of ['reload.mp3', 'pistol.mp3', 'blackspot.mp3', 'albatross.mp3'
                     'albatross_strike.mp3', 'marque.mp3', 'armada.mp3',
                     'facade.mp3', 'eightbell.mp3', 'crownest.mp3', 'blackpowder.mp3',
                     'cannon.mp3', 'piratecode.mp3', 'scurvy.mp3', 'cabinfever.mp3',
-                    'stormyseas.mp3']) {
+                    'stormyseas.mp3', 'map.mp3']) {
   ok('มี ' + want, names.includes(want), true);
 }
 
