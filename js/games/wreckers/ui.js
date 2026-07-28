@@ -45,7 +45,6 @@ const BOB = { ship: [1, 4], merchant: [1.3, 3.5], boat: [2.6, 2.6], island: [0, 
 /* สถานะเฉพาะหน้าจอ ไม่ต้องขึ้นเซิร์ฟเวอร์เพราะเป็นการเลือกที่ยังไม่ยืนยัน */
 let menu = null;        // { kind, uid, spot, place, x, y }
 let picks = [];         // การ์ดเหตุการณ์ที่เลือกไว้ สูงสุด 2 ใบ
-let forcing = null;     // uid ของคนที่กำลังจะบังคับให้เปิดการ์ด
 /* ช่องการ์ดที่เลือกไว้ตอนสั่งให้คนอื่นเปิด — เก็บในเครื่อง ยังไม่ส่งจนกว่าจะครบสอง */
 let forcePick = [];
 /* ไพ่ในมือที่เลือกไว้จะทิ้ง (สัญญาฉบับใหม่) — ยังไม่ส่งจนกว่าจะกดยืนยัน */
@@ -216,7 +215,7 @@ function shell(el, ctx) {
       const i = Number(mini.closest('.wr-event-slot').dataset.event) - 1;
       if (mini.dataset.ev === 'pick') { devOpen = true; devFind = ''; picks = [String(i + 1)]; paint(el); return; }
       ctx.send(mini.dataset.ev, { slot: i });
-      picks = []; forcing = null; paint(el);
+      picks = []; paint(el);
       return;
     }
 
@@ -891,8 +890,7 @@ function paintEvents(el, st, ctx) {
   if (note) {
     note.textContent =
         mid ? t('wreck.peekLeft', { n: mid.left })
-      : forcing ? t('wreck.forcing', { name: st.names?.[forcing] || '?' })
-      : picks.length === 1 ? t('wreck.pickMore') : '';
+        : picks.length === 1 ? t('wreck.pickMore') : '';
     note.hidden = !note.textContent;
   }
 
@@ -1224,7 +1222,10 @@ const btnRow = (act, label, on, arg = '', tip = '') =>
 /* เมนูข้างหมากไม่ยิงคำสั่งทันที ตั้งเป็นแผนรอยืนยันแล้วเมนูเปลี่ยนเป็นปุ่ม Confirm/Cancel
    เมนูต้องไม่ปิดตัวเอง ไม่งั้นแผนจะหายไปพร้อมเมนูโดยไม่มีอะไรให้กด */
 function runMenu(el, ctx, act, arg) {
-  if (act === 'force') { closeMenu(); forcing = arg; picks = []; paint(el); return; }
+  /* บังคับให้เปิด — ส่งชื่อเป้าไปพร้อมกันเลย จะได้ข้ามขั้นเลือกคน
+     ของเดิมตั้งตัวแปรในเครื่องแล้วจบ ซึ่งเป็นเศษของโครงเก่าที่เลิกใช้ไปแล้ว
+     กดแล้วจึงไม่มีอะไรเกิดขึ้น และปุ่มอื่นค้างเพราะแผนไม่เคยถูกล้าง */
+  if (act === 'force') { plan = { act: 'force', target: arg, via: 'menu' }; paint(el); return; }
   if (act === 'move') plan = { act: 'toBoat', boat: String(arg).split(':')[0], via: 'menu' };
   else if (act === 'kick') plan = { act: 'kick', uid: arg, via: 'menu' };
   else if (act === 'held') plan = { act: 'playHeld', card: arg, via: 'menu' };
@@ -1408,6 +1409,11 @@ export function planBody(st, ctx) {
     const c = eventById(plan.card);
     rows = `<div class="wr-plan-row"><span>${esc(t('wreck.plan.card'))}</span>
       <span class="wr-chip on">${esc(c ? (c[lang] || c.th).name : plan.card)}</span></div>`;
+  } else if (plan.act === 'force') {
+    rows = plan.target
+      ? `<div class="wr-plan-row"><span>${esc(t('wreck.ask.force.player'))}</span>
+          <span class="wr-chip on">${esc(st.names?.[plan.target] || '?')}</span></div>`
+      : '';
   } else if (plan.act === 'useCard') {
     /* หัวข้อกับป้ายกำกับต้องเป็นของการ์ดใบนั้น ไม่ใช่ข้อความกลาง
        ของเดิมยืมของปืนพกมาใช้ทุกใบ จดหมายเลยขึ้นว่า "ไล่ลงเรือ" ทั้งที่กำลังเชิญขึ้นเรือ */

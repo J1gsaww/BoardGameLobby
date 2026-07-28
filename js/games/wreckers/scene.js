@@ -489,18 +489,15 @@ function cardNote(body, st, ctx) {
   const line = body.parentElement.querySelector('.wr-scene-line');
   const stage = body.parentElement.querySelector('.wr-scene-stage');
   const mineNow = st.pending?.by === ctx.me.uid;
-  /* อยู่ในขั้นเลือกไพ่จากกองหรือยัง — ดูจาก **กองที่ถูกส่งมาให้จริง** ด้วย
-     ไม่ใช่เดาจากชื่อการ์ดกับชื่อขั้นอย่างเดียว เพราะถ้าค่าใดค่าหนึ่งเพี้ยน
-     หน้าจอจะกลับไปแสดงข้อความธรรมดาแล้วไม่มีทางส่งคำตอบได้ เกมค้างทันที
-     กองมีอยู่ = เซิร์ฟเวอร์กำลังรอไพ่จากเรา ซึ่งเถียงไม่ได้ */
-  const many = !!st.pending
-    && (pickCountOf(st.pending.card, st.pending.needs) > 1
-        || (st.pending.by === ctx.me.uid && (ctx.secret?.pool || []).length > 0));
 
   /* ขั้นที่ต้องเลือกไพ่หลายใบจากกอง — คนเปิดได้แผงเลือกไพ่
      คนอื่นได้ข้อความรอเฉย ๆ ไม่เห็นว่ากองมีอะไรบ้าง */
   if (stage) {
-    if (many && mineNow) poolPanel(stage, st, ctx);
+    /* หน้าต่างเลือกไพ่ขึ้นเฉพาะตอน **มีกองไพ่ถูกส่งมาให้จริง** (รังกา)
+       ของเดิมดูแค่ว่าขั้นนี้เลือกหลายใบไหม ซึ่งจริงกับการเลือกช่องการ์ดด้วย
+       หน้าต่างเลือกไพ่จึงโผล่มาว่างเปล่าตอนบังคับให้คนอื่นเปิด ซึ่งชวนงงมาก */
+    const hasPool = mineNow && (ctx.secret?.pool || []).length > 0;
+    if (hasPool) poolPanel(stage, st, ctx);
     else if (mineNow && isChoice(st.pending.card)) choicePanel(stage, st, ctx);
     else if (!seq) { stage.hidden = true; stage.dataset.pool = ''; }
   }
@@ -508,11 +505,11 @@ function cardNote(body, st, ctx) {
   if (line) {
     const want = !st.pending ? ''
       : mineNow
-        ? (many && st.pending.needs !== 'slots' ? '' : t(askKey(st.pending.card, st.pending.needs)))
+        ? ((ctx.secret?.pool || []).length ? '' : t(askKey(st.pending.card, st.pending.needs)))
         : (st.pending.needs === 'slots'
             ? t('wreck.scene.forcing', { name: st.names?.[st.pending.by] || '?',
                                          who: st.names?.[st.pending.picks?.player] || '?' })
-          : many ? t('wreck.scene.crowWait')
+          : st.pending.needs === 'cards' ? t('wreck.scene.crowWait')
                 : t('wreck.scene.pickTargetThem', { name: st.names?.[st.pending.by] || '?' }));
     if (line.textContent !== want) line.textContent = want;
     line.hidden = !want || !parked;

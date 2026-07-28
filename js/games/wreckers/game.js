@@ -323,14 +323,21 @@ async function route(ctx, uid, type, payload) {
     case 'activate': return activate(ctx, uid, payload);
     case 'peek':     return peek(ctx, uid, payload);
 
-    /* บังคับให้คนอื่นเปิด — ถามสองขั้น เลือกคน แล้วเลือกการ์ดสองใบให้เขาเลือกเอง */
-    case 'force':
+    /* บังคับให้คนอื่นเปิด — ถามสองขั้น เลือกคน แล้วเลือกการ์ดสองใบให้เขาเลือกเอง
+       ถ้ากดมาจากเมนูข้างตัวคนนั้น เป้าติดมาแล้ว ข้ามขั้นแรกไปเลย
+       ไม่งั้นจะกลายเป็นถามซ้ำสิ่งที่เพิ่งเลือกไป ซึ่งชวนงงมาก */
+    case 'force': {
+      const pre = payload.target;
+      const okTarget = pre && targetsOf(st, uid, 'force', 'player', {}).includes(pre);
       return {
         state: { ...st,
-          pending: { card: 'force', by: uid, mode: 'force', picks: {}, needs: 'player',
+          pending: { card: 'force', by: uid, mode: 'force',
+                     picks: okTarget ? { player: pre } : {},
+                     needs: okTarget ? 'slots' : 'player',
                      at: (st.logSeq || 0) + 1 },
           deadline: Date.now() + PICK_MS }
       };
+    }
 
     default: return null;
   }
