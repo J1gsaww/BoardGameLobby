@@ -794,10 +794,19 @@ function duelSideBack(ship, side, names) {
       <img src="${esc(VOTE_BACK)}" alt="" draggable="false">
       <span class="wr-vb-name">${esc(names?.[u] || '?')}</span>
     </span>`).join('');
+
+  /* ฝั่งนี้ส่งครบแล้ว = ไพ่จากกองกลางเลื่อนเข้ามาสมทบ
+     ซ้ายเลื่อนมาจากซ้าย ขวาเลื่อนมาจากขวา ให้รู้สึกว่ามาจากนอกวง */
+  const full = !side.empty && side.done.length === side.crew.length;
+  const extra = full ? `<span class="wr-vb wr-vb-deck from-${ship === 'shipL' ? 'l' : 'r'}">
+      <img src="${esc(VOTE_BACK)}" alt="" draggable="false">
+      <span class="wr-vb-name">${esc(t('wreck.scene.fromDeck'))}</span>
+    </span>` : '';
+
   return `<div class="wr-duel-side">
       <p class="wr-duel-head">${esc(t('wreck.place.' + ship))}</p>
       <div class="wr-duel-cards">${side.empty
-        ? `<p class="wr-duel-empty">${esc(t('wreck.duel.empty'))}</p>` : cards}</div>
+        ? `<p class="wr-duel-empty">${esc(t('wreck.duel.empty'))}</p>` : cards + extra}</div>
     </div>`;
 }
 

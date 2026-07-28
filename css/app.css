@@ -2211,3 +2211,15 @@ button{ cursor:pointer; border:0; background:none; }
 .wr-duel-cards .wr-vb.in{ opacity:1; }
 .wr-duel-cards .wr-vb img,
 .wr-duel-cards .wr-vb .vote-card{ width:100%; height:auto; border-radius:6px; }
+
+/* ไพ่จากกองกลางที่เลื่อนเข้ามาสมทบเมื่อฝั่งนั้นส่งครบ
+   ซ้ายมาจากซ้าย ขวามาจากขวา ให้รู้สึกว่ามาจากนอกวง ไม่ใช่โผล่ขึ้นมาเฉย ๆ */
+.wr-vb-deck{ animation:wr-deck-in .55s cubic-bezier(.2,.9,.3,1) both; }
+.wr-vb-deck .wr-vb-name{ color:var(--lamp); }
+.wr-vb-deck.from-l{ --from:-190px; }
+.wr-vb-deck.from-r{ --from:190px; }
+@keyframes wr-deck-in{
+  0%   { opacity:0; transform:translateX(var(--from)) scale(.9); }
+  70%  { opacity:1; transform:translateX(0) scale(1.04); }
+  100% { opacity:1; transform:none; }
+}

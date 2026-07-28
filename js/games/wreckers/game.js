@@ -568,9 +568,17 @@ function finishDuel(ctx, st, res, hands) {
     next = { ...next, lastDuel: { ...next.lastDuel, safe, order, ashore } };
   }
 
+  /* คืนไพ่ให้ทุกคนจนเต็มเพดานของตัวเอง เหมือนหลังโหวตปกติทุกประการ
+     ไพ่ที่ลงไปในวงยิงจึงกลับเข้ากองเองเพราะไม่อยู่ในมือใครแล้ว
+
+     ลืมข้อนี้ไปตอนแรก ผลคือคนที่ส่งไพ่เข้าวงยิงเหลือไพ่น้อยลงถาวร
+     ทั้งที่เพดานไม่ได้ลด — คนละเรื่องกับโทษเสียไพ่ถาวรของคนบนเกาะ */
+  const back = refill(next.seats, out, next.maxVote, ctx.rng || Math.random);
+  next = { ...next, votes: countHands(back.hands) };
+
   return {
     state: passTurn(pushLog(next, 'wreck.log.duelDone', {})),
-    secrets: secretsFrom(ctx, out)
+    secrets: secretsFrom(ctx, back.hands)
   };
 }
 

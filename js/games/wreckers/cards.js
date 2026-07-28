@@ -86,8 +86,8 @@ export const EXTRA_CARDS = [
   /* ── Rare ชนิดละ 1 ใบ ───────────────────────────────────── */
   {
     id: 'holdmutiny', rarity: 'rare', count: 1,
-    th: { name: 'กบฏใต้ท้องเรือ', desc: 'สั่งโหวตก่อกบฏได้ทันทีไม่ว่าจะยืนตำแหน่งไหน · บนเรือ ถ้าผ่านกัปตันเด้งลงเกาะและคุณขึ้นเป็นกัปตัน · บนเกาะ ถ้าผ่านคุณขึ้นเป็นประธานเกาะแทนคนเดิม' },
-    en: { name: 'Mutiny in the Hold', desc: 'Call a mutiny vote from any position. On a ship, if it passes the Captain is marooned and you take the helm. On the island, if it passes you replace the President.' }
+    th: { name: 'กบฏใต้ท้องเรือ', desc: 'เปิดโหวตได้ทันทีไม่ว่าจะยืนตำแหน่งไหน ไม่ต้องเป็นกัปตันหรือประธานเกาะ · บนเรือเลือกได้ว่าจะเปิดโหวตยิงหรือโหวตก่อกบฏ ถ้ากบฏผ่าน กัปตันเด้งลงเกาะและคุณขึ้นเป็นกัปตันเอง ไม่ใช่ต้นหน · บนเกาะเปิดโหวตย้ายกล่อง' },
+    en: { name: 'Mutiny in the Hold', desc: 'Open a vote at once, whatever position you stand in \u2014 no need to be Captain or President. On a ship, choose between an attack vote and a mutiny vote; if the mutiny passes the Captain is marooned and you take the helm yourself, not the First Mate. On the island, open the cargo vote.' }
   },
   {
     id: 'wreckers', rarity: 'rare', count: 1,

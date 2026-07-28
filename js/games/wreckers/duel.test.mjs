@@ -100,6 +100,25 @@ ok('ผ่านตาหลังจบ', s.turn !== 'a', true);
   ok('ลำดับที่ลงเกาะถูกสุ่มมาครบทุกคน', [...t.lastDuel.order].sort(), ['a', 'b', 'c', 'd']);
 }
 
+/* ไพ่ต้องถูกคืนหลังจบวงยิง เหมือนหลังโหวตปกติ
+   ลืมข้อนี้ไปรอบแรก ผลคือคนที่ส่งไพ่เข้าวงยิงเหลือไพ่น้อยลงถาวร
+   ซึ่งคนละเรื่องกับโทษเสียไพ่ถาวรของคนที่อยู่บนเกาะ */
+{
+  let c3 = table(HANDS);
+  let u = (await onAction(c3, { uid: 'a', type: 'activate', payload: { slot: 0 } })).state;
+  for (const [uid, card] of [['a', C[0]], ['b', F[2]], ['c', W[0]], ['d', W[3]]]) {
+    const r = await onAction({ ...c3, state: u }, { uid, type: 'duelCard', payload: { card } });
+    u = r.state;
+    c3 = { ...c3, secrets: { ...c3.secrets, ...(r.secrets || {}) } };
+  }
+  ok('คนบนเรือได้ไพ่คืนจนเต็มมือ',
+     ['a', 'b', 'c', 'd'].map(x => c3.secrets[x].vote.length), [3, 3, 3, 3]);
+  ok('เพดานของคนบนเรือไม่ลด',
+     ['a', 'b', 'c', 'd'].map(x => u.maxVote[x]), [3, 3, 3, 3]);
+  ok('คนบนเกาะเพดานลดหนึ่งตามกติกา', u.maxVote.e, 2);
+  ok('ตัวเลขที่หน้าจอโชว์ตรงกับมือจริง', u.votes.a, 3);
+}
+
 console.log('');
 console.log('\u2500'.repeat(46));
 console.log(`ผ่าน ${pass} · ไม่ผ่าน ${fail}`);
