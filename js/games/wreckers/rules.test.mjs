@@ -24,7 +24,8 @@ import {
 } from './rules.js';
 import { onAction, init, tick, finish, passTurn, openTurn } from './game.js';
 import { DECK } from './vote.js';
-import { shipsWithRoom, canUseCard, MAP_CARDS, playWindow, pickCountOf, targetsOf, isChoice } from './effects.js';
+import { shipsWithRoom, canUseCard, MAP_CARDS, playWindow, pickCountOf, targetsOf, isChoice,
+         pickUpToOf, isHandStep } from './effects.js';
 import { BASE_CARDS, BASE_TOTAL, baseById, ENDER } from './events.js';
 import { EXTRA_CARDS, randomSets } from './cards.js';
 
@@ -2165,5 +2166,95 @@ group('การ์ดพิเศษ · ตะขอเกี่ยว · ห�
     }
     ok('หม้อได้ไพ่เพิ่มจากกองกลางอีกใบ', rr.state.lastVote.pot.length, v.vote.voters.length + 2);
     ok('ป้ายถูกเก็บคืนหลังใช้', markCount(rr.state, 'a', 'whisper'), 0);
+  }
+}
+
+group('การ์ดพิเศษ · ปล่อยของ · สัญญาฉบับใหม่ · ผลัดเวร');
+{
+  const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+  const mk = (id) => ({ ...out.secrets._deck, slots: [id, ...out.secrets._deck.slots.slice(1)] });
+  const cargo = { shipL: { B: 2, F: 1 }, shipR: { B: 0, F: 1 },
+                  island: { B: 1, F: 1 }, merchant: 0 };
+  const at = (pos, turn, c) => ({ ...out.state, phase: 'play', turn, pos, cargo: c || cargo,
+                                  seats: [...P], names: filled().names, out: [] });
+
+  /* ปล่อยของ — เลือกเรือแล้วเลือกฝั่ง */
+  {
+    const st = at({ a: 'shipL:C', b: 'shipR:C', c: 'island:G' }, 'a');
+    const ctx = { ...ctxOf(st), secrets: { ...out.secrets, _deck: mk('jettison') }, hostUid: 'a' };
+    const up = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+    ok('ขั้นแรกเลือกเรือ', up.state.pending.needs, 'ship');
+    ok('เลือกได้เฉพาะลำที่มีกล่อง',
+       targetsOf(up.state, 'a', 'jettison', 'ship', {}), ['shipL', 'shipR']);
+
+    const s1 = await onAction({ ...ctx, state: up.state }, { uid: 'a', type: 'useCard', payload: { target: 'shipL' } });
+    ok('ขั้นสองเลือกฝั่ง', s1.state.pending.needs, 'side');
+    ok('เลือกได้เฉพาะฝั่งที่มีกล่อง',
+       targetsOf(s1.state, 'a', 'jettison', 'side', { ship: 'shipL' }), ['B', 'F']);
+
+    const done = await onAction({ ...ctx, state: s1.state }, { uid: 'a', type: 'useCard', payload: { target: 'B' } });
+    ok('กล่องหายจากเรือ', done.state.cargo.shipL, { B: 1, F: 1 });
+    ok('ไปโผล่ที่เรือสินค้า', done.state.cargo.merchant, 1);
+    ok('กล่องรวมทั้งเกมไม่หาย',
+       done.state.cargo.shipL.B + done.state.cargo.shipL.F
+       + done.state.cargo.shipR.B + done.state.cargo.shipR.F
+       + done.state.cargo.island.B + done.state.cargo.island.F
+       + done.state.cargo.merchant, 6);
+  }
+
+  /* เรือว่างทั้งสองลำ = โมฆะ */
+  {
+    const empty = { ...cargo, shipL: { B: 0, F: 0 }, shipR: { B: 0, F: 0 } };
+    const st = at({ a: 'shipL:C', b: 'shipR:C', c: 'island:G' }, 'a', empty);
+    const ctx = { ...ctxOf(st), secrets: { ...out.secrets, _deck: mk('jettison') }, hostUid: 'a' };
+    const r = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+    ok('ไม่มีเรือให้โยน = โมฆะ', r.state.shout.kind, 'fizzle');
+    ok('ไม่ค้างรอ', r.state.pending ?? null, null);
+  }
+
+  /* สัญญาฉบับใหม่ — ทิ้งได้ 0 ถึง 3 ใบ */
+  {
+    const st = at({ a: 'shipL:C', b: 'shipR:C', c: 'island:G' }, 'a');
+    const ctx = { ...ctxOf(st), secrets: { ...out.secrets, _deck: mk('contract') }, hostUid: 'a' };
+    const mine = ctx.secrets.a.vote;
+
+    const up = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+    ok('ถามว่าจะทิ้งใบไหน', up.state.pending.needs, 'toss');
+    ok('ทิ้งได้ไม่เกินสามใบ', pickUpToOf('contract', 'toss'), 3);
+    ok('เลือกจากมือตัวเอง ไม่ใช่ของบนกระดาน', isHandStep('contract'), true);
+
+    const c2 = { ...ctx, state: up.state };
+    const two = await onAction(c2, { uid: 'a', type: 'useCard', payload: { cards: mine.slice(0, 2) } });
+    ok('ทิ้งสองใบแล้วยังมีสามใบ', two.secrets.a.vote.length, 3);
+    ok('ใบที่ไม่ได้ทิ้งยังอยู่', two.secrets.a.vote.includes(mine[2]), true);
+    ok('ได้ใบใหม่มาสองใบ',
+       two.secrets.a.vote.filter(c => !mine.includes(c)).length, 2);
+
+    ok('ทิ้งศูนย์ใบก็ได้', !!(await onAction(c2, { uid: 'a', type: 'useCard', payload: { cards: [] } })), true);
+    ok('ทิ้งใบที่ไม่ได้ถือไม่ได้',
+       await onAction(c2, { uid: 'a', type: 'useCard', payload: { cards: ['v99'] } }), null);
+    ok('ทิ้งเกินสามใบไม่ได้',
+       await onAction(c2, { uid: 'a', type: 'useCard', payload: { cards: [...mine, 'v30'] } }), null);
+  }
+
+  /* ผลัดเวร — สลับกับคนข้างหลัง วนแถว และอยู่คนเดียวโดน Maroon */
+  {
+    const st = at({ a: 'shipL:C', b: 'shipL:F', c: 'island:G' }, 'a');
+    const ctx = { ...ctxOf(st), secrets: { ...out.secrets, _deck: mk('relief') }, hostUid: 'a' };
+    const r = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+    ok('สลับกับคนข้างหลัง', [r.state.pos.a, r.state.pos.b], ['shipL:F', 'shipL:C']);
+  }
+  {
+    const st = at({ a: 'shipL:C', b: 'shipL:F', c: 'shipL:3' }, 'c');
+    const ctx = { ...ctxOf(st), secrets: { ...out.secrets, _deck: mk('relief') }, hostUid: 'a' };
+    const r = await onAction(ctx, { uid: 'c', type: 'activate', payload: { slot: 0 } });
+    ok('อยู่ท้ายแถวก็วนไปสลับกับหัวแถว', occupants(r.state.pos, 'shipL'), ['c', 'b', 'a']);
+  }
+  {
+    const st = at({ a: 'shipL:C', b: 'shipL:F', c: 'island:G' }, 'c');
+    const ctx = { ...ctxOf(st), secrets: { ...out.secrets, _deck: mk('relief') }, hostUid: 'a' };
+    const r = await onAction(ctx, { uid: 'c', type: 'activate', payload: { slot: 0 } });
+    ok('อยู่คนเดียว = โดน Maroon', r.state.maxVote.c, 2);
+    ok('ประกาศว่าไม่มีใครให้ผลัด', r.state.shout.kind, 'reliefMiss');
   }
 }

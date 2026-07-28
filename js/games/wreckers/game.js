@@ -16,7 +16,8 @@ import {
 import { deal } from './vote.js';
 import { BASE_CARDS, ENDER, ENDER_ZONE } from './events.js';
 import { effectOf, targetsOf, nextStep, keepsInHand, canUseCard,
-         isDeferred, isGift, giftTargets, canPlayNow, pickCountOf, crowPool } from './effects.js';
+         isDeferred, isGift, giftTargets, canPlayNow, pickCountOf, crowPool,
+         pickUpToOf, isHandStep } from './effects.js';
 import { EXTRA_CARDS } from './cards.js';
 import {
   SHIP_IDS, BOAT_IDS, BOAT_LINK, VOTE_ROW,
@@ -421,7 +422,9 @@ function activate(ctx, uid, { slot }) {
   /* ต้องเลือกเป้า แต่ไม่มีอะไรให้เลือกเลย = การ์ดใบนั้นเป็นโมฆะ
      เช่นหนูท้องเรือตอนที่ทั้งสองฝั่งไม่มีกล่องสักใบ
      ถ้าปล่อยให้ค้างรอ เกมจะแข็งจนกว่าจะหมดเวลา ทั้งที่ไม่มีอะไรให้ทำ */
-  if (needs && !targetsOf(said, uid, id, needs, {}).length) {
+  const noTarget = needs && !isHandStep(id) && !pickUpToOf(id, needs)
+    && !targetsOf(said, uid, id, needs, {}).length;
+  if (noTarget) {
     return {
       state: passTurn(pushLog({ ...said, shout: { kind: 'fizzle', by: uid, card: id,
                                                   at: (said.logSeq || 0) + 1 } },
@@ -655,10 +658,20 @@ function useCard(ctx, uid, { target, cards }) {
   const step = p.needs || nextStep(p.card, picks);
   if (!step) return null;
 
+  const upTo = pickUpToOf(p.card, step);
   const want = pickCountOf(p.card, step);
   let answer;
 
-  if (want > 1 && step === 'slots') {
+  if (upTo) {
+    /* เลือกได้ไม่เกิน N ใบ และไม่เลือกเลยก็ได้ — ต่างจากขั้นที่ต้องครบพอดี
+       ตรวจกับมือจริงของเจ้าตัว ไม่ใช่รายการที่หน้าจอส่งมา */
+    const mine0 = handsOf(ctx)[uid] || [];
+    const list = Array.isArray(cards) ? cards : [];
+    if (list.length > upTo) return null;
+    if (new Set(list).size !== list.length) return null;
+    if (!list.every(c => mine0.includes(c))) return null;
+    answer = list;
+  } else if (want > 1 && step === 'slots') {
     /* เลือกช่องการ์ดบนกระดาน — ตรวจว่าเป็นเลขช่องจริงและช่องนั้นมีไพ่คว่ำอยู่
        ไม่ใช้กองลับเหมือนรังกา เพราะช่องการ์ดเป็นของสาธารณะอยู่แล้ว */
     const deck = deckOf(ctx);
@@ -713,7 +726,16 @@ function useCard(ctx, uid, { target, cards }) {
 
   const e = effectOf(p.card);
   const hands = handsOf(ctx);
-  const out = e.run(st, uid, got, hands);
+  let out = e.run(st, uid, got, hands);
+
+  /* การ์ดที่สั่งให้จั่วทดแทน — เติมมือทุกคนกลับจนเต็มเพดานของตัวเอง
+     ใช้ตัวเดียวกับที่ใช้หลังโหวต ไพ่ที่ทิ้งไปจึงกลับเข้ากองเองโดยไม่ต้องเก็บกอง */
+  if (out.refill) {
+    const back = refill(out.state.seats, out.hands, out.state.maxVote);
+    out = { ...out,
+      state: { ...out.state, votes: countHands(back.hands) },
+      hands: back.hands };
+  }
 
   /* การ์ดที่ใช้จากมือ ต้องถูกทิ้งออกจากมือหลังใช้ */
   const mine = ctx.secrets?.[uid] || {};

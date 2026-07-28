@@ -79,8 +79,8 @@ export const EXTRA_CARDS = [
   {
     /* [2026-07-27] ลดจาก 3 เหลือ 2 ใบตามที่ผู้ใช้เคาะ */
     id: 'relief', rarity: 'common', count: 2,
-    th: { name: 'ผลัดเวร', desc: 'สลับตำแหน่งกับผู้เล่นที่อยู่ข้างหลังคุณโดยตรง ใช้ถอยลงจากตำแหน่งที่กำลังตกเป็นเป้าได้' },
-    en: { name: 'Relief Watch', desc: 'Swap places with the player directly behind you \u2014 a way to step down from a position under threat.' }
+    th: { name: 'ผลัดเวร', desc: 'สลับตำแหน่งกับผู้เล่นที่อยู่ข้างหลังคุณโดยตรง ใช้ถอยลงจากตำแหน่งที่กำลังตกเป็นเป้าได้ · ถ้าคุณอยู่ท้ายแถวอยู่แล้ว ให้สลับกับคนหัวแถวแทน · ถ้าคุณอยู่คนเดียวในที่นั้น ไม่มีใครให้ผลัดเวร คุณโดน Maroon' },
+    en: { name: 'Relief Watch', desc: 'Swap places with the player directly behind you \u2014 a way to step down from a position under threat. If you are already last in line, swap with the player at the front instead. If you stand there alone, there is nobody to relieve you and you are marooned.' }
   },
 
   /* ── Rare ชนิดละ 1 ใบ ───────────────────────────────────── */

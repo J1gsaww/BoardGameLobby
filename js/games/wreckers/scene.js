@@ -316,7 +316,15 @@ function shoutNote(body, st) {
     const nameOf2 = (u) => st.names?.[u] || '?';
     /* สายนี้เคยหลุดหายไปตอนแก้ข้อความ ทำให้ไหลไปจบที่ข้อความไล่คนลงเรือ
        ซึ่งเป็นอันสุดท้ายของสาย เลยขึ้นผิดเรื่องทั้งหัวข้อและเนื้อความ */
-    const msg = sh.kind === 'fizzle'
+    const msg = sh.kind === 'toss'
+      ? t('wreck.scene.toss', { name: nameOf2(sh.by),
+          side: t(sh.side === 'B' ? 'wreck.british' : 'wreck.france'),
+          place: t('wreck.place.' + sh.place) })
+      : sh.kind === 'deal'
+      ? t(sh.n ? 'wreck.scene.deal' : 'wreck.scene.dealNone', { name: nameOf2(sh.by), n: sh.n })
+      : sh.kind === 'reliefMiss'
+      ? t('wreck.scene.reliefMiss', { name: nameOf2(sh.by) })
+      : sh.kind === 'fizzle'
       ? t('wreck.scene.fizzle')
       : sh.kind === 'hookMiss'
       ? t('wreck.scene.hookMiss', { name: st.names?.[sh.by] || '?' })
@@ -713,6 +721,8 @@ function choicePanel(stage, st, ctx) {
   const step = st.pending.needs;
   const okList = targetsOf(st, ctx.me.uid, st.pending.card, step, st.pending.picks || {});
   const all = ['B', 'F'];
+  /* ข้อความบนปุ่มต่างกันตามขั้น — ย้ายกล่องบอกทิศทาง ส่วนโยนของบอกแค่ชื่อประเทศ */
+  const label = (k) => t(step === 'side' ? 'wreck.pick.side.' + k : 'wreck.pick.' + k);
 
   const sig = st.pending.at + '|' + okList.join(',');
   if (stage.dataset.pool === sig) return;
@@ -724,7 +734,7 @@ function choicePanel(stage, st, ctx) {
       <div class="wr-choice-row">${
         all.map(k => `<button class="wr-choice-btn n-${k}" data-pick="${k}"
           ${okList.includes(k) ? '' : 'disabled title="' + esc(t('wreck.pick.none')) + '"'}>
-            ${esc(t('wreck.pick.' + k))}
+            ${esc(label(k))}
           </button>`).join('')
       }</div>
     </div>`;
@@ -767,6 +777,9 @@ function titleOf(st, ph, me) {
       hookMiss: 'wreck.card.grapple',
       rat:     'wreck.card.bilgerat',
       fizzle:  'wreck.event',
+      toss:    'wreck.card.jettison',
+      deal:    'wreck.card.contract',
+      reliefMiss: 'wreck.card.relief',
       skip:    'wreck.card.scurvy',
       wreck:   'wreck.card.shipwreck',
       calm:    'wreck.card.doldrums',

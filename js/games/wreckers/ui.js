@@ -18,7 +18,8 @@ import { cardById as voteById, voteCard, iconSrc } from './vote.js';
 import { dieSvg, rollPose, HERO, ROLL_MS } from './die.js';
 import { actionsFor, occupants, placeOf, BOAT_IDS, canVoteNow, isWrecked,
          boatsFromAll, boatsOpen } from './rules.js';
-import { targetsOf, canUseCard, askKey, canPlayNow, playWindow } from './effects.js';
+import { targetsOf, canUseCard, askKey, canPlayNow, playWindow,
+         isHandStep, pickUpToOf } from './effects.js';
 import * as Sound from './sound.js';
 import { BASE_CARDS, cardArt, cardArtAlt, CARD_BACK, CARD_BACK_ALT,
          tokenArt, tokenAlt } from './events.js';
@@ -47,6 +48,8 @@ let picks = [];         // การ์ดเหตุการณ์ที่�
 let forcing = null;     // uid ของคนที่กำลังจะบังคับให้เปิดการ์ด
 /* ช่องการ์ดที่เลือกไว้ตอนสั่งให้คนอื่นเปิด — เก็บในเครื่อง ยังไม่ส่งจนกว่าจะครบสอง */
 let forcePick = [];
+/* ไพ่ในมือที่เลือกไว้จะทิ้ง (สัญญาฉบับใหม่) — ยังไม่ส่งจนกว่าจะกดยืนยัน */
+let tossPick = [];
 let plan = null;        // ตัวเลือกที่ยังไม่ยืนยัน เช่นจะยิงลำไหน เก็บฝั่งไหน
 
 /* เครื่องมือทดสอบเปิดด้วย ?dev=cards ท้าย URL เท่านั้น
@@ -711,15 +714,27 @@ function paintHand(el, st, ctx) {
   /* ใช้ฟังก์ชันเดียวกับฝั่งกติกา จะได้ไม่มีทางที่หน้าจอชวนให้กดสิ่งที่กติกาไม่รับ */
   const asking = canVoteNow(st, me);
 
+  /* การ์ดที่ให้เลือกไพ่ในมือตัวเอง (สัญญาฉบับใหม่) — คนละโหมดกับการโหวต
+     เลือกได้หลายใบ คลิกซ้ำเอาออก แล้วกดยืนยันทีเดียว */
+  const tossing = st.pending?.by === me && isHandStep(st.pending.card);
+  const tossMax = tossing ? pickUpToOf(st.pending.card, st.pending.needs) : 0;
+
   /* เพดานไพ่เหลือศูนย์ = หมดสิทธิ์ร่วมโหวตถาวร ต้องบอกเหตุผล
      ไม่งั้นจะดูเหมือนหน้าจอค้างหรือลืมไฮไลท์ให้ */
   const spent = (st.maxVote?.[me] ?? 0) === 0;
   const sittingOut = !!st.vote && spent && occupants(st.pos, placeOf(st.pos?.[me])).includes(me);
 
   const html =
-    mine.map(id => (asking
-      ? `<button class="wr-pick" data-card="${esc(id)}">${voteCard(voteById(id), lang)}</button>`
-      : voteCard(voteById(id), lang))).join('') +
+    mine.map(id => {
+      /* โหมดทิ้งไพ่ — เลือกหลายใบได้ ไฮไลท์เหลืองที่ใบที่เลือกไว้ */
+      if (tossing) {
+        return `<button class="wr-pick wr-toss${tossPick.includes(id) ? ' on' : ''}"
+          data-toss="${esc(id)}">${voteCard(voteById(id), lang)}</button>`;
+      }
+      return asking
+        ? `<button class="wr-pick" data-card="${esc(id)}">${voteCard(voteById(id), lang)}</button>`
+        : voteCard(voteById(id), lang);
+    }).join('') +
     (ctx.secret?.held || []).map(id => {
       const c = eventById(id);
       const info = c ? (c[lang] || c.th) : null;
@@ -741,6 +756,10 @@ function paintHand(el, st, ctx) {
           ${eventFace(id)}
         </button>`;
     }).join('') +
+    (tossing ? `<div class="wr-toss-go">
+        <span class="wr-toss-left">${esc(t('wreck.contract.left', { n: tossMax - tossPick.length }))}</span>
+        <button class="wr-act" data-toss-go="1">${esc(t('wreck.plan.confirm'))}</button>
+      </div>` : '') +
     (mine.length + held ? '' : `<p class="wr-empty">${esc(t('wreck.noCards'))}</p>`) +
     (spent ? `<p class="wr-spent">${esc(t('wreck.voteSpent'))}</p>` : '') +
     (sittingOut ? `<p class="wr-empty">${esc(t('wreck.sittingOut'))}</p>` : '');
@@ -753,7 +772,19 @@ function paintHand(el, st, ctx) {
   if (box.dataset.sig !== html) {
     box.dataset.sig = html;
     box.innerHTML = html;
-    box.querySelectorAll('[data-held]').forEach(b => {
+    /* โหมดทิ้งไพ่ — คลิกเลือก คลิกซ้ำเอาออก แล้วกดยืนยันทีเดียว */
+  box.querySelectorAll('[data-toss]').forEach(b => {
+    b.onclick = () => {
+      const id = b.dataset.toss;
+      tossPick = tossPick.includes(id) ? tossPick.filter(c => c !== id)
+        : (tossPick.length < tossMax ? [...tossPick, id] : tossPick);
+      paint(el);
+    };
+  });
+  const go = box.querySelector('[data-toss-go]');
+  if (go) go.onclick = () => { ctx.send('useCard', { cards: [...tossPick] }); tossPick = []; };
+
+  box.querySelectorAll('[data-held]').forEach(b => {
     b.onclick = () => {
       if (b.disabled) return;
       plan = { act: 'playHeld', card: b.dataset.held, via: 'menu' };

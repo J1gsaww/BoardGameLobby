@@ -60,6 +60,51 @@ export const EFFECTS = {
     }
   },
 
+  /* สัญญาฉบับใหม่ — ทิ้งไพ่โหวตในมือกี่ใบก็ได้ แล้วจั่วกลับมาเท่าที่ทิ้ง
+     ทิ้งศูนย์ใบก็ได้ ซึ่งแปลว่าไม่เอาอะไรเลย เป็นทางเลือกที่ถูกต้อง
+
+     pickUpTo = เลือกได้ไม่เกินเท่านี้ ต่างจาก pickCount ที่ต้องครบพอดี */
+  contract: {
+    steps: ['toss'],
+    ask: { toss: 'contract.toss' },
+    hand: true,
+    pickUpTo: { toss: 3 },
+    run: (st, uid, picks, hands) => {
+      const drop = new Set(picks.toss || []);
+      if (!drop.size) return { state: st, hands };
+      return {
+        state: st,
+        hands: { ...hands, [uid]: (hands[uid] || []).filter(c => !drop.has(c)) },
+        refill: true,
+        shout: { kind: 'deal', by: uid, n: drop.size, card: 'contract' }
+      };
+    }
+  },
+
+  /* ปล่อยของ — ย้ายกล่องหนึ่งใบจากเรือใหญ่ลำไหนก็ได้ไปเรือสินค้า
+     ขั้นแรกเลือกเรือบนกระดาน ขั้นสองเลือกฝั่งประเทศด้วยปุ่มกลางจอ */
+  jettison: {
+    steps: ['ship', 'side'],
+    ask: { ship: 'toss.ship', side: 'toss.side' },
+    choice: true,
+    targets: (st, uid, step, picks) => {
+      if (step === 'ship') {
+        return SHIP_IDS.filter(s => ((st.cargo?.[s]?.B || 0) + (st.cargo?.[s]?.F || 0)) > 0);
+      }
+      const box = st.cargo?.[picks.ship] || {};
+      return ['B', 'F'].filter(k => (box[k] || 0) > 0);
+    },
+    run: (st, uid, picks, hands) => {
+      const ship = picks.ship;
+      const box = st.cargo[ship];
+      const cargo = { ...st.cargo,
+        [ship]: { ...box, [picks.side]: box[picks.side] - 1 },
+        merchant: (st.cargo.merchant || 0) + 1 };
+      return { state: { ...st, cargo }, hands,
+               shout: { kind: 'toss', by: uid, place: ship, side: picks.side, card: 'jettison' } };
+    }
+  },
+
   /* ตะขอเกี่ยว — สลับกับคนข้างหน้า อยู่หัวแถวก็สลับกับคนท้ายแถวแทน
      อยู่คนเดียวในที่นั้น = ไม่มีอะไรให้เกี่ยว โดน Maroon เอง */
   grapple: {
@@ -122,11 +167,23 @@ export const EFFECTS = {
   relief: {
     run: (st, uid, _picks, hands) => {
       const line = occupants(st.pos, placeOf(st.pos[uid]));
-      const behind = line[line.indexOf(uid) + 1];
-      const pos = behind ? swapSpots(st.pos, uid, behind) : null;
+
+      /* อยู่คนเดียวในที่นั้น = ไม่มีใครให้ผลัด โดน Maroon เอง
+         กฎเดียวกับตะขอเกี่ยว แค่คนละทิศทาง */
+      if (line.length < 2) {
+        const out = maroon(st, uid, hands);
+        return { state: out.state, hands: out.hands,
+                 shout: { kind: 'reliefMiss', by: uid, card: 'relief' } };
+      }
+
+      /* อยู่ท้ายแถวก็วนไปสลับกับคนหัวแถว — ตรงข้ามกับตะขอเกี่ยวที่วนอีกทาง */
+      const i = line.indexOf(uid);
+      const mate = i < line.length - 1 ? line[i + 1] : line[0];
+      const pos = swapSpots(st.pos, uid, mate);
       if (!pos) return { state: st, hands };
+
       return {
-        state: { ...st, pos, glow: { uids: [uid, behind], at: (st.logSeq || 0) + 1 } },
+        state: { ...st, pos, glow: { uids: [uid, mate], at: (st.logSeq || 0) + 1 } },
         hands
       };
     }
@@ -548,6 +605,13 @@ export function canPlayNow(st, uid, id) {
 
 /* ขั้นนี้ต้องเลือกกี่ใบ — ไม่ใช่ทุกขั้นที่เลือกทีละหนึ่ง */
 export const pickCountOf = (id, step) => effectOf(id)?.pickCount?.[step] || 1;
+
+/* เลือกได้ไม่เกินกี่ใบ — ต่างจาก pickCount ที่ต้องครบพอดี
+   ใช้กับขั้นที่ "ไม่เลือกเลย" เป็นคำตอบที่ถูกต้อง เช่นสัญญาฉบับใหม่ */
+export const pickUpToOf = (id, step) => effectOf(id)?.pickUpTo?.[step] || 0;
+
+/* ขั้นนี้ตอบด้วยการเลือกไพ่ในมือตัวเองไหม */
+export const isHandStep = (id) => !!effectOf(id)?.hand;
 
 /* กองไพ่โหวตที่รังกาเลือกได้ — สำรับลบมือคนอื่น รวมมือเดิมของเป้าด้วย
    เพราะไพ่ของเป้าคืนกองก่อนแล้วค่อยหยิบใหม่ ใบเดิมจึงมีสิทธิ์กลับมา */

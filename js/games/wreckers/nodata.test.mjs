@@ -93,6 +93,27 @@ for (const card of ['blackspot', 'albatross', 'facade', 'eightbell', 'piratecode
         await onAction({ ...ctx, state: up.state }, { uid: 'a', type: 'useCard', payload: { target: 'boatL' } }));
 }
 
+/* ปล่อยของ — เลือกเรือแล้วเลือกฝั่ง */
+{
+  const ctx = table('jettison');
+  const up = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+  check('jettison · ตอนถามเรือ', up);
+  const s1 = await onAction({ ...ctx, state: up.state }, { uid: 'a', type: 'useCard', payload: { target: 'shipL' } });
+  check('jettison · ตอนถามฝั่ง', s1);
+  check('jettison · ตอนโยนจริง',
+        await onAction({ ...ctx, state: s1.state }, { uid: 'a', type: 'useCard', payload: { target: 'B' } }));
+}
+
+/* สัญญาฉบับใหม่ — ทิ้งไพ่แล้วจั่วใหม่ */
+{
+  const ctx = table('contract');
+  const up = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+  check('contract · ตอนถาม', up);
+  check('contract · ตอนทิ้งจริง',
+        await onAction({ ...ctx, state: up.state },
+                       { uid: 'a', type: 'useCard', payload: { cards: ctx.secrets.a.vote.slice(0, 2) } }));
+}
+
 /* แผนที่ — เปิดแล้วยกให้คนอื่น */
 for (const card of ['fountain', 'atlantis', 'eldorado']) {
   const ctx = table(card);
