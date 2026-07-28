@@ -112,6 +112,7 @@ function shell(el, ctx) {
                  </div>
                </div>`).join('')}
           </div>
+          <div class="wr-pickbar" hidden></div>
           <div class="wr-event-open" hidden></div>
           <p class="wr-event-note" hidden></p>
           <div class="wr-devbar-top" hidden></div>
@@ -576,6 +577,31 @@ export function render(el, ctx) {
   /* ไฮไลท์เรือได้ก็ต่อเมื่อฉากเล่าถึงช่วงเลือกแล้วจริง ๆ
      ไม่ใช่ทันทีที่สถานะมี aim ซึ่งเกิดพร้อมกับตอนผลเพิ่งเริ่มขึ้น */
   const aimMine = st.aim && st.aim.by === ctx.me.uid && !st.aim.target && sceneAtAim();
+  /* แถบปุ่มส่งของขั้นเลือกการ์ด — ปุ่มเดียวใต้แถว ไม่ใช่ปุ่มในทุกช่อง
+     กดได้ต่อเมื่อครบสองใบ จะได้ไม่ต้องเดาว่าเลือกพอหรือยัง
+     ไม่ใช้เมนูลอยเพราะเมนูอิงตำแหน่งของสิ่งที่คลิก ซึ่งอยู่นอกกระดานแล้วถูกตัดหาย */
+  const pickBar = el.querySelector('.wr-pickbar');
+  if (pickBar) {
+    const picking = st.pending?.by === ctx.me.uid && st.pending?.needs === 'slots';
+    pickBar.hidden = !picking;
+    if (picking) {
+      const ready = forcePick.length === 2;
+      const html = `<span class="wr-pickbar-left">${
+        esc(t('wreck.pick.left', { n: 2 - forcePick.length }))}</span>
+        <button class="wr-act" data-pick-go="1"${ready ? '' : ' disabled'}>${
+        esc(t('wreck.plan.confirm'))}</button>`;
+      if (pickBar.dataset.sig !== html) {
+        pickBar.dataset.sig = html;
+        pickBar.innerHTML = html;
+        pickBar.querySelector('[data-pick-go]').onclick = (e) => {
+          if (e.currentTarget.disabled) return;
+          ctx.send('useCard', { cards: [...forcePick] });
+          forcePick = []; plan = null; closeMenu();
+        };
+      }
+    } else { pickBar.dataset.sig = ''; pickBar.innerHTML = ''; }
+  }
+
   /* เรือเล็กที่โดนระเบิด — เปลี่ยนภาพเป็นซาก และย่อลง 15%
      ย่อด้วยการวาดแทนการแก้ไฟล์ จะได้ปรับตัวเลขทีหลังได้โดยไม่ต้องส่งรูปใหม่ */
   for (const boat of BOAT_IDS) {
@@ -866,6 +892,11 @@ function paintEvents(el, st, ctx) {
     const usedByPeek = mid?.slots.includes(i);
     const acts = slot.querySelector('.wr-event-acts');
     acts.classList.toggle('ready', on && mine && !usedByPeek);
+    /* ระหว่างเลือกการ์ดให้คนอื่นเปิด ทั้งช่องคือปุ่มเลือก
+       ปุ่มเปิด/แอบดูจึงต้องหายไปเลย ไม่ใช่แค่ทึบ เพราะตอนนี้ไม่ใช่ทางเลือกที่มีอยู่ */
+    const actBox = slot.querySelector('.wr-event-acts');
+    if (actBox) actBox.hidden = !!(st.pending?.by === me && st.pending?.needs === 'slots');
+
     slot.querySelector('[data-ev="activate"]').disabled = !(on && mine && filled && !mid);
     /* ดูใบที่เคยเปิดไปแล้วซ้ำได้ ห้ามเฉพาะใบที่เพิ่งดูไปในการแอบดูรอบนี้ */
     slot.querySelector('[data-ev="peek"]').disabled = !(on && mine && filled && !usedByPeek);

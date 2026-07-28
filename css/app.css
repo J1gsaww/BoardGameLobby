@@ -2152,3 +2152,14 @@ button{ cursor:pointer; border:0; background:none; }
 .wr-event-row.picking{
   outline:1px dashed var(--lamp); outline-offset:8px; border-radius:12px;
 }
+
+/* แถบปุ่มส่งของขั้นเลือกการ์ดให้คนอื่นเปิด — ปุ่มเดียวใต้แถวการ์ด
+   ปุ่มทึบจนกว่าจะครบสองใบ จะได้ไม่ต้องเดาว่าเลือกพอหรือยัง */
+.wr-pickbar{
+  display:flex; align-items:center; gap:10px; margin-top:10px;
+  padding:9px 12px; border-radius:12px;
+  background:rgba(244,169,73,.1); border:1px solid var(--lamp);
+}
+.wr-pickbar-left{ flex:1; font-family:var(--mono); font-size:11px; color:var(--lamp); }
+.wr-pickbar .wr-act{ min-width:150px; }
+.wr-pickbar .wr-act:disabled{ opacity:.4; cursor:not-allowed; }
