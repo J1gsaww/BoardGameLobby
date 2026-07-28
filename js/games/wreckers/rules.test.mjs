@@ -1868,3 +1868,38 @@ group('การ์ด · บ้าเรือ');
      [one.state.shout.kind, one.state.shout.by, one.state.shout.who], ['fever', 'a', 'b']);
   ok('ใช้เสร็จแล้วผ่านตา', one.state.turn, 'b');
 }
+
+group('การ์ด · ทะเลบ้า');
+{
+  const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+  const deck = { ...out.secrets._deck, slots: ['stormyseas', ...out.secrets._deck.slots.slice(1)] };
+  const cargo = { shipL: { B: 3, F: 3 }, shipR: { B: 0, F: 1 },
+                  island: { B: 3, F: 1 }, merchant: 0 };
+  const base = { ...out.state, phase: 'play', pos: filled().pos, cargo,
+                 seats: [...P], names: filled().names, out: [] };
+
+  /* เปิดบนเรือ */
+  const onShip = { ...ctxOf({ ...base, turn: 'a' }),
+                   secrets: { ...out.secrets, _deck: deck }, hostUid: 'a' };
+  const r1 = await onAction(onShip, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+  ok('กล่องบนลำนั้นหายหมด', r1.state.cargo.shipL, { B: 0, F: 0 });
+  ok('ไปโผล่ที่เรือสินค้าครบทุกใบ', r1.state.cargo.merchant, 6);
+  ok('เรืออีกลำไม่โดน', r1.state.cargo.shipR, { B: 0, F: 1 });
+  ok('เกาะไม่โดน', r1.state.cargo.island, { B: 3, F: 1 });
+  ok('ประกาศบอกจำนวนที่ถูกซัด', [r1.state.shout.kind, r1.state.shout.n], ['storm', 6]);
+
+  /* เปิดบนเกาะ */
+  const onIsle = { ...ctxOf({ ...base, turn: 'd' }),
+                   secrets: { ...out.secrets, _deck: deck }, hostUid: 'a' };
+  const r2 = await onAction(onIsle, { uid: 'd', type: 'activate', payload: { slot: 0 } });
+  ok('กล่องบนเกาะถูกแบ่งเท่ากัน', r2.state.cargo.island, { B: 2, F: 2 });
+  ok('จำนวนรวมบนเกาะไม่หาย', r2.state.cargo.island.B + r2.state.cargo.island.F, 4);
+  ok('เรือไม่โดนตอนเปิดบนเกาะ', r2.state.cargo.shipL, { B: 3, F: 3 });
+
+  /* เรือว่างอยู่แล้ว */
+  const empty = { ...base, turn: 'f', cargo: { ...cargo, shipR: { B: 0, F: 0 } } };
+  const onBare = { ...ctxOf(empty), secrets: { ...out.secrets, _deck: deck }, hostUid: 'a' };
+  const r3 = await onAction(onBare, { uid: 'f', type: 'activate', payload: { slot: 0 } });
+  ok('เรือว่างอยู่แล้วก็ไม่พัง', r3.state.cargo.merchant, 0);
+  ok('ประกาศบอกว่าไม่มีอะไรให้ซัด', r3.state.shout.n, 0);
+}

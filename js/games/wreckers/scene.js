@@ -22,6 +22,12 @@ import { BASE_CARDS, cardArt, eventArt, eventAlt, CARD_ART, CARD_EXT, CARD_ALT }
 
 /* หลังไพ่ประเทศ ใช้ในฉากสับไพ่ของบ้าเรือ */
 const BRAWL_BACK = 'assets/game/wreckers/cards/brawl_back' + CARD_EXT;
+
+/* ภาพเอฟเฟกต์เฉพาะใบ — ตอนนี้มีแค่สายฟ้าของทะเลบ้า
+   เก็บเป็นตารางไว้ตั้งแต่ต้น เผื่อใบอื่นอยากมีของประกอบฉากบ้าง
+   จะได้เพิ่มชื่อใบเดียวไม่ต้องไปแก้ตัววาด */
+const FX = 'assets/game/wreckers/effect/';
+const CARD_FX = { stormyseas: ['lightning_left', 'lightning_right'] };
 const BRAWL_BACK_ALT = 'assets/game/wreckers/cards/brawl_back' + CARD_ALT;
 import { EXTRA_CARDS } from './cards.js';
 import { lang } from '../../i18n.js';
@@ -305,7 +311,11 @@ function shoutNote(body, st) {
     const nameOf2 = (u) => st.names?.[u] || '?';
     /* สายนี้เคยหลุดหายไปตอนแก้ข้อความ ทำให้ไหลไปจบที่ข้อความไล่คนลงเรือ
        ซึ่งเป็นอันสุดท้ายของสาย เลยขึ้นผิดเรื่องทั้งหัวข้อและเนื้อความ */
-    const msg = sh.kind === 'skip'
+    const msg = sh.kind === 'storm'
+      ? (sh.place === 'island' ? t('wreck.scene.stormIsle')
+        : !sh.n ? t('wreck.scene.stormNone', { place: t('wreck.place.' + sh.place) })
+        : t('wreck.scene.storm', { n: sh.n, place: t('wreck.place.' + sh.place) }))
+      : sh.kind === 'skip'
       ? t('wreck.scene.skipped', { who: (sh.who || []).map(nameOf2).join(', ') })
       : sh.kind === 'scurvy'
       ? t('wreck.scene.scurvy', { place: t('wreck.place.' + placeOf(st.pos?.[sh.by] || '')) })
@@ -392,7 +402,17 @@ function cardNote(body, st, ctx) {
   if (goto('collect')) {
     const c = cardById(id);
     const info = c ? (c[lang] || c.th) : null;
-    body.innerHTML = `<div class="wr-cardup">
+
+    /* ของประกอบฉากเฉพาะใบ — วางไว้ริมซ้ายขวา เต็มความสูงของเวที
+       อยู่นอกกล่องการ์ด เพราะกล่องนั้นจะย่อไปมุมตอนมีขั้นถัดไป
+       ถ้าอยู่ข้างในจะหดตามไปด้วยจนหายไปเลย */
+    const fx = CARD_FX[id];
+    const sideFx = !fx ? '' : fx.map((name, i) => `<img class="wr-cardfx wr-cardfx-${i ? 'r' : 'l'}"
+      src="${esc(FX + name + CARD_EXT)}" alt="" draggable="false"
+      data-alt="${esc(FX + name + CARD_ALT)}"
+      onerror="if(this.dataset.alt){this.src=this.dataset.alt;this.dataset.alt='';}else{this.remove();}">`).join('');
+
+    body.innerHTML = sideFx + `<div class="wr-cardup">
         <img class="wr-cardup-img" src="${esc(cardArt(id))}" alt=""
           draggable="false" onerror="this.remove()">
         <span class="wr-cardup-name">${esc(info?.name || id)}</span>
@@ -678,6 +698,7 @@ function titleOf(st, ph, me) {
       /* ใบที่เพิ่มทีหลัง — ถ้าลืมใส่ตรงนี้ หัวข้อจะตกไปเป็นคำว่า EVENT ลอย ๆ */
       scurvy:  'wreck.card.scurvy',
       fever:   'wreck.card.cabinfever',
+      storm:   'wreck.card.stormyseas',
       skip:    'wreck.card.scurvy',
       wreck:   'wreck.card.shipwreck',
       calm:    'wreck.card.doldrums',

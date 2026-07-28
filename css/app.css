@@ -1924,3 +1924,28 @@ button{ cursor:pointer; border:0; background:none; }
   transition:opacity .4s;
 }
 .wr-fever-line.show{ opacity:1; }
+
+/* ── ของประกอบฉากเฉพาะใบ (สายฟ้าของทะเลบ้า) ────────────────
+   ชิดขอบบนล่างของเวทีเต็มความสูง แล้วให้ความกว้างวิ่งตามสัดส่วนภาพเอง
+   จะได้ไม่ถูกครอปและไม่ยืดผิดสัดส่วน */
+.wr-cardfx{
+  position:absolute; top:0; bottom:0; height:100%; width:auto;
+  pointer-events:none; opacity:0;
+  filter:drop-shadow(0 0 18px rgba(180,210,255,.85));
+  animation:wr-bolt 2.4s ease-out both;
+}
+.wr-cardfx-l{ left:0; }
+.wr-cardfx-r{ right:0; }
+/* ฟ้าแลบเป็นจังหวะ ไม่ใช่ค้างสว่างเท่ากันตลอด */
+@keyframes wr-bolt{
+  0%   { opacity:0; }
+  6%   { opacity:1; }
+  12%  { opacity:.15; }
+  18%  { opacity:.95; }
+  26%  { opacity:.3; }
+  34%  { opacity:.85; }
+  70%  { opacity:.5; }
+  100% { opacity:.28; }
+}
+/* การ์ดย่อไปมุมแล้ว สายฟ้าไม่ต้องอยู่ต่อ */
+.wr-scene-body.parked .wr-cardfx{ display:none; }

@@ -211,6 +211,33 @@ export const EFFECTS = {
     })
   },
 
+  /* ทะเลบ้า — เปิดบนเรือ กล่องทั้งลำถูกซัดไปเรือสินค้าหมด
+     เปิดบนเกาะ กล่องบนเกาะถูกแบ่งเท่ากันสองฝั่ง
+
+     เกาะมีได้ทั้ง 2 และ 4 กล่อง (จาก "เกยตื้น") จึงแบ่งครึ่งตามจำนวนจริง
+     ไม่ใช่ตั้งเป็น 1-1 ตายตัว ไม่งั้นกล่องจะหายไปจากเกม */
+  stormyseas: {
+    run: (st, uid, _picks, hands) => {
+      const place = placeOf(st.pos[uid]);
+      const c = st.cargo;
+
+      if (place === 'island') {
+        const total = (c.island?.B || 0) + (c.island?.F || 0);
+        const cargo = { ...c, island: { B: Math.ceil(total / 2), F: Math.floor(total / 2) } };
+        return { state: { ...st, cargo }, hands,
+                 shout: { kind: 'storm', by: uid, place, card: 'stormyseas' } };
+      }
+
+      const gone = (c[place]?.B || 0) + (c[place]?.F || 0);
+      if (!gone) return { state: st, hands,
+                          shout: { kind: 'storm', by: uid, place, n: 0, card: 'stormyseas' } };
+
+      const cargo = { ...c, [place]: { B: 0, F: 0 }, merchant: (c.merchant || 0) + gone };
+      return { state: { ...st, cargo }, hands,
+               shout: { kind: 'storm', by: uid, place, n: gone, card: 'stormyseas' } };
+    }
+  },
+
   /* ประมวลโจรสลัด — คนเปิดโดนห้ามโหวตสองครั้ง
      ใช้กลไกเดียวกับโทษของเอลโดราโด แค่เปลี่ยนจำนวนครั้ง
      ป้ายข้างชื่อจึงขึ้นเองโดยไม่ต้องเก็บอะไรเพิ่ม เพราะอ่านจากจำนวนครั้งที่เหลือ */
