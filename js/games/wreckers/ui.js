@@ -907,7 +907,11 @@ function paintEvents(el, st, ctx) {
     /* ระหว่างแอบดูค้าง เหลือให้กดได้แค่ปุ่มแอบดูของใบที่ยังไม่ได้ดู */
     const usedByPeek = mid?.slots.includes(i);
     const acts = slot.querySelector('.wr-event-acts');
-    acts.classList.toggle('ready', on && mine && !usedByPeek);
+    /* ปุ่มบนไพ่กดได้เมื่อ "พร้อม" — ปกติคือคลิกเลือกไพ่ใบนั้นก่อน
+       แต่ตอนถูกบังคับไม่มีขั้นเลือกไพ่ ต้องกดได้ทันทีบนสองใบที่เขาชี้ไว้
+       ถ้าไม่ใส่ตรงนี้ ปุ่มจะโผล่มาแต่ pointer-events ปิดอยู่ กดยังไงก็ไม่ติด */
+    const forcedReady = st.forced?.who === me && (st.forced.slots || []).includes(i);
+    acts.classList.toggle('ready', forcedReady || (on && mine && !usedByPeek));
     /* ── ปุ่มในช่องการ์ด มีสามสถานการณ์ที่ต้องแยกให้ขาด ──────
        ปกติ          — เปิดหรือแอบดูได้ตามสิทธิ์ของตา
        กำลังเลือกให้คนอื่นเปิด — ทั้งช่องคือปุ่มเลือก ปุ่มในช่องหายไปหมด
@@ -1336,6 +1340,10 @@ function paintActions(el, st, ctx) {
   const btn = (k, on = can.includes(k)) =>
     `<button class="wr-act" data-do="${k}"${on ? '' : ' disabled'}>${esc(t('wreck.act.' + k))}</button>`;
 
+  /* ปุ่มที่กดไม่ได้พร้อมเหตุผล — ใช้ตอนที่ทางที่ถูกต้องอยู่ที่อื่น */
+  const btnOff = (k, why) =>
+    `<button class="wr-act" data-do="${k}" disabled title="${esc(why)}">${esc(t('wreck.act.' + k))}</button>`;
+
   const boats = boatsFromAll(spot);
   const boatBtn = (b) => {
     const gone = isWrecked(st, b);
@@ -1351,7 +1359,11 @@ function paintActions(el, st, ctx) {
     : boats.length === 1 ? boatBtn(boats[0])
     : `<div class="wr-act-two">${boats.map(boatBtn).join('')}</div>`;
 
-  const common = ['activate', 'peek', 'force'].map(k => btn(k)).join('') + boatRow;
+  /* ถูกบังคับให้เปิดอยู่ = ต้องกดจากบนไพ่ เพราะปุ่มในคอลัมน์ไม่รู้ว่าใบไหน
+     ปล่อยให้กดได้จะส่งคำสั่งที่ไม่มีเลขใบไป แล้วโดนปฏิเสธเงียบ ๆ */
+  const forcedNow = st.forced?.who === me;
+  const common = ['activate', 'peek', 'force']
+    .map(k => (forcedNow ? btnOff(k, t('wreck.pickOnCard')) : btn(k))).join('') + boatRow;
 
   /* useCard / useSave ไม่ใช่ปุ่ม — มันคือ "ตอบด้วยการคลิกของบนกระดาน"
      ถ้าทำเป็นปุ่ม จะกดได้โดยไม่มีเป้าติดมาด้วย แล้วส่งคำสั่งเปล่าไปโดนปฏิเสธเงียบ ๆ

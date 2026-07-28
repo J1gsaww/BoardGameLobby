@@ -2168,3 +2168,9 @@ button{ cursor:pointer; border:0; background:none; }
 .wr-pickbar-left{ flex:1; font-family:var(--mono); font-size:11px; color:var(--lamp); }
 .wr-pickbar .wr-act{ min-width:150px; }
 .wr-pickbar .wr-act:disabled{ opacity:.4; cursor:not-allowed; }
+
+/* ถูกบังคับให้เปิด — ปุ่มบนไพ่สองใบนั้นต้องเห็นชัดและกดได้ทันที
+   ไม่ต้องรอให้เอาเมาส์ไปชี้ เพราะเป็นสิ่งเดียวที่ทำได้ตอนนั้น */
+.wr-event-slot.fx-must .wr-event-acts{ opacity:1; pointer-events:auto; }
+.wr-event-slot.fx-must .wr-mini{ border-color:var(--rose); color:#fff; }
+.wr-event-slot.fx-must .wr-mini:hover{ background:var(--rose); color:#241704; }
