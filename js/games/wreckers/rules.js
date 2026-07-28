@@ -503,15 +503,19 @@ export function score(cargo) {
   };
 }
 
-export function winningSide(cargo) {
+/* ฝ่ายที่ชนะ — เสมอกันแล้วดัตช์ชนะ **ก็ต่อเมื่อมีดัตช์อยู่ในเกมจริง**
+   ถ้าไม่มีใครเป็นดัตช์เลย การเสมอคือเสมอ ไม่มีใครชนะ
+   ของเดิมคืน 'D' ทุกครั้งที่เสมอ ทำให้เกมที่ไม่มีดัตช์ประกาศผู้ชนะที่ไม่มีตัวตน */
+export function winningSide(cargo, nations = null) {
   const s = score(cargo);
   if (s.B > s.F) return 'B';
   if (s.F > s.B) return 'F';
-  return 'D';
+  if (!nations) return 'D';
+  return Object.values(nations).includes('D') ? 'D' : 'tie';
 }
 
 export const winners = (cargo, nations = {}) => {
-  const side = winningSide(cargo);
+  const side = winningSide(cargo, nations);
   return Object.entries(nations).filter(([, n]) => n === side).map(([uid]) => uid);
 };
 

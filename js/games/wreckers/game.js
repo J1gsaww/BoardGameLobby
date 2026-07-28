@@ -376,6 +376,17 @@ function activate(ctx, uid, { slot }) {
 
   /* การ์ดที่ต้องถามก่อน จะยังไม่ผ่านตา เกมค้างรอคนเปิดเลือกเป้าก่อน
      จังหวะเดียวกับการโหวต ผลจึงไม่โผล่ก่อนที่ฉากจะเล่าถึง */
+  /* กองเรือสเปน — จบเกมทันทีตรงนี้เลย ไม่ผ่านฉากเปิดการ์ด
+     เพราะเกมจบแล้ว ฉากเล่าเรื่องการ์ดจะกลายเป็นการหน่วงผลที่ทุกคนรออยู่ */
+  if (id === ENDER) {
+    const done = finish(ctx);
+    return {
+      state: pushLog({ ...done.state, cardUp: null },
+                     'wreck.log.card.armada', { name: st.names?.[uid] }),
+      secrets: { _deck: next, ...cleared }
+    };
+  }
+
   const eff = effectOf(id);
   const needs = nextStep(id, {});
 
@@ -1114,7 +1125,9 @@ export function finish(ctx) {
       deadline: null,
       result: {
         score: score(st.cargo),
-        side: winningSide(st.cargo),
+        /* ส่งไพ่ประเทศทุกคนไปด้วย — เกมจบแล้ว ความลับหมดหน้าที่
+           และหน้าสรุปต้องบอกได้ว่าใครอยู่ฝ่ายไหนตอนจบ */
+        side: winningSide(st.cargo, nations),
         winners: winners(st.cargo, nations),
         nations
       }

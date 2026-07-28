@@ -1903,3 +1903,35 @@ group('การ์ด · ทะเลบ้า');
   ok('เรือว่างอยู่แล้วก็ไม่พัง', r3.state.cargo.merchant, 0);
   ok('ประกาศบอกว่าไม่มีอะไรให้ซัด', r3.state.shout.n, 0);
 }
+
+group('การ์ด · กองเรือสเปน');
+{
+  const cargo = { shipL: { B: 2, F: 0 }, shipR: { B: 0, F: 2 },
+                  island: { B: 0, F: 0 }, merchant: 4 };
+
+  ok('เสมอแล้วมีดัตช์ = ดัตช์ชนะ', winningSide(cargo, { a: 'B', b: 'F', c: 'D' }), 'D');
+  ok('เสมอแล้วไม่มีดัตช์ = เสมอจริง', winningSide(cargo, { a: 'B', b: 'F' }), 'tie');
+  ok('ไม่ส่งไพ่ประเทศมาก็ยังคืนดัตช์เหมือนเดิม', winningSide(cargo), 'D');
+
+  const lead = { ...cargo, shipL: { B: 3, F: 0 } };
+  ok('ฝ่ายที่มีกล่องมากกว่าชนะ', winningSide(lead, { a: 'B', b: 'F' }), 'B');
+  ok('ผู้ชนะคือทุกคนในฝ่ายนั้น', winners(lead, { a: 'B', b: 'F', c: 'B' }).sort(), ['a', 'c']);
+  ok('เสมอแล้วไม่มีดัตช์ ก็ไม่มีผู้ชนะ', winners(cargo, { a: 'B', b: 'F' }), []);
+}
+{
+  const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+  const deck = { ...out.secrets._deck, slots: ['armada', ...out.secrets._deck.slots.slice(1)] };
+  const base = { ...out.state, phase: 'play', turn: 'a', pos: filled().pos,
+                 seats: [...P], names: filled().names, out: [],
+                 cargo: { shipL: { B: 3, F: 0 }, shipR: { B: 0, F: 2 },
+                          island: { B: 0, F: 0 }, merchant: 3 } };
+  const ctx = { ...ctxOf(base), secrets: { ...out.secrets, _deck: deck }, hostUid: 'a' };
+
+  const r = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+  ok('เปิดแล้วเกมจบทันที', r.state.phase, 'over');
+  ok('ไม่มีฉากเปิดการ์ด', r.state.cardUp ?? null, null);
+  ok('สรุปคะแนนไว้แล้ว', [r.state.result.score.B, r.state.result.score.F], [3, 2]);
+  ok('บอกฝ่ายที่ชนะ', r.state.result.side, 'B');
+  ok('ส่งไพ่ประเทศทุกคนไปให้หน้าจอ', Object.keys(r.state.result.nations).sort(), [...P].sort());
+  ok('ไม่นับกล่องบนเรือสินค้า', r.state.result.score.B + r.state.result.score.F, 5);
+}

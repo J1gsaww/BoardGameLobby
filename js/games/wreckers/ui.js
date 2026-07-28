@@ -84,6 +84,7 @@ function shell(el, ctx) {
           <div class="wr-dice" hidden></div>
           <div class="wr-scene" hidden></div>
           <div class="wr-loading" hidden></div>
+          <div class="wr-over" hidden></div>
         </div>
 
         <aside class="wr-side wr-roster">
@@ -319,6 +320,47 @@ function boardView(st) {
   return st;
 }
 
+/* ── หน้าสรุปผลตอนจบเกม ────────────────────────────────────
+   ขึ้นกลางจอทับกระดาน สามชั้น — ใครชนะ · คะแนนสองฝ่าย · ใครอยู่ฝ่ายไหน
+   ไพ่ประเทศถูกเปิดหมดตรงนี้ เพราะเกมจบแล้วไม่มีอะไรต้องปิดอีก */
+function paintOver(el, st, ctx) {
+  const box = el.querySelector('.wr-over');
+  if (!box) return;
+  const r = st.phase === 'over' ? st.result : null;
+  box.hidden = !r;
+  if (!r) { box.dataset.sig = ''; return; }
+
+  const me = ctx.me.uid;
+  const mine = r.nations?.[me];
+  const won = r.side !== 'tie' && mine === r.side;
+
+  const rows = (st.seats || []).map(uid => {
+    const n = r.nations?.[uid] || 'D';
+    return `<li class="wr-over-row${n === r.side ? ' win' : ''}">
+        <span class="wr-over-who">${esc(st.names?.[uid] || '?')}</span>
+        <span class="wr-tag n-${esc(n)}">${esc(t('wreck.nation.' + n + '.tag'))}</span>
+      </li>`;
+  }).join('');
+
+  const html = `<div class="wr-over-card">
+      <p class="wr-over-small">${esc(t('wreck.over.done'))}</p>
+      <h3 class="wr-over-win n-${esc(r.side)}">${esc(t('wreck.over.win.' + r.side))}</h3>
+      ${mine ? `<p class="wr-over-you${won ? ' yes' : ''}">${
+        esc(won ? t('wreck.over.youWin') : t('wreck.over.youLose'))}</p>` : ''}
+
+      <p class="wr-over-small">${esc(t('wreck.over.scores'))}</p>
+      <div class="wr-over-score">
+        <span class="n-B">${esc(t('wreck.british'))} ${r.score.B}</span>
+        <span class="n-F">${esc(t('wreck.france'))} ${r.score.F}</span>
+      </div>
+
+      <p class="wr-over-small">${esc(t('wreck.over.sides'))}</p>
+      <ul class="wr-over-list">${rows}</ul>
+    </div>`;
+
+  if (box.dataset.sig !== html) { box.dataset.sig = html; box.innerHTML = html; }
+}
+
 function paintLoading(el) {
   const box = el.querySelector('.wr-loading');
   if (!box) return;
@@ -502,6 +544,7 @@ export function render(el, ctx) {
   setPlanWire(box => wirePlan(box, el, ctx));
   /* ฉากปิดเมื่อไหร่ วาดกระดานใหม่ทันที ไม่ต้องรอสถานะเปลี่ยนรอบถัดไป */
   setSceneClose(() => paint(el));   /* วาดกระดานใหม่ และเปิดฉากถัดไปถ้ามีรออยู่ */
+  paintOver(el, st, ctx);
   paintScene(el, st, ctx);
   paintHand(el, st, ctx);
   paintRoster(el, view, ctx);

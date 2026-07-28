@@ -1949,3 +1949,44 @@ button{ cursor:pointer; border:0; background:none; }
 }
 /* การ์ดย่อไปมุมแล้ว สายฟ้าไม่ต้องอยู่ต่อ */
 .wr-scene-body.parked .wr-cardfx{ display:none; }
+
+/* ── หน้าสรุปผลตอนจบเกม ────────────────────────────────────
+   ลอยเต็มจอ ไม่ขึ้นกับขนาดกระดาน เพราะกระดานตั้ง overflow:hidden ไว้ */
+.wr-over{
+  position:fixed; inset:0; z-index:96;
+  display:grid; place-items:center; padding:16px;
+  background:rgba(4,3,12,.78); backdrop-filter:blur(3px);
+}
+.wr-over-card{
+  display:grid; justify-items:center; gap:9px;
+  width:min(420px, 92vw); max-height:88vh; overflow-y:auto;
+  padding:22px 20px; border-radius:20px;
+  background:linear-gradient(150deg,#2f2450,#150f28);
+  border:2px solid var(--lamp); box-shadow:0 26px 70px rgba(0,0,0,.8);
+  animation:wr-reveal-in .45s cubic-bezier(.2,.9,.3,1);
+}
+.wr-over-small{
+  margin:6px 0 0; font-family:var(--mono); font-size:10px; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--muted);
+}
+.wr-over-win{
+  margin:0; font-family:var(--display); font-size:26px; font-weight:700; text-align:center;
+  text-shadow:0 2px 8px rgba(0,0,0,.7);
+}
+.wr-over-win.n-tie{ color:var(--muted); }
+.wr-over-you{
+  margin:0; font-family:var(--mono); font-size:11px; letter-spacing:.1em;
+  color:var(--muted);
+}
+.wr-over-you.yes{ color:var(--mint); }
+.wr-over-score{
+  display:flex; gap:16px; font-family:var(--display); font-size:19px; font-weight:700;
+}
+.wr-over-list{ list-style:none; margin:0; padding:0; width:100%; display:grid; gap:5px; }
+.wr-over-row{
+  display:flex; align-items:center; gap:8px;
+  padding:6px 9px; border-radius:9px;
+  background:rgba(33,27,58,.7); border:1px solid var(--line);
+}
+.wr-over-row.win{ border-color:var(--lamp); box-shadow:0 0 0 1px var(--lamp) inset; }
+.wr-over-who{ flex:1; min-width:0; font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
