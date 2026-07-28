@@ -98,17 +98,18 @@ const now = () => performance.now();
 /* หนึ่งฉาก = หนึ่งการโหวตทั้งกระบวน ตั้งแต่สั่งจนกัปตันเลือกเสร็จ
    ผูกกับคนสั่งกับสถานที่ ไม่ผูกกับช่วง จึงไม่ถูกตัดใหม่กลางทาง */
 function sceneKey(st) {
-  /* วงยิงแข่งสองลำ — ฉากของตัวเอง ไม่ปนกับการโหวตปกติ
-     มาก่อนทุกอย่างเพราะระหว่างนั้นไม่มีอะไรอื่นเกิดขึ้นได้เลย */
-  if (st.duel) return `duel:${st.duel.at}`;
-  if (st.lastDuel && !told.has('duel:' + st.lastDuel.at)) return `duelend:${st.lastDuel.at}`;
-
   if (st.vote) return `ep:${st.vote.caller}:${st.vote.place}`;
   /* ประกาศการแอบดูเป็นฉากสั้น ๆ ของตัวเอง ไม่ปนกับฉากโหวต */
   if (st.lastPeek && !dismissed.has('peek:' + st.lastPeek.at)) return `peek:${st.lastPeek.at}`;
   /* การ์ดมาก่อนประกาศผลเสมอ — ต้องรู้ว่าเปิดเจออะไรก่อนถึงจะเข้าใจว่าทำไมถึงเกิดผลนั้น
      ถ้าสลับลำดับ จะเห็นผลลอย ๆ ก่อนแล้วค่อยรู้ว่ามาจากการ์ดใบไหน */
   if (st.cardUp && !dismissed.has('card:' + st.cardUp.at)) return `card:${st.cardUp.at}`;
+
+  /* วงยิงแข่งสองลำ — ต้องมา **หลัง** ฉากเปิดการ์ดเสมอ
+     ไม่งั้นวงยิงจะขึ้นทับก่อนที่คนดูจะรู้ว่าเปิดเจอการ์ดอะไร
+     ซึ่งเป็นกฎเดียวกับที่ใช้กับประกาศผลทุกชนิด — รู้เหตุก่อนเห็นผล */
+  if (st.duel) return `duel:${st.duel.at}`;
+  if (st.lastDuel && !told.has('duel:' + st.lastDuel.at)) return `duelend:${st.lastDuel.at}`;
   /* ค้างรอคำตอบว่าจะใช้การ์ดกันไหม ต้องมาก่อนประกาศผลเสมอ
      เพราะตอนนี้ผลยังไม่เกิด คนที่ถูกถามอาจรอดก็ได้ */
   if (st.saveAsk) return `save:${st.saveAsk.at}`;
@@ -787,10 +788,12 @@ function askNote(body, st, ctx) {
 const DUEL_READ = 3400;
 
 function duelSideBack(ship, side, names) {
-  const cards = side.crew.map(u => `<div class="wr-vb${side.done.includes(u) ? ' in' : ''}">
-      <span class="wr-vb-card">${VOTE_BACK}</span>
+  /* หลังไพ่เป็นรูป ไม่ใช่ข้อความ — VOTE_BACK เป็น path ต้องใส่ในแท็กรูปเอง
+     ยังไม่ส่งไพ่ = จาง · ส่งแล้ว = ชัด จะได้เห็นว่ารอใครอยู่ */
+  const cards = side.crew.map(u => `<span class="wr-vb${side.done.includes(u) ? ' in' : ' wait'}">
+      <img src="${esc(VOTE_BACK)}" alt="" draggable="false">
       <span class="wr-vb-name">${esc(names?.[u] || '?')}</span>
-    </div>`).join('');
+    </span>`).join('');
   return `<div class="wr-duel-side">
       <p class="wr-duel-head">${esc(t('wreck.place.' + ship))}</p>
       <div class="wr-duel-cards">${side.empty
@@ -799,6 +802,7 @@ function duelSideBack(ship, side, names) {
 }
 
 function duelCollect(body, st, ctx) {
+  goto('collect');
   const d = st.duel;
   const sig = 'duel:' + SHIP_IDS.map(x => d.sides[x].done.length).join('.');
   if (body.dataset.duel === sig) return true;
@@ -815,15 +819,19 @@ function duelCollect(body, st, ctx) {
 
 function duelResult(body, st, ctx) {
   const r = st.lastDuel;
+
+  /* ต้องเริ่มจับเวลาใหม่ตรงนี้ ไม่งั้นนาฬิกายังเป็นของฉากก่อนหน้า
+     ซึ่งเดินไปไกลแล้ว ฉากผลจะถือว่าอ่านจบทันทีแล้วปิดตัวเองโดยไม่มีใครเห็น */
+  goto('collect');
   const ms = now() - stageAt;
 
   if (body.dataset.duel !== 'end:' + r.at) {
     body.dataset.duel = 'end:' + r.at;
     const side = (ship) => {
       const one = r.sides[ship];
-      const cards = one.pot.map(id => `<div class="wr-vb">
-          <span class="wr-vb-card">${voteCard(voteById(id), lang)}</span>
-        </div>`).join('');
+      const cards = one.pot.map(id => `<span class="wr-vb">
+          ${voteCard(voteById(id), lang)}
+        </span>`).join('');
       return `<div class="wr-duel-side">
           <p class="wr-duel-head ${one.hit ? 'hit' : 'miss'}">${esc(t('wreck.place.' + ship))}</p>
           <div class="wr-duel-cards">${cards}</div>
