@@ -143,6 +143,17 @@ export const ANYTIME = new Set(['atlantis']);
 export function actionsFor(st, uid) {
   if (st.phase !== 'play') return [];
 
+  /* กัปตันลำที่ชนะกำลังเลือกกล่องที่จะชิง — คนอื่นรออย่างเดียว */
+  if (st.grab) return st.grab.who === uid ? ['grabPick'] : [];
+
+  /* ค้างรอคำตอบว่าลำไหนคืนกล่องฝั่งไหน — ถามได้พร้อมกันสองคน
+     คนที่ถูกถามตอบได้ คนอื่นทำอะไรไม่ได้จนกว่าจะครบ */
+  if (st.spoils) {
+    const mine = Object.entries(st.spoils.asks)
+      .some(([ship, u]) => u === uid && st.spoils.need.includes(ship) && !st.spoils.picked[ship]);
+    return mine ? ['spoilPick'] : [];
+  }
+
   /* ค้างรอคำตอบว่าจะใช้การ์ดกัน Maroon ไหม
      ต้องเช็กก่อนด่านตรวจว่าถึงตาหรือยัง เพราะคนที่ถูกถามมักไม่ใช่คนที่ถึงตา
      เช่นโดนคนอื่นยิงด้วยปืนพก หรือโดนนกถล่มพร้อมทั้งลำ */

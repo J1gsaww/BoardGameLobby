@@ -326,6 +326,17 @@ function cardPicker(room, game, setting) {
   head.className = 'card-picker-head';
   head.innerHTML = `<span class="card-picker-count">${esc(t('cards.added', { n: total }))}</span>`;
 
+  /* เกมปิดตัวเลือกนี้ไว้ชั่วคราว — โชว์ให้เห็นว่ามีอยู่ แต่กดอะไรไม่ได้
+     ซ่อนไปเลยจะทำให้คนที่เคยเห็นสงสัยว่าหายไปไหน */
+  if (setting.off) {
+    wrap.classList.add('off');
+    const why = document.createElement('p');
+    why.className = 'cards-off';
+    why.textContent = t(setting.off);
+    wrap.append(head, why);
+    return wrap;
+  }
+
   if (room.isHost) {
     const all = document.createElement('button');
     all.className = 'btn btn-slim';

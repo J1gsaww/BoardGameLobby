@@ -15,7 +15,9 @@ import {
 } from './board.js';
 import { deal } from './vote.js';
 import { BASE_CARDS, ENDER, ENDER_ZONE } from './events.js';
-import { startDuel, duelSubmit, duelReady, resolveDuel, canDuelNow, marchOrder } from './duel.js';
+import { startDuel, duelSubmit, duelReady, resolveDuel, canDuelNow, marchOrder,
+         roomOn, grabBoxes, spoilAsks, dumpShip,
+         grabFrom, grabTo, moveOne, canGrab } from './duel.js';
 import { effectOf, targetsOf, nextStep, keepsInHand, canUseCard,
          isDeferred, isGift, giftTargets, canPlayNow, pickCountOf, crowPool,
          pickUpToOf, isHandStep, duelOf } from './effects.js';
@@ -169,6 +171,9 @@ export function passTurn(st, now = Date.now()) {
      การเปิดเป็นส่วนหนึ่งของ Action นั้น ไม่ใช่ตาใหม่ของใคร */
   if (st.forced) return st;
 
+  /* ยังมีคนค้างตอบว่าคืนกล่องฝั่งไหน หรือกำลังเลือกกล่องที่จะชิง = ยังไม่จบ */
+  if (st.spoils || st.grab) return st;
+
   const { state, uid, skipped = [] } = advance(st);        /* คนที่ติดหนี้ข้ามเทิร์นถูกหักหนี้แล้วข้ามไปในนี้ */
   /* มีคนโดนข้ามตา = ประกาศให้ทั้งวงรู้ว่าใครหยุดอยู่
      ไม่งั้นจะเห็นแค่ตากระโดดข้ามหัวไปเฉย ๆ แล้วงงว่าเกิดอะไรขึ้น */
@@ -209,6 +214,10 @@ export async function onAction(ctx, action) {
   if (type === 'voteCard') return submitVote(ctx, uid, payload.card);
   /* ส่งไพ่เข้าวงยิงแข่ง — ทุกคนบนเรือส่งพร้อมกัน จึงทำได้นอกตาตัวเอง */
   if (type === 'duelCard') return submitDuel(ctx, uid, payload.card);
+  /* เลือกว่าลำนี้คืนกล่องฝั่งไหน — ถามได้พร้อมกันสองคน จึงทำนอกตาตัวเอง */
+  if (type === 'spoilPick') return spoilPick(ctx, uid, payload.side);
+  /* กัปตันของลำที่ชนะเลือกกล่องที่จะชิง ทีละใบ */
+  if (type === 'grabPick') return grabPick(ctx, uid, payload.side);
   if (type === 'useDorado') return useDorado(ctx, uid, payload);
   if (type === 'endGame') return finish(ctx);
 
@@ -511,6 +520,70 @@ function activate(ctx, uid, { slot }) {
   };
 }
 
+/* ── กัปตันลำที่ชนะเลือกกล่องที่จะชิง ──────────────────────
+   ถามทีละใบ สองขั้นต่อใบ — เอาจากฝั่งไหน แล้วเก็บไว้ฝั่งไหน
+   กติกาเดียวกับการยิงปกติทุกประการ */
+function grabPick(ctx, uid, side) {
+  const st = ctx.state;
+  const g = st.grab;
+  if (!g || g.who !== uid) return null;
+  if (!['B', 'F'].includes(side)) return null;
+
+  /* ขั้นเลือกต้นทาง — เก็บไว้ก่อนแล้วไปถามปลายทาง */
+  if (g.step === 'from') {
+    if (!grabFrom(st.cargo, g.from).includes(side)) return null;
+    return { state: { ...st, grab: { ...g, step: 'to', pick: { from: side } } } };
+  }
+
+  /* ขั้นเลือกปลายทาง — ย้ายกล่องจริงตรงนี้ */
+  if (!grabTo(st.cargo, g.ship).includes(side)) return null;
+  const cargo = moveOne(st.cargo, g.ship, g.from, g.pick.from || null, side);
+  if (!cargo) return null;
+
+  const left = g.left - 1;
+  const more = left > 0 && canGrab(cargo, g.ship, g.from);
+
+  if (more) {
+    return { state: { ...st, cargo,
+      grab: { ...g, left, pick: {},
+              step: grabFrom(cargo, g.from).length ? 'from' : 'to' } } };
+  }
+
+  return {
+    state: passTurn(pushLog({ ...st, cargo, grab: null,
+      shout: { kind: 'grabbed', place: g.ship, n: 2 - left, at: (st.logSeq || 0) + 1 } },
+      'wreck.log.grabbed', { place: '' }))
+  };
+}
+
+/* ── ตอบว่าลำนี้คืนกล่องฝั่งไหน ────────────────────────────
+   ถามพร้อมกันได้สองคน ลำละคน ซึ่งเป็นจังหวะที่ยังไม่เคยมีในเกม
+   จึงเก็บคำตอบไว้ก่อนแล้วลงมือเมื่อครบทุกคนที่ถูกถาม */
+function spoilPick(ctx, uid, side) {
+  const st = ctx.state;
+  const sp = st.spoils;
+  if (!sp) return null;
+  if (!['B', 'F'].includes(side)) return null;
+
+  const ship = SHIP_IDS.find(s => sp.asks[s] === uid && sp.need.includes(s));
+  if (!ship || sp.picked[ship]) return null;
+
+  const picked = { ...sp.picked, [ship]: side };
+  const left = sp.need.filter(s => !picked[s]);
+
+  if (left.length) return { state: { ...st, spoils: { ...sp, picked } } };
+
+  /* ครบแล้ว — คืนกล่องของทุกลำกลับเรือสินค้า */
+  let cargo = st.cargo;
+  for (const s of SHIP_IDS) cargo = dumpShip(cargo, s, picked[s] || null);
+
+  return {
+    state: passTurn(pushLog({ ...st, cargo, spoils: null,
+      shout: { kind: 'spoils', picked, at: (st.logSeq || 0) + 1 } },
+      'wreck.log.spoils', {}))
+  };
+}
+
 /* ── ส่งไพ่เข้าวงยิงแข่งสองลำ ──────────────────────────────
    ทั้งสองลำส่งพร้อมกัน ผลเปิดพร้อมกันเมื่อครบทุกคน
    ระบบนี้แยกจากการโหวตปกติทั้งชุด ไม่ได้ใช้ st.vote เลย */
@@ -545,6 +618,68 @@ function finishDuel(ctx, st, res, hands) {
     lastDuel: { card: d.card, by: d.by, sides: res.sides, won: res.won,
                 at: (st.logSeq || 0) + 1 } };
   let out = hands;
+
+  if (d.card === 'wreckers') {
+    /* ลำที่ยิงติดฝ่ายเดียวชิงกล่อง 2 ใบ — แต่ต้องมีที่ว่างรับด้วย
+       รับไม่ไหว = นับเป็นแพ้ทันที แล้วตกไปใช้กติกาเสมอ */
+    const win = res.won !== 'tie' && roomOn(next.cargo, res.won) > 0 ? res.won : null;
+
+    if (win) {
+      /* กัปตันของลำที่ชนะเลือกเองทีละใบ ว่าเอากล่องฝั่งไหนมาใส่ฝั่งไหน
+         กติกาเดียวกับการยิงปกติ ไม่ใช่คำนวณให้เอง
+         ยังไม่ผ่านตา เพราะการชิงกล่องยังไม่จบ */
+      const lose = win === 'shipL' ? 'shipR' : 'shipL';
+      const crew = occupants(next.pos, win);
+      const boss = crew[0] || null;
+      const backH = refill(next.seats, out, next.maxVote).hands;
+
+      next = { ...next, votes: countHands(backH),
+               lastDuel: { ...next.lastDuel, won: win } };
+
+      if (!boss || !canGrab(next.cargo, win, lose)) {
+        return {
+          state: passTurn(pushLog(next, 'wreck.log.duelDone', {})),
+          secrets: secretsFrom(ctx, backH)
+        };
+      }
+
+      return {
+        state: pushLog({ ...next,
+          grab: { ship: win, from: lose, who: boss, left: 2,
+                  step: grabFrom(next.cargo, lose).length ? 'from' : 'to',
+                  pick: {}, at: (next.logSeq || 0) + 1 } },
+          'wreck.log.duelDone', {}),
+        secrets: secretsFrom(ctx, backH)
+      };
+    }
+
+    /* เสมอ (หรือผู้ชนะรับไม่ไหว) — กล่องของทั้งสองลำกลับเรือสินค้า
+       ต้องถามคนท้ายสุดของแต่ละลำก่อนว่าจะคืนฝั่งไหน จึงยังไม่ผ่านตา */
+    const asks = spoilAsks(next.pos);
+    const need = SHIP_IDS.filter(s =>
+      asks[s] && ((next.cargo[s]?.B || 0) + (next.cargo[s]?.F || 0)) > 0);
+
+    next = { ...next, lastDuel: { ...next.lastDuel, won: 'tie', dumped: true } };
+
+    if (!need.length) {
+      /* ไม่มีใครให้ถามหรือไม่มีกล่องให้คืน — จัดการเองเลย */
+      let cargo = next.cargo;
+      for (const s of SHIP_IDS) cargo = dumpShip(cargo, s);
+      next = { ...next, cargo };
+      return {
+        state: passTurn(pushLog(next, 'wreck.log.duelDone', {})),
+        secrets: secretsFrom(ctx, refill(next.seats, out, next.maxVote).hands)
+      };
+    }
+
+    const backHands = refill(next.seats, out, next.maxVote).hands;
+    return {
+      state: pushLog({ ...next, votes: countHands(backHands),
+        spoils: { asks, need, picked: {}, at: (next.logSeq || 0) + 1 } },
+        'wreck.log.duelDone', {}),
+      secrets: secretsFrom(ctx, backHands)
+    };
+  }
 
   if (d.card === 'vegan') {
     /* ลำที่ยิงติดฝ่ายเดียวรอด นอกนั้นลงเกาะหมด ลำดับสุ่มทั้งหมด */

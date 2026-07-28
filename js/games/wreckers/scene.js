@@ -17,6 +17,7 @@ import { t } from '../../i18n.js';
 import { VOTE_ART, ICON_EXT } from './vote.js';
 import { takeSides, keepSides, SHIP_CARGO_CAP, occupants, placeOf, SHIP_IDS } from './rules.js';
 import { askKey, pickCountOf, isChoice, targetsOf } from './effects.js';
+import { grabFrom, grabTo } from './duel.js';
 import { voteCard, cardById as voteById } from './vote.js';
 import { BASE_CARDS, cardArt, eventArt, eventAlt, CARD_ART, CARD_EXT, CARD_ALT } from './events.js';
 
@@ -110,6 +111,9 @@ function sceneKey(st) {
      ซึ่งเป็นกฎเดียวกับที่ใช้กับประกาศผลทุกชนิด — รู้เหตุก่อนเห็นผล */
   if (st.duel) return `duel:${st.duel.at}`;
   if (st.lastDuel && !told.has('duel:' + st.lastDuel.at)) return `duelend:${st.lastDuel.at}`;
+  /* ค้างถามลูกเรือว่าลำไหนคืนกล่องฝั่งไหน — ถามสองคนพร้อมกันได้ */
+  if (st.spoils) return `spoils:${st.spoils.at}`;
+  if (st.grab) return `grab:${st.grab.at}.${st.grab.left}.${st.grab.step}`;
   /* ค้างรอคำตอบว่าจะใช้การ์ดกันไหม ต้องมาก่อนประกาศผลเสมอ
      เพราะตอนนี้ผลยังไม่เกิด คนที่ถูกถามอาจรอดก็ได้ */
   if (st.saveAsk) return `save:${st.saveAsk.at}`;
@@ -221,6 +225,8 @@ export function paintScene(el, st, ctx) {
 /* ตัวเดินเรื่อง — ตัดสินว่าตอนนี้ควรอยู่ช่วงไหน แล้วเดินไปข้างหน้าเท่านั้น
    คืนค่า true เมื่อยังมีอะไรขยับ เพื่อขอเฟรมถัดไป */
 function step(body, st, ctx) {
+  if (key.startsWith('spoils:')) return spoilNote(body, st, ctx);
+  if (key.startsWith('grab:')) return grabNote(body, st, ctx);
   if (key.startsWith('duelend:')) return duelResult(body, st, ctx);
   if (key.startsWith('duel:')) return duelCollect(body, st, ctx);
   if (key.startsWith('peek:')) return peekNote(body, st);
@@ -329,7 +335,11 @@ function shoutNote(body, st) {
     const nameOf2 = (u) => st.names?.[u] || '?';
     /* สายนี้เคยหลุดหายไปตอนแก้ข้อความ ทำให้ไหลไปจบที่ข้อความไล่คนลงเรือ
        ซึ่งเป็นอันสุดท้ายของสาย เลยขึ้นผิดเรื่องทั้งหัวข้อและเนื้อความ */
-    const msg = sh.kind === 'hold'
+    const msg = sh.kind === 'grabbed'
+      ? t('wreck.scene.grabbed', { place: t('wreck.place.' + sh.place), n: sh.n })
+      : sh.kind === 'spoils'
+      ? t('wreck.scene.spoils')
+      : sh.kind === 'hold'
       ? t('wreck.scene.hold', { name: nameOf2(sh.by) })
       : sh.kind === 'toss'
       ? t('wreck.scene.toss', { name: nameOf2(sh.by),
@@ -897,7 +907,78 @@ function marchStage(stage, st, order, ms, headKey = 'wreck.duel.march') {
   return ms > BELL_LEAD + order.length * BELL_STEP + BELL_HOLD;
 }
 
+/* ── ถามลูกเรือว่าลำนี้คืนกล่องฝั่งไหน ─────────────────────
+   ถามสองคนพร้อมกันได้ ลำละคน ซึ่งเป็นจังหวะแรกในเกมที่ทำแบบนี้
+   คนที่ถูกถามเห็นปุ่มเลือก คนอื่นเห็นว่ารอใครอยู่ */
+function spoilNote(body, st, ctx) {
+  const sp = st.spoils;
+  const me = ctx.me?.uid;
+  const mine = SHIP_IDS.find(s => sp.asks[s] === me && sp.need.includes(s) && !sp.picked[s]);
+
+  const sig = 'spoils:' + sp.at + '|' + (mine || '-') + '|' + Object.keys(sp.picked).join(',');
+  if (body.dataset.spoil === sig) return true;
+  body.dataset.spoil = sig;
+
+  if (!mine) {
+    const left = sp.need.filter(s => !sp.picked[s])
+      .map(s => st.names?.[sp.asks[s]] || '?').join(', ');
+    body.innerHTML = `<p class="wr-scene-note">${esc(
+      left ? t('wreck.scene.waiting', { who: left }) : t('wreck.spoil.wait'))}</p>`;
+    return true;
+  }
+
+  body.innerHTML = `<div class="wr-choice">
+      <p class="wr-choice-head">${esc(t('wreck.spoil.ask'))} · ${esc(t('wreck.place.' + mine))}</p>
+      <div class="wr-choice-row">${['B', 'F'].map(k =>
+        `<button class="wr-choice-btn n-${k}" data-spoil="${k}">${
+          esc(t('wreck.pick.side.' + k))}</button>`).join('')}</div>
+    </div>`;
+
+  body.querySelectorAll('[data-spoil]').forEach(b => {
+    b.onclick = () => sendFn?.('spoilPick', { side: b.dataset.spoil });
+  });
+  return true;
+}
+
+/* ── กัปตันลำที่ชนะเลือกกล่องที่จะชิง ──────────────────────
+   ถามทีละใบ สองขั้นต่อใบ — จากฝั่งไหน แล้วไปฝั่งไหน
+   ฝั่งที่เลือกไม่ได้ขึ้นทึบ ไม่ใช่หายไป */
+function grabNote(body, st, ctx) {
+  const g = st.grab;
+  const mine = g.who === ctx.me?.uid;
+
+  const sig = 'grab:' + g.at + '.' + g.left + '.' + g.step + (mine ? ':me' : '');
+  if (body.dataset.grab === sig) return true;
+  body.dataset.grab = sig;
+
+  if (!mine) {
+    body.innerHTML = `<p class="wr-scene-note">${esc(t('wreck.grab.wait', {
+      name: st.names?.[g.who] || '?', n: g.left }))}</p>`;
+    return true;
+  }
+
+  const okList = g.step === 'from' ? grabFrom(st.cargo, g.from) : grabTo(st.cargo, g.ship);
+  body.innerHTML = `<div class="wr-choice">
+      <p class="wr-choice-head">${esc(t('wreck.grab.' + g.step, { n: g.left }))}</p>
+      <div class="wr-choice-row">${['B', 'F'].map(k =>
+        `<button class="wr-choice-btn n-${k}" data-grab="${k}"
+          ${okList.includes(k) ? '' : 'disabled'}>${esc(t('wreck.pick.side.' + k))}</button>`
+      ).join('')}</div>
+    </div>`;
+
+  body.querySelectorAll('[data-grab]').forEach(b => {
+    b.onclick = () => { if (!b.disabled) sendFn?.('grabPick', { side: b.dataset.grab }); };
+  });
+  return true;
+}
+
 function titleOf(st, ph, me) {
+  if (st.grab && key.startsWith('grab:')) {
+    return { who: t('wreck.card.wreckers'), big: t('wreck.grab.title') };
+  }
+  if (st.spoils && key.startsWith('spoils:')) {
+    return { who: t('wreck.card.wreckers'), big: t('wreck.spoil.title') };
+  }
   if (key.startsWith('duel')) {
     return { who: t('wreck.card.' + (st.duel?.card || st.lastDuel?.card || 'vegan')),
              big: t('wreck.duel.title') };
@@ -939,6 +1020,8 @@ function titleOf(st, ph, me) {
       fizzle:  'wreck.event',
       toss:    'wreck.card.jettison',
       hold:    'wreck.card.holdmutiny',
+      spoils:  'wreck.card.wreckers',
+      grabbed: 'wreck.card.wreckers',
       deal:    'wreck.card.contract',
       reliefMiss: 'wreck.card.relief',
       skip:    'wreck.card.scurvy',

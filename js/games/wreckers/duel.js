@@ -11,26 +11,22 @@
 
    ยืมของเดิมมาใช้ได้เฉพาะ **ภาพไพ่กับตัวนับหน้าไพ่** ซึ่งเป็นข้อมูลดิบ ไม่ใช่กลไก */
 
-import { DECK, cardById } from './vote.js';
-import { SHIP_IDS, occupants, placeOf, shuffle } from './rules.js';
+import { DECK } from './vote.js';
+import { SHIP_IDS, occupants, placeOf, shuffle, tallyRow, attackPasses } from './rules.js';
 
-/* หน้า Attack ของไพ่โหวต — ปืนใหญ่ ไฟ น้ำ
-   ยิงติดเมื่อ **มีปืนใหญ่อย่างน้อยหนึ่ง และไฟมากกว่าน้ำ** (น้ำ 1 ดับไฟ 1)
-   กติกาเดียวกับการสั่งยิงปกติ เขียนซ้ำที่นี่เพราะไม่อยากผูกกับตัวเดิม
-   ถ้าวันหลังแก้กติกายิงของใบใดใบหนึ่ง อีกใบจะได้ไม่เปลี่ยนตาม */
-export function tally(ids) {
-  const out = { cannon: 0, fire: 0, water: 0 };
-  for (const id of ids) {
-    const c = cardById(id);
-    if (!c) continue;
-    if (c.attack === 'C') out.cannon++;
-    else if (c.attack === 'F') out.fire++;
-    else if (c.attack === 'W') out.water++;
-  }
-  return out;
-}
+/* นับหน้า Attack แล้วตัดสินว่ายิงติดไหม
 
-export const hits = (counts) => counts.cannon >= 1 && counts.fire > counts.water;
+   **ใช้ตัวเดียวกับการสั่งยิงปกติ ไม่เขียนใหม่**
+
+   รอบแรกพี่เขียนตัวนับขึ้นเองเพราะอยากให้สองระบบแยกจากกันสนิท
+   แล้วพลาดทันที เพราะสำรับมีไพ่หน้ารวมอยู่ด้วย — `CF` คือปืนใหญ่กับคบเพลิง
+   ในใบเดียว และ `WW` คือน้ำสองหน่วย ตัวนับที่เขียนเองรู้จักแต่ตัวเดียวโดด ๆ
+   ไพ่พวกนั้นจึงถูกนับเป็นศูนย์ ผลออกมาว่ายิงไม่ติดทั้งที่ควรติด
+
+   บทเรียน: **แยกกลไกได้ แต่ห้ามแยกการอ่านข้อมูลดิบ**
+   หน้าไพ่คือข้อมูลของสำรับ ไม่ใช่กติกาของใบใดใบหนึ่ง */
+export const tally = (ids) => tallyRow(ids, 'attack');
+export const hits = (n) => attackPasses(n);
 
 /* เปิดวงยิงแข่ง — ทั้งสองลำพร้อมกัน
    ลำที่ไม่มีคนอยู่เลยถือว่า "ว่าง" ไม่ต้องรอ และนับว่ายิงไม่ติด */
@@ -100,3 +96,126 @@ export function resolveDuel(st, hands, rng = Math.random) {
 /* ลำดับที่คนจะถูกส่งลงเกาะ — สุ่มทั้งหมด ไม่อิงลำดับเดิมบนเรือ
    คนละลำถูกรวมกันก่อนแล้วค่อยสุ่ม จึงสลับกันไปมาได้จริง */
 export const marchOrder = (list, rng = Math.random) => shuffle(list, rng);
+
+/* ── ผลของ "พวกล่อเรือ" ────────────────────────────────────
+   แยกออกมาจากตัววงยิง เพราะวงยิงเป็นกลไกกลาง ส่วนนี้เป็นกติกาของใบเดียว
+
+   ลำที่ยิงติดฝ่ายเดียวชิงกล่องจากอีกลำ 2 ใบ
+   ถ้าลำนั้นรับไม่ไหว (เต็ม) นับเป็นแพ้ไปเลย แล้วตกไปใช้กติกาเสมอ
+   เสมอ = กล่องของทั้งสองลำกลับเรือสินค้า โดยมีคนเลือกว่าคืนฝั่งไหน */
+
+const SHIP_CAP_SIDE = 3;   /* เรือหนึ่งลำเก็บได้ประเทศละ 3 กล่อง */
+
+/* ลำนี้ยังรับกล่องเพิ่มได้อีกกี่ใบ */
+export const roomOn = (cargo, ship) =>
+  Math.max(0, SHIP_CAP_SIDE - (cargo[ship]?.B || 0))
+  + Math.max(0, SHIP_CAP_SIDE - (cargo[ship]?.F || 0));
+
+/* ── ชิงกล่องทีละใบ โดยคนชนะเลือกเอง ──────────────────────
+   กติกาเดียวกับการยิงปกติ — กัปตันเลือกทั้งว่าเอาจากฝั่งไหน และเก็บไว้ฝั่งไหน
+   จึงต้องถามทีละใบ ไม่ใช่คำนวณให้เอง
+
+   ต้นทางเลือกได้เฉพาะฝั่งที่มีกล่องจริง · ปลายทางเลือกได้เฉพาะฝั่งที่ยังไม่เต็ม
+   กล่องบนเรือสินค้าไม่มีประเทศ ถ้าหยิบจากตรงนั้นจึงข้ามขั้นเลือกต้นทางไป */
+export const grabFrom = (cargo, loser) =>
+  ['B', 'F'].filter(k => (cargo[loser]?.[k] || 0) > 0);
+
+export const grabTo = (cargo, winner) =>
+  ['B', 'F'].filter(k => (cargo[winner]?.[k] || 0) < SHIP_CAP_SIDE);
+
+/* ย้ายหนึ่งกล่องตามที่เลือก — from เป็น null แปลว่าหยิบจากเรือสินค้า */
+export function moveOne(cargo, winner, loser, from, to) {
+  const c = { ...cargo,
+    [winner]: { ...cargo[winner] },
+    [loser]: { ...cargo[loser] } };
+  if ((c[winner][to] || 0) >= SHIP_CAP_SIDE) return null;
+
+  if (from) {
+    if (!(c[loser][from] > 0)) return null;
+    c[loser][from]--;
+  } else {
+    if (!(c.merchant > 0)) return null;
+    c.merchant--;
+  }
+  c[winner][to] = (c[winner][to] || 0) + 1;
+  return c;
+}
+
+/* ยังชิงได้อีกไหม — ลำที่แพ้หมดแล้วและเรือสินค้าก็หมด ก็จบเท่านั้น */
+export const canGrab = (cargo, winner, loser) =>
+  grabTo(cargo, winner).length > 0
+  && (grabFrom(cargo, loser).length > 0 || (cargo.merchant || 0) > 0);
+
+/* ตัวคำนวณอัตโนมัติ — เก็บไว้ใช้ตอนหมดเวลาแล้วไม่มีใครตอบ */
+export function grabBoxes(cargo, winner, loser, n = 2) {
+  let c = { ...cargo, [winner]: { ...cargo[winner] }, [loser]: { ...cargo[loser] } };
+  let got = 0;
+
+  const put = (side) => {
+    if ((c[winner][side] || 0) >= SHIP_CAP_SIDE) return false;
+    c[winner][side]++;
+    return true;
+  };
+
+  /* จากลำที่แพ้ก่อน */
+  while (got < n) {
+    const from = (c[loser].B || 0) >= (c[loser].F || 0) ? 'B' : 'F';
+    if (!(c[loser][from] > 0)) break;
+    if (!put(from)) {
+      const alt = from === 'B' ? 'F' : 'B';
+      if (!(c[loser][alt] > 0) || !put(alt)) break;
+      c[loser][alt]--;
+    } else c[loser][from]--;
+    got++;
+  }
+
+  /* ยังไม่ครบและเรือสินค้ายังมี ก็เอาจากเรือสินค้าต่อ
+     กล่องบนเรือสินค้ายังไม่มีประเทศ ผู้ชนะจึงลงฝั่งที่ยังว่างกว่า */
+  while (got < n && (c.merchant || 0) > 0) {
+    const side = (c[winner].B || 0) <= (c[winner].F || 0) ? 'B' : 'F';
+    if (!put(side)) break;
+    c.merchant--;
+    got++;
+  }
+
+  return { cargo: c, got };
+}
+
+/* ตอนเสมอ ใครเป็นคนเลือกว่าลำนั้นคืนกล่องฝั่งไหน
+   ลำที่มีคน = ลูกเรือคนท้ายสุดของลำนั้น (กัปตันอยู่คนเดียวก็นับเป็นคนท้ายสุด)
+   ลำที่ว่าง = คนท้ายเกาะ — ท้ายสุดเลือกลำขวา รองท้ายเลือกลำซ้าย */
+export function spoilAsks(pos) {
+  const isle = occupants(pos, 'island');
+  const last = isle[isle.length - 1] || null;
+  const second = isle[isle.length - 2] || null;
+
+  const asks = {};
+  for (const ship of SHIP_IDS) {
+    const crew = occupants(pos, ship);
+    if (crew.length) asks[ship] = crew[crew.length - 1];
+    else asks[ship] = ship === 'shipR' ? last : second;
+  }
+
+  /* คนเดียวกันถูกขอสองลำไม่ได้ — ถ้าเกาะมีคนเดียว ลำซ้ายจึงไม่มีใครเลือก */
+  if (asks.shipL && asks.shipL === asks.shipR) asks.shipL = null;
+
+  return asks;
+}
+
+/* คืนกล่องของลำหนึ่งกลับเรือสินค้า โดยเลือกได้ว่าจะคืนฝั่งไหนก่อน
+   ไม่มีคนเลือก = คืนทั้งลำตามที่มีอยู่ */
+export function dumpShip(cargo, ship, side = null) {
+  const c = { ...cargo, [ship]: { ...cargo[ship] } };
+  const total = (c[ship].B || 0) + (c[ship].F || 0);
+  if (!total) return c;
+
+  if (side) {
+    /* ฝั่งที่เลือกคืนก่อน แล้วอีกฝั่งตามไป — ปลายทางเดียวกันคือเรือสินค้า
+       การเลือกจึงมีผลกับลำดับ ไม่ใช่กับจำนวน แต่เก็บไว้เพราะกติกาบอกให้เลือก */
+    c.merchant = (c.merchant || 0) + total;
+  } else {
+    c.merchant = (c.merchant || 0) + total;
+  }
+  c[ship] = { B: 0, F: 0 };
+  return c;
+}
