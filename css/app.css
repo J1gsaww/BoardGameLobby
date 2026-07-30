@@ -2230,3 +2230,19 @@ button{ cursor:pointer; border:0; background:none; }
 .cards-off{
   margin:6px 0 0; font-family:var(--mono); font-size:11px; color:var(--muted);
 }
+
+/* ── เว้นระยะระหว่างกระดานกับแผงปรับเสียง ──────────────────
+   ของเดิมชิดกันจนดูเหมือนเป็นก้อนเดียว ทั้งที่เป็นคนละเรื่องกัน */
+#audioPlay{ margin-top:22px; }
+
+/* ── โทนสีของแผงกลางตามเกม ─────────────────────────────────
+   โต๊ะของแต่ละเกมสีไม่เหมือนกัน แผงที่วางทับจึงต้องเข้าชุดกับโต๊ะของเกมนั้น
+   สลาฟเป็นม่วงอยู่แล้วเข้ากับพื้นหลังของมัน · ไทคูนโต๊ะแดงเข้ม ม่วงเลยตีกัน */
+#view-play[data-game="tycoon"] .slave{
+  background:rgba(32,7,13,.74);
+  border-color:rgba(120,40,50,.45);
+}
+#view-play[data-game="tycoon"] .scoreboard{
+  background:rgba(32,7,13,.74);
+  border-color:rgba(120,40,50,.45);
+}

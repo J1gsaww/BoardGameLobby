@@ -113,6 +113,36 @@ console.log('\nบังคับให้คนอื่นเปิดกา�
   ok('ไม่มีกองไพ่ในข้อมูลลับของคนสั่ง', s1.secrets?.a?.pool ?? null, null);
 }
 
+/* สั่ง Force ติดกันหลายรอบ — เคยพังเว้นรอบ
+   เพราะการ์ดที่เพิ่งเปิดค้างอยู่ในสถานะข้ามตา
+   ฉากจึงไปหยิบใบเก่ามาแสดงแทนขั้นเลือก แล้วกดอะไรไม่ได้ */
+{
+  let ctx = table();
+  let s = ctx.state;
+
+  for (let round = 1; round <= 4; round++) {
+    const r1 = await onAction({ ...ctx, state: s },
+                              { uid: 'a', type: 'force', payload: { target: 'b' } });
+    s = r1.state;
+    ok('รอบ ' + round + ' · ไม่มีการ์ดเก่าค้างตอนเริ่ม', s.cardUp ?? null, null);
+    ok('รอบ ' + round + ' · ขั้นถามเป็นของ Force เอง', s.pending.card, 'force');
+
+    const r2 = await onAction({ ...ctx, state: s },
+                              { uid: 'a', type: 'useCard', payload: { cards: [0, 1] } });
+    s = r2.state;
+    ok('รอบ ' + round + ' · ตั้งสถานะบังคับได้', s.forced.who, 'b');
+
+    const r3 = await onAction({ ...ctx, state: s },
+                              { uid: 'b', type: 'activate', payload: { slot: 0 } });
+
+    /* วนกลับมาถึงตาเขาอีกครั้ง — ล้างเฉพาะสิ่งที่ตาใหม่ล้างอยู่แล้ว
+       **จงใจไม่ล้าง cardUp** เพราะนั่นคือสิ่งที่เทสนี้ตรวจว่าไม่หลุดข้ามรอบ
+       ส่วนใบที่เปิดได้อาจเป็นใบที่ต้องเลือกเป้า จึงต้องล้าง pending ให้เหมือนจบตาจริง */
+    s = { ...r3.state, turn: 'a', pending: null, forced: null, aim: null, vote: null };
+    ctx = { ...ctx, secrets: { ...ctx.secrets, ...(r3.secrets || {}) } };
+  }
+}
+
 console.log('');
 console.log('\u2500'.repeat(46));
 console.log(`ผ่าน ${pass} · ไม่ผ่าน ${fail}`);

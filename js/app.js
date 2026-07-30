@@ -405,6 +405,9 @@ function paintRoom() {
     if (!onOverlay()) show('view-play');
     const game = Room.currentGame();
     $('view-play').style.backgroundImage = game?.table ? `url("${game.table}")` : '';
+    /* บอกซีเอสเอสว่ากำลังเล่นเกมอะไร — บางเกมใช้โทนสีคนละชุดกับพื้นหลังของตัวเอง
+       เช่นไทคูนที่โต๊ะเป็นแดงเข้ม แผงกลางจึงต้องแดงตาม ไม่ใช่ม่วงเหมือนสลาฟ */
+    $('view-play').dataset.game = room.doc?.gameId || '';
     $('playCode').textContent = room.code;
     Music.setTrack(game?.music || Music.defaultTrack());
     startAmbience(game?.ambience);

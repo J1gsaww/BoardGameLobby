@@ -11,7 +11,7 @@
    ไว้ทำชั้นการ์ดแล้วค่อยมาต่อผลของแต่ละใบ */
 
 import {
-  SHIP_SLOTS, EVENT_SLOTS, MAX_VOTE, graceMs, rollStarter, OFFLINE_WAIT, PICK_MS
+  SHIP_SLOTS, EVENT_SLOTS, MAX_VOTE, graceMs, rollStarter, OFFLINE_WAIT, PICK_MS, pickMs
 } from './board.js';
 import { deal } from './vote.js';
 import { BASE_CARDS, ENDER, ENDER_ZONE } from './events.js';
@@ -343,6 +343,9 @@ async function route(ctx, uid, type, payload) {
       const okTarget = pre && targetsOf(st, uid, 'force', 'player', {}).includes(pre);
       return {
         state: { ...st,
+          /* การ์ดที่เปิดไปเมื่อตาก่อนจบเรื่องแล้ว ล้างทิ้งตอนเริ่ม Action ใหม่
+             ไม่งั้นมันจะค้างไปเรื่อย ๆ แล้วไปโผล่ในฉากที่ไม่เกี่ยวกับมัน */
+          cardUp: null,
           pending: { card: 'force', by: uid, mode: 'force',
                      picks: okTarget ? { player: pre } : {},
                      needs: okTarget ? 'slots' : 'player',
@@ -459,7 +462,7 @@ function activate(ctx, uid, { slot }) {
       state: { ...said,
         pending: { card: id, by: uid, mode: 'gift', picks: {}, needs: 'player',
                    at: (st.logSeq || 0) + 1 },
-        deadline: Date.now() + PICK_MS },
+        deadline: Date.now() + pickMs(id) },
       secrets: { _deck: next, ...cleared }
     };
   }
@@ -513,8 +516,11 @@ function activate(ctx, uid, { slot }) {
           pending: { card: id, by: uid, needs, at: (st.logSeq || 0) + 1 },
           /* คนเลือกหลุดไปแล้วเกมจะค้างตลอดกาล ต้องมีเพดานเวลาเสมอ
              หมดเวลาแล้วผลการ์ดหายไปเลย ไม่สุ่มให้ เพราะการ์ดใบอื่นบางใบ
-             สุ่มแล้วจะเสียหายหนักกว่าปล่อยผ่าน */
-          deadline: Date.now() + PICK_MS }
+             สุ่มแล้วจะเสียหายหนักกว่าปล่อยผ่าน
+
+             บางใบได้เวลาเพิ่มเพราะต้องคิดนานกว่าจริง ๆ เช่นรังกา
+             ที่ต้องดูไพ่ทั้งกองแล้วเลือกสามใบให้คนอื่น */
+          deadline: Date.now() + pickMs(id) }
       : passTurn(said),
     secrets: { _deck: next, ...cleared }
   };
@@ -864,7 +870,7 @@ function playHeld(ctx, uid, { card }) {
     state: pushLog({ ...st,
       cardUp: { id: card, by: uid, at },
       pending: { card, by: uid, from: 'hand', picks: {}, needs: first, at },
-      deadline: Date.now() + PICK_MS
+      deadline: Date.now() + pickMs(card)
     }, 'wreck.log.playHeld', { name: st.names?.[uid] })
   };
 }

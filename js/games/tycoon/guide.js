@@ -14,7 +14,8 @@ export const TYCOON_EXTRA = {
       h: 'โจ๊กเกอร์ลงเดี่ยว',
       p: [
         'โจ๊กเกอร์ใบเดียวชนะไพ่เดี่ยวทุกใบในสำรับ',
-        'มีใบเดียวที่ล้มมันได้ คือ โพดำของแต้มที่อ่อนที่สุดในลำดับตอนนั้น',
+        'ตองยังทับได้ตามปกติ เหมือนที่ตองทับไพ่เดี่ยวใบอื่น',
+        'ไพ่เดี่ยวที่ล้มมันได้มีใบเดียว คือ โพดำของแต้มที่อ่อนที่สุดในลำดับตอนนั้น',
         'ปกติแต้มอ่อนสุดคือ 3 ตัวล้มจึงเป็นโพดำ 3',
         'ตอนปฏิวัติแต้มอ่อนสุดคือ 2 ตัวล้มจึงกลายเป็นโพดำ 2',
         'พอถูกล้มแล้ว ไพ่ใบอื่นทับต่อได้ตามปกติ'
@@ -60,7 +61,8 @@ export const TYCOON_EXTRA = {
       h: 'A joker played alone',
       p: [
         'A single joker beats every other single card in the deck',
-        'Only one card can take it down: the spade of whichever rank is currently weakest',
+        'Only one single card can take it down: the spade of whichever rank is currently weakest',
+        'A triple still beats it, the same as any other single',
         'Normally the weakest rank is 3, so that card is the 3 of spades',
         'Under revolution the weakest rank is 2, so it becomes the 2 of spades',
         'Once the joker has been taken down, play continues normally on top of it'

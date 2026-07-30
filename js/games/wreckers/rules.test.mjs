@@ -2369,3 +2369,27 @@ group('การ์ดที่สั่งเปิดโหวตทันท�
     ok('ธงดำบนเกาะ = เปิดโหวตย้ายกล่องทันที', r.state.vote.kind, 'islandVote');
   }
 }
+
+group('เพดานเวลาของช่วงเลือกเป้า');
+{
+  ok('ปกติ 90 วินาที', PICK_MS, 90000);
+  ok('รังกาได้ 120 วินาที', pickMs('crowsnest'), 120000);
+  ok('ใบอื่นได้ 90 ตามปกติ',
+     ['pistol', 'marque', 'eldorado', 'crowsnest'].map(pickMs),
+     [90000, 90000, 90000, 120000]);
+  ok('ชื่อที่ไม่รู้จักก็ตกมาที่ค่าปกติ', pickMs('อะไรก็ไม่รู้'), 90000);
+
+  /* เวลาที่ตั้งจริงตอนเปิดการ์ด ต้องตรงกับตารางข้างบน */
+  const out = init({ members, settings: { turnSeconds: 0, extraCards: [] } });
+  const base = { ...out.state, phase: 'play', turn: 'a', pos: filled().pos,
+                 seats: [...P], names: filled().names, out: [] };
+
+  for (const [card, want] of [['pistol', 90000], ['crowsnest', 120000]]) {
+    const deck = { ...out.secrets._deck, slots: [card, ...out.secrets._deck.slots.slice(1)] };
+    const ctx = { ...ctxOf(base), secrets: { ...out.secrets, _deck: deck }, hostUid: 'a' };
+    const r = await onAction(ctx, { uid: 'a', type: 'activate', payload: { slot: 0 } });
+    const left = r.state.deadline - Date.now();
+    ok(card + ' ตั้งเวลาไว้ราว ' + want / 1000 + ' วินาที',
+       Math.abs(left - want) < 2000, true);
+  }
+}

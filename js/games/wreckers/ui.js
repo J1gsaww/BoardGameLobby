@@ -474,6 +474,7 @@ export function render(el, ctx) {
   /* เสียงประกอบของการ์ด — ผูกกับสถานะ ทุกคนจึงได้ยินพร้อมกัน
      ไม่ใช่ผูกกับการกด ซึ่งจะได้ยินแค่คนกดคนเดียว */
   Sound.cardSounds(st);
+  Sound.actionSounds(st);
 
   /* เกมมีหน้าต่างของตัวเองขึ้นมาแทรกเมื่อไหร่ ปิดสมุดการ์ดทิ้ง
 
@@ -691,7 +692,9 @@ export function render(el, ctx) {
   setPlanView(null);
   setPlanWire(box => wirePlan(box, el, ctx));
   /* ฉากปิดเมื่อไหร่ วาดกระดานใหม่ทันที ไม่ต้องรอสถานะเปลี่ยนรอบถัดไป */
-  setSceneClose(() => paint(el));   /* วาดกระดานใหม่ และเปิดฉากถัดไปถ้ามีรออยู่ */
+  /* ฉากปิดแล้ว — วาดกระดานใหม่ และปล่อยเสียงที่รอให้ฉากเล่าจบก่อน
+     ผูกกับการปิดฉากจริง ไม่ใช่ตั้งเวลาเดา เพราะฉากแต่ละแบบยาวไม่เท่ากัน */
+  setSceneClose(() => { Sound.sceneClosed(); paint(el); });
   paintOver(el, st, ctx);
   paintScene(el, st, ctx);
   paintHand(el, st, ctx);
