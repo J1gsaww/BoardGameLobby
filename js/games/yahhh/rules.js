@@ -22,9 +22,13 @@ export const REROLLS = 4;
 /* ดอกไม่มีผลกับคะแนนเลย ยกเว้นช่อง "ดอกเหมือนกัน" ช่องเดียว */
 export const SUIT_ROW_MAX = 4;    /* ช่องดอกเหมือนกันนับได้ไม่เกิน 4 ใบ */
 
+/* [2026-07-28] ถอดช่อง "เหมือนกันทั้งห้าใบ" ออกตามที่ผู้ใช้สั่ง
+   เหตุผลคืองงและทำได้ยากเกินไป — ทุ่มทั้งตาไล่ช่องนี้ยังได้แค่ 1.7%
+   เพราะแต้มหนึ่งมีแค่ห้าใบในสำรับพอดี ต้องเก็บครบทุกใบที่มีอยู่ในเกม
+   กระดานจึงเหลือ 13 ช่อง = เล่นคนละ 13 รอบ รวม 26 ตา */
 export const ROWS = [
   'r1', 'r2', 'r3', 'r4', 'r5', 'r6',
-  'pair', 'twoPair', 'three', 'four', 'full', 'suit', 'yahhh', 'straight'
+  'pair', 'twoPair', 'three', 'four', 'full', 'suit', 'straight'
 ];
 
 export const cardId = (r, s) => `${r}${s}`;
@@ -100,8 +104,7 @@ export const SCORE = {
 
   /* ช่องคะแนนตายตัว */
   full:     (h) => isFull(h) ? 25 : 0,
-  straight: (h) => isStraight(h) ? 35 : 0,
-  yahhh:    (h) => isYahhh(h) ? 50 : 0
+  straight: (h) => isStraight(h) ? 35 : 0
 };
 
 function rankSum(hand, r) {
@@ -119,6 +122,7 @@ export function isStraight(hand) {
   return u.length === HAND && u[HAND - 1] - u[0] === HAND - 1;
 }
 
+/* เก็บไว้เผื่อวันหลังอยากเอาช่องนี้กลับมา — ตอนนี้ไม่มีช่องไหนเรียกใช้ */
 export const isYahhh = (hand) => Object.values(byRank(hand)).some(n => n === HAND);
 
 /* คะแนนที่จะได้ถ้าลงมือนี้ในช่องนั้น — ศูนย์ก็ลงได้ ถือเป็นการทิ้งช่อง */

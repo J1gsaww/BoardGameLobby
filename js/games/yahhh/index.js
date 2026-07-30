@@ -23,7 +23,7 @@ register({
   i18n: {
     th: {
       'game.yahhh.name': 'Yahhh',
-      'game.yahhh.desc': '2 คน · ยาห์ทซีที่เปลี่ยนลูกเต๋าเป็นไพ่ · จั่วห้าใบ ล็อกใบที่ชอบ สุ่มใหม่ได้อีกสี่รอบ แล้วเลือกช่องลงคะแนน',
+      'game.yahhh.desc': '2 คน · ยาห์ทซีที่เปลี่ยนลูกเต๋าเป็นไพ่ · จั่วห้าใบ ล็อกใบที่ชอบ สุ่มใหม่ได้อีกสี่รอบ แล้วเลือกช่องลงคะแนน · 13 ช่อง คนละ 13 รอบ',
 
       'yahhh.round': 'รอบที่ {n} จาก {of}',
       'yahhh.yourTurn': 'ตาของคุณ',
@@ -48,7 +48,6 @@ register({
       'yahhh.row.four': 'โฟร์',
       'yahhh.row.full': 'ฟูลเฮาส์',
       'yahhh.row.suit': 'ดอกเหมือนกัน',
-      'yahhh.row.yahhh': 'Yahhhhh',
       'yahhh.row.straight': 'เสตรท'
     },
     en: {
@@ -78,7 +77,6 @@ register({
       'yahhh.row.four': 'Four of a kind',
       'yahhh.row.full': 'Full house',
       'yahhh.row.suit': 'Same suit',
-      'yahhh.row.yahhh': 'Yahhhhh',
       'yahhh.row.straight': 'Straight'
     }
   }

@@ -23,7 +23,8 @@ ok('มี 30 ใบ', fullDeck().length, 30);
 ok('ไม่มีใบซ้ำ', new Set(fullDeck()).size, 30);
 ok('แต้มหนึ่งมีห้าใบ', fullDeck().filter(c => c[0] === '4').length, 5);
 ok('ดอกหนึ่งมีหกใบ', fullDeck().filter(c => c[1] === 'X').length, 6);
-ok('กระดานมี 14 ช่อง', ROWS.length, 14);
+ok('กระดานมี 13 ช่อง', ROWS.length, 13);
+ok('ไม่มีช่องเหมือนกันทั้งห้าใบแล้ว', ROWS.includes('yahhh'), false);
 
 group('ช่องบน — รวมแต้มของใบที่เป็นเลขนั้น');
 ok('สาม 4 ได้ 12', scoreFor('r4', ['4C', '4D', '4H', '1S', '2X']), 12);
@@ -62,8 +63,9 @@ ok('เรียง 2 ถึง 6 ได้ 35', scoreFor('straight', ['2C', '3D
 ok('เรียงสี่ใบไม่นับ', isStraight(['1C', '2D', '3H', '4S', '6X']), false);
 ok('มีใบซ้ำก็ไม่นับ', isStraight(['1C', '2D', '3H', '4S', '4X']), false);
 
-ok('ห้าใบเหมือนกันได้ 50', scoreFor('yahhh', ['4C', '4D', '4H', '4S', '4X']), 50);
-ok('สี่ใบยังไม่ใช่ Yahhhhh', isYahhh(['4C', '4D', '4H', '4S', '1X']), false);
+/* ช่องนี้ถูกถอดออกแล้ว — ตัวช่วยยังอยู่เผื่ออยากเอากลับมา แต่ลงคะแนนไม่ได้ */
+ok('ตัวช่วยยังบอกได้ว่าเหมือนกันห้าใบไหม', isYahhh(['4C', '4D', '4H', '4S', '4X']), true);
+ok('แต่ลงช่องนี้ไม่ได้แล้ว', scoreFor('yahhh', ['4C', '4D', '4H', '4S', '4X']), 0);
 
 group('การจั่วในหนึ่งตา');
 {
@@ -88,12 +90,12 @@ group('การจั่วในหนึ่งตา');
 group('กระดานคะแนน');
 {
   const empty = Object.fromEntries(ROWS.map(r => [r, null]));
-  ok('เริ่มมาว่างทั้ง 14 ช่อง', openRows(empty).length, 14);
+  ok('เริ่มมาว่างทั้ง 13 ช่อง', openRows(empty).length, 13);
   ok('ยังไม่จบ', sheetDone(empty), false);
 
-  const some = { ...empty, r1: 3, full: 25, yahhh: 0 };
+  const some = { ...empty, r1: 3, full: 25, straight: 0 };
   ok('รวมคะแนนเฉพาะช่องที่ลงแล้ว', sheetTotal(some), 28);
-  ok('ช่องที่ลงศูนย์ถือว่าใช้ไปแล้ว', openRows(some).length, 11);
+  ok('ช่องที่ลงศูนย์ถือว่าใช้ไปแล้ว', openRows(some).length, 10);
 
   const done = Object.fromEntries(ROWS.map(r => [r, 0]));
   ok('ลงครบแล้วถือว่าจบ', sheetDone(done), true);
@@ -109,7 +111,7 @@ group('สายพานของเกม');
   ok('เล่นสองคน', st.seats.length, 2);
   ok('เริ่มด้วยห้าใบ', st.hand.length, HAND);
   ok('กระดานของทั้งสองคนว่าง',
-     st.seats.map(u => openRows(st.sheets[u]).length), [14, 14]);
+     st.seats.map(u => openRows(st.sheets[u]).length), [13, 13]);
   ok('คนที่ถึงตาลงคะแนนได้', actionsFor(st, st.turn).includes('score'), true);
   ok('อีกคนทำอะไรไม่ได้',
      actionsFor(st, st.seats.find(u => u !== st.turn)), []);
@@ -149,8 +151,8 @@ group('เล่นจนจบเกม');
     turns++;
   }
 
-  ok('ใช้ 28 ตาพอดี', turns, 28);
-  ok('เล่นคนละ 14 รอบ', state.round, 14);
+  ok('ใช้ 26 ตาพอดี', turns, 26);
+  ok('เล่นคนละ 13 รอบ', state.round, 13);
   ok('จบเกมแล้ว', state.phase, 'over');
   ok('กระดานเต็มทั้งสองคน',
      state.seats.every(u => sheetDone(state.sheets[u])), true);
