@@ -11,6 +11,7 @@
 import { cardFace } from '../core/face.js';
 import { t } from '../../i18n.js';
 import { ROWS, scoreFor, sheetTotal, openRows } from './rules.js';
+import * as Sound from './sound.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -21,7 +22,11 @@ let lockFor = '';
 
 export function render(el, ctx) {
   const st = ctx.state;
-  if (!st || !st.phase) { el.innerHTML = ''; lock = []; return; }
+  if (!st || !st.phase) { el.innerHTML = ''; lock = []; Sound.reset(); return; }
+
+  /* เสียงผูกกับสถานะ ทั้งสองคนจึงได้ยินพร้อมกัน ไม่ใช่แค่คนที่กด */
+  Sound.preload();
+  Sound.play(st);
 
   const me = ctx.me.uid;
   const mine = st.turn === me && st.phase === 'play';
