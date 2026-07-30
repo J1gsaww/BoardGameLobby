@@ -2246,3 +2246,63 @@ button{ cursor:pointer; border:0; background:none; }
   background:rgba(32,7,13,.74);
   border-color:rgba(120,40,50,.45);
 }
+
+/* ── Yahhh ─────────────────────────────────────────────────
+   ซ้าย = กระดานคะแนนของสองคนวางเทียบกัน · ขวา = มือกับปุ่ม
+   วางคู่กันตั้งแต่ต้นเพราะเกมนี้ตัดสินกันที่การเทียบช่องกับอีกฝ่าย */
+.yh-wrap{
+  display:grid; grid-template-columns:minmax(0,320px) minmax(0,1fr);
+  gap:18px; align-items:start; margin-top:12px;
+}
+@media (max-width: 860px){ .yh-wrap{ grid-template-columns:1fr; } }
+
+.yh-sheet{
+  background:rgba(14,11,28,.72); backdrop-filter:blur(2px);
+  border:1px solid var(--line); border-radius:18px; padding:14px 12px;
+}
+.yh-sheet table{ width:100%; border-collapse:collapse; font-size:13px; }
+.yh-sheet th{ text-align:left; font-weight:500; color:var(--muted); padding:5px 6px; }
+.yh-who{ text-align:center !important; font-family:var(--display); color:var(--ink) !important; }
+.yh-who.now{ color:var(--lamp) !important; }
+.yh-cell{
+  width:56px; text-align:center; padding:4px 6px;
+  border-top:1px solid var(--line); font-family:var(--mono);
+}
+.yh-cell.done{ color:var(--ink); }
+.yh-cell.total{ font-size:15px; color:var(--lamp); font-weight:700; }
+.yh-sheet tfoot th{ color:var(--lamp); }
+
+/* ช่องว่างของเราเองตอนถึงตา — โชว์คะแนนที่จะได้ล่วงหน้า กดแล้วลงเลย */
+.yh-pick{
+  width:100%; padding:3px 0; border-radius:7px;
+  font-family:var(--mono); font-size:13px;
+  background:rgba(244,169,73,.12); border:1px solid var(--lamp); color:var(--lamp);
+}
+.yh-pick:hover{ background:var(--lamp); color:#241704; }
+
+.yh-play{
+  background:rgba(14,11,28,.72); backdrop-filter:blur(2px);
+  border:1px solid var(--line); border-radius:18px;
+  padding:18px 20px 22px; min-height:420px;
+  display:flex; flex-direction:column; align-items:center;
+}
+.yh-head{ display:grid; justify-items:center; gap:4px; margin-bottom:18px; }
+.yh-round, .yh-left{
+  font-family:var(--mono); font-size:11px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--muted);
+}
+.yh-big{ margin:0; font-family:var(--display); font-size:22px; font-weight:700; }
+
+.yh-hand{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+.yh-card{
+  padding:0; line-height:0; border-radius:9px; background:none; border:2px solid transparent;
+  transition:transform .14s, border-color .14s;
+}
+.yh-card:not(:disabled):hover{ transform:translateY(-4px); }
+/* ล็อกไว้ = ยกขึ้นและมีกรอบไฟ เห็นได้จากอีกฝั่งโต๊ะ */
+.yh-card.on{ transform:translateY(-12px); border-color:var(--lamp); }
+.yh-card:disabled{ cursor:default; }
+
+.yh-hint{ margin:12px 0 0; min-height:1.2em; font-size:12px; color:var(--muted); }
+.yh-acts{ margin-top:auto; padding-top:16px; }
+.yh-acts .btn{ min-width:220px; }

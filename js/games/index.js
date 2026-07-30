@@ -5,6 +5,7 @@
 
 import './slave/index.js';
 import './tycoon/index.js';
+import './yahhh/index.js';
 import './curtain_rivalry/index.js';
 import './whothefuq/index.js';
 import './wreckers/index.js';
