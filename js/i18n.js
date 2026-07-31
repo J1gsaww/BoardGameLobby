@@ -282,7 +282,7 @@ const DICT = {
 function detect() {
   const saved = localStorage.getItem(KEY);
   if (saved && DICT[saved]) return saved;
-  return (navigator.language || '').toLowerCase().startsWith('th') ? 'th' : 'en';
+  return 'th';   /* ค่าเริ่มต้นเป็นภาษาไทยเสมอ (ใครสลับเป็น en เองระบบจะจำไว้ให้) */
 }
 
 export let lang = detect();

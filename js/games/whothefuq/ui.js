@@ -18,16 +18,18 @@ import * as Sound from './sound.js';
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const L = (o) => (o ? (o[lang] ?? o.th) : '');
+/* จุดเด่น (Traits) ให้เป็นภาษาไทยเสมอ ตามที่กลุ่มเพื่อนเล่นกัน ไม่ว่า UI จะภาษาอะไร */
+const TR = (o) => (o ? (o.th ?? o.en ?? '') : '');
 const DEV = (() => { try { return new URLSearchParams(location.search).get('dev') === 'card'; } catch { return false; } })();
 
 const ACTIVE_HELD = ['expose', 'peek', 'scan', 'silence', 'awaken'];
 
 function mapArgs(a = {}) {
   const o = { ...a };
-  if (o.trait) o.trait = L(traitById(o.trait)) || o.trait;
+  if (o.trait) o.trait = TR(traitById(o.trait)) || o.trait;
   if (o.llama) o.llama = L(llamaById(o.llama)) || o.llama;
   if (o.card) o.card = L(cardById(o.card)) || o.card;
-  if (o.traits) o.traits = String(o.traits).split(',').map(x => L(traitById(x)) || x).join(', ');
+  if (o.traits) o.traits = String(o.traits).split(',').map(x => TR(traitById(x)) || x).join(', ');
   return o;
 }
 
@@ -52,7 +54,7 @@ export function render(el, ctx) {
     <div class="wtf-wrap">
       <aside class="wtf-me">${meCard(mine, me, st)}${seenFeed(ctx)}${heldCards(st, ctx, me)}</aside>
       <main class="wtf-mid">${header(st)}${center(st, ctx, me)}${logBox(st)}</main>
-      <aside class="wtf-side">${players(st, me)}${knownBoard(st)}${checklist(st)}${infoTable()}</aside>
+      <aside class="wtf-side">${players(st, me)}${knownBoard(st)}</aside>
     </div>
     ${DEV && ctx.isHost ? devPanel() : ''}`;
 
@@ -70,7 +72,7 @@ function meCard(llamaId, me, st) {
   if (st.out.includes(me)) return `<div class="wtf-card wtf-dim">${esc(t('wtf.youOut'))}</div>`;
   if (!llamaId) return `<div class="wtf-card wtf-dim">${esc(t('wtf.watching'))}</div>`;
   const l = llamaById(llamaId);
-  const traits = traitsOf(llamaId).map(id => `<li>${esc(L(traitById(id)))}</li>`).join('');
+  const traits = traitsOf(llamaId).map(id => `<li>${esc(TR(traitById(id)))}</li>`).join('');
   return `<div class="wtf-card">
       <div class="wtf-hint">${esc(t('wtf.secretHint'))}</div>
       <div class="wtf-llama"><img src="${esc(llamaArt(llamaId))}" alt="" onerror="this.style.display='none'">
@@ -106,14 +108,20 @@ function heldCards(st, ctx, me) {
 }
 
 function center(st, ctx, me) {
-  if (st.pending) return `<section class="wtf-center">${pendingBox(st, ctx, me)}${hostBar(st, ctx)}</section>`;
+  const tables = st.phase === PHASE.OVER ? '' : tablesRow(st);
+  if (st.pending) return `<section class="wtf-center">${pendingBox(st, ctx, me)}${hostBar(st, ctx)}${tables}</section>`;
   if (st.phase === PHASE.OVER) return `<section class="wtf-center">${overBody(st, ctx, me)}</section>`;
   let body = '';
   if (st.phase === PHASE.ANNOUNCE) body = announceBody(st, me);
   else if (st.phase === PHASE.EVENT) body = eventBody(st, me);
   else if (st.phase === PHASE.TALK) body = `<div class="wtf-block"><h3>${esc(t('wtf.phase.talk'))}</h3><p class="wtf-note">${esc(t('wtf.talkHelp'))}</p></div>`;
   else if (st.phase === PHASE.CHALLENGE) body = challengeBody(st, ctx, me);
-  return `<section class="wtf-center">${body}${hostBar(st, ctx)}</section>`;
+  return `<section class="wtf-center">${body}${hostBar(st, ctx)}${tables}</section>`;
+}
+
+/* สองตารางใหญ่วางคู่กันกลางจอ: ข้อมูลลามะ (ซ้าย) · เช็คลิสติ๊ก (ขวา) */
+function tablesRow(st) {
+  return `<div class="wtf-tables">${infoTable()}${checklist(st)}</div>`;
 }
 
 function hostBar(st, ctx) {
@@ -207,11 +215,11 @@ function pendingBox(st, ctx, me) {
 const prompt = (k) => `<p class="wtf-note">${esc(t(k))}</p>`;
 function ownTraitSelect(ctx) {
   const own = traitsOf(ctx.secret?.llama);
-  const opts = own.map(id => `<option value="${esc(id)}">${esc(L(traitById(id)))}</option>`).join('');
+  const opts = own.map(id => `<option value="${esc(id)}">${esc(TR(traitById(id)))}</option>`).join('');
   return `<select class="wtf-sel" id="wtf-trait">${opts}</select>`;
 }
 function anyTraitSelect(id) {
-  const opts = TRAITS.map(tr => `<option value="${esc(tr.id)}">${esc(L(tr))}</option>`).join('');
+  const opts = TRAITS.map(tr => `<option value="${esc(tr.id)}">${esc(TR(tr))}</option>`).join('');
   return `<select class="wtf-sel" id="${id}">${opts}</select>`;
 }
 function guessSelect(id) {
@@ -251,7 +259,7 @@ function players(st, me) {
 function knownBoard(st) {
   const rows = st.seats.filter(u => st.known?.[u] && Object.keys(st.known[u]).length).map(u => {
     const cells = Object.entries(st.known[u]).map(([tr, v]) =>
-      `<span class="wtf-kv ${v}">${v === 'yes' ? '✓' : '✗'} ${esc(L(traitById(tr)))}</span>`).join('');
+      `<span class="wtf-kv ${v}">${v === 'yes' ? '✓' : '✗'} ${esc(TR(traitById(tr)))}</span>`).join('');
     return `<li><b>${esc(st.names[u] || '?')}</b> ${cells}</li>`;
   }).join('');
   if (!rows) return '';
@@ -262,7 +270,7 @@ function checklist(st) {
   const rowsSrc = ckMode === 'player'
     ? st.seats.map(u => ({ key: u, label: st.names[u] || '?', dot: '', ph: '' }))
     : COLORS.map(([c, hex]) => ({ key: c, label: ckNames[c] || '', dot: hex, ph: t('wtf.color.' + c) }));
-  const head = TRAITS.map(tr => `<th><span>${esc(L(tr))}</span></th>`).join('');
+  const head = TRAITS.map(tr => `<th><span>${esc(TR(tr))}</span></th>`).join('');
   const body = rowsSrc.map(r => {
     const cells = TRAIT_IDS.map(tid => {
       const v = ckTicks[r.key + '|' + tid] || 0;
@@ -274,24 +282,24 @@ function checklist(st) {
       : `<th class="wtf-lh"><span class="wtf-dot" style="background:${r.dot}"></span><input class="wtf-cin" data-color="${esc(r.key)}" value="${esc(r.label)}" placeholder="${esc(r.ph)}"></th>`;
     return `<tr>${name}${cells}</tr>`;
   }).join('');
-  return `<details class="wtf-panel" open><summary class="wtf-tt">${esc(t('wtf.check.title'))}</summary>
+  return `<div class="wtf-panel wtf-bigtable"><div class="wtf-tt">${esc(t('wtf.check.title'))}</div>
       <div class="wtf-row wtf-modes">
         <button class="wtf-btn wtf-sm ${ckMode === 'player' ? '' : 'wtf-ghost'}" data-ckmode="player">${esc(t('wtf.check.mode.player'))}</button>
         <button class="wtf-btn wtf-sm ${ckMode === 'color' ? '' : 'wtf-ghost'}" data-ckmode="color">${esc(t('wtf.check.mode.color'))}</button>
       </div>
       <p class="wtf-note">${esc(t('wtf.check.hint'))}</p>
-      <div class="wtf-tablewrap"><table class="wtf-info wtf-checktbl"><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table></div>
-    </details>`;
+      <div class="wtf-tablewrap big"><table class="wtf-info wtf-checktbl"><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table></div>
+    </div>`;
 }
 
 function infoTable() {
-  const head = TRAITS.map(tr => `<th><span>${esc(L(tr))}</span></th>`).join('');
+  const head = TRAITS.map(tr => `<th><span>${esc(TR(tr))}</span></th>`).join('');
   const rows = LLAMAS.map(l => {
     const cells = TRAIT_IDS.map((_, i) => `<td>${l.vec[i] === '1' ? '✓' : ''}</td>`).join('');
     return `<tr><th class="wtf-lh">${esc(L(l))}</th>${cells}</tr>`;
   }).join('');
-  return `<details class="wtf-panel"><summary class="wtf-tt">${esc(t('wtf.infoTable'))}</summary>
-      <div class="wtf-tablewrap"><table class="wtf-info"><thead><tr><th></th>${head}</tr></thead><tbody>${rows}</tbody></table></div></details>`;
+  return `<div class="wtf-panel wtf-bigtable"><div class="wtf-tt">${esc(t('wtf.infoTable'))}</div>
+      <div class="wtf-tablewrap big"><table class="wtf-info"><thead><tr><th></th>${head}</tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
 
 function logBox(st) {
@@ -419,7 +427,16 @@ function ensureStyle() {
   .wtf-kv{display:inline-block;margin:0 4px 2px 0;padding:0 5px;border-radius:6px;background:#191322}
   .wtf-kv.yes{color:#7fe0a8}.wtf-kv.no{color:#e0889a}
   .wtf-modes{margin:6px 0}
+  .wtf-tables{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
+  @media(max-width:1100px){.wtf-tables{grid-template-columns:1fr}}
+  .wtf-bigtable{padding:12px}
   .wtf-tablewrap{overflow:auto;max-height:320px}
+  .wtf-tablewrap.big{max-height:none}
+  .wtf-bigtable .wtf-info{font-size:13px;width:100%}
+  .wtf-bigtable .wtf-info th,.wtf-bigtable .wtf-info td{padding:6px 8px}
+  .wtf-bigtable .wtf-info thead th{height:118px;vertical-align:bottom}
+  .wtf-bigtable .wtf-checktbl .wtf-ck{min-width:30px;height:30px;font-size:15px}
+  .wtf-bigtable .wtf-cin{width:110px;font-size:12px}
   .wtf-info{border-collapse:collapse;font-size:11px}
   .wtf-info th,.wtf-info td{border:1px solid #3a3050;padding:3px;text-align:center}
   .wtf-info thead th span{writing-mode:vertical-rl;transform:rotate(200deg);white-space:nowrap;display:inline-block}
